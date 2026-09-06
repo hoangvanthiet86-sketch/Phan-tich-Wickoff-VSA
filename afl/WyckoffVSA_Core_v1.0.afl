@@ -1,0 +1,257 @@
+/*
+    Wyckoff VSA Core Engine v1.0
+    Measurement only: current observation vs prior reference.
+*/
+
+_SECTION_BEGIN("1. Parameters");
+VolumeLookback = Param("Volume Lookback", 20, 2, 200, 1);
+SpreadLookback = Param("Spread Lookback", 20, 2, 200, 1);
+ATRPeriod = Param("ATR Period", 14, 2, 200, 1);
+
+HighEffortThreshold = Param("High Effort RVOL", 1.80, 0.01, 10, 0.05);
+LowEffortThreshold = Param("Low Effort RVOL", 0.75, 0, 10, 0.05);
+LowDirectionalResultThreshold = Param("Low Directional Result ATR", 0.35, 0, 10, 0.05);
+HighDirectionalResultThreshold = Param("High Directional Result ATR", 0.80, 0.01, 10, 0.05);
+ShowDebugTitle = ParamToggle("Show Debug Title", "No|Yes", 0);
+
+// Fixed v1.0 descriptive display bands; these are not editable calibration Params.
+RVOLBandExtremelyLowMax = 0.50;
+RVOLBandLowMax = 0.75;
+RVOLBandNormalMax = 1.25;
+RVOLBandHighMax = 1.80;
+RVOLBandVeryHighMax = 2.50;
+
+RSpreadBandVeryNarrowMax = 0.60;
+RSpreadBandNarrowMax = 0.80;
+RSpreadBandNormalMax = 1.20;
+RSpreadBandWideMax = 1.60;
+
+CloseBandWeakMax = 0.25;
+CloseBandLowerMax = 0.40;
+CloseBandMidMax = 0.60;
+CloseBandUpperMax = 0.75;
+
+ThresholdConfigValid = LowEffortThreshold < HighEffortThreshold
+                       AND LowDirectionalResultThreshold < HighDirectionalResultThreshold;
+_SECTION_END();
+
+_SECTION_BEGIN("2. Input Validity");
+BarNumber = BarIndex();
+
+// Explicit 0/1 masks make rolling valid counts independent of Null propagation.
+VolumeValid = IIf(IsNull(Volume), 0, IIf(Volume >= 0, 1, 0));
+CurrentVolumeValid = VolumeValid;
+CurrentCloseValid = IIf(IsNull(Close), 0, IIf(Close > 0, 1, 0));
+
+SpreadFieldsPresent = NOT IsNull(High) AND NOT IsNull(Low);
+SpreadInputValid = IIf(SpreadFieldsPresent, IIf(High >= Low, 1, 0), 0);
+
+PriceFieldsPresent = SpreadFieldsPresent AND NOT IsNull(Close);
+PriceInputValid = IIf(PriceFieldsPresent,
+                      IIf(Close > 0 AND High >= Low
+                          AND Close >= Low AND Close <= High, 1, 0), 0);
+_SECTION_END();
+
+_SECTION_BEGIN("3. Prior Volume Reference");
+// Shift the completed N-bar rolling window once: reference at t is t-N ... t-1.
+VolumeValidCountEndingCurrent = Sum(VolumeValid, VolumeLookback);
+PriorVolumeValidCount = Ref(VolumeValidCountEndingCurrent, -1);
+VolumeSumEndingCurrent = Sum(IIf(VolumeValid, Volume, 0), VolumeLookback);
+PriorVolumeSum = Ref(VolumeSumEndingCurrent, -1);
+
+PriorVolumeWindowComplete = PriorVolumeValidCount == VolumeLookback;
+PriorVolumeBaseCandidate = PriorVolumeSum / VolumeLookback;
+PriorVolumeBaseValid = PriorVolumeWindowComplete
+                       AND NOT IsNull(PriorVolumeBaseCandidate)
+                       AND PriorVolumeBaseCandidate > 0;
+PriorVolumeBase = IIf(PriorVolumeBaseValid, PriorVolumeBaseCandidate, Null);
+_SECTION_END();
+
+_SECTION_BEGIN("4. RVOL");
+SafePriorVolumeBase = IIf(PriorVolumeBaseValid, PriorVolumeBaseCandidate, 1);
+RVOLValid = CurrentVolumeValid AND PriorVolumeBaseValid;
+RVOL = IIf(RVOLValid, Volume / SafePriorVolumeBase, Null);
+_SECTION_END();
+
+_SECTION_BEGIN("5. Prior Raw Spread Reference");
+RawSpread = IIf(SpreadInputValid, High - Low, Null);
+RawSpreadValid = IIf(SpreadInputValid AND NOT IsNull(RawSpread), 1, 0);
+CurrentSpreadValid = RawSpreadValid;
+
+SpreadValidCountEndingCurrent = Sum(RawSpreadValid, SpreadLookback);
+PriorSpreadValidCount = Ref(SpreadValidCountEndingCurrent, -1);
+SpreadSumEndingCurrent = Sum(IIf(RawSpreadValid, RawSpread, 0), SpreadLookback);
+PriorSpreadSum = Ref(SpreadSumEndingCurrent, -1);
+
+PriorSpreadWindowComplete = PriorSpreadValidCount == SpreadLookback;
+PriorSpreadBaseCandidate = PriorSpreadSum / SpreadLookback;
+PriorSpreadBaseValid = PriorSpreadWindowComplete
+                       AND NOT IsNull(PriorSpreadBaseCandidate)
+                       AND PriorSpreadBaseCandidate > 0;
+PriorSpreadBase = IIf(PriorSpreadBaseValid, PriorSpreadBaseCandidate, Null);
+_SECTION_END();
+
+_SECTION_BEGIN("6. RSpread");
+SafePriorSpreadBase = IIf(PriorSpreadBaseValid, PriorSpreadBaseCandidate, 1);
+RSpreadValid = CurrentSpreadValid AND PriorSpreadBaseValid;
+RSpread = IIf(RSpreadValid, RawSpread / SafePriorSpreadBase, Null);
+_SECTION_END();
+
+_SECTION_BEGIN("7. Close Position");
+ZeroRangeBar = PriceInputValid AND High == Low;
+SafeRawSpread = IIf(PriceInputValid AND High > Low, High - Low, 1);
+ClosePosition = IIf(NOT PriceInputValid, Null,
+                    IIf(ZeroRangeBar, 0.5, (Close - Low) / SafeRawSpread));
+ClosePositionValid = PriceInputValid AND NOT IsNull(ClosePosition);
+_SECTION_END();
+
+_SECTION_BEGIN("8. Prior ATR and Directional Progress");
+PreviousClose = Ref(Close, -1);
+PreviousCloseValid = IIf(IsNull(PreviousClose), 0, IIf(PreviousClose > 0, 1, 0));
+ATRCurrent = ATR(ATRPeriod);
+PriorATR = Ref(ATRCurrent, -1);
+PriorATRWarm = BarNumber >= ATRPeriod;
+PriorATRValid = PriorATRWarm AND NOT IsNull(PriorATR) AND PriorATR > 0;
+
+DirectionalProgressValid = CurrentCloseValid AND PreviousCloseValid AND PriorATRValid;
+RawDirectionalMove = IIf(DirectionalProgressValid, Close - PreviousClose, Null);
+SafePriorATR = IIf(PriorATRValid, PriorATR, 1);
+DirectionalProgress = IIf(DirectionalProgressValid,
+                          RawDirectionalMove / SafePriorATR, Null);
+AbsDirectionalProgress = IIf(DirectionalProgressValid,
+                             abs(DirectionalProgress), Null);
+_SECTION_END();
+
+_SECTION_BEGIN("9. Effort vs Directional Result");
+EffortDirectionalResultDataValid = RVOLValid AND DirectionalProgressValid;
+EffortDirectionalResultValid = EffortDirectionalResultDataValid AND ThresholdConfigValid;
+HighEffort = EffortDirectionalResultValid AND RVOL >= HighEffortThreshold;
+LowEffort = EffortDirectionalResultValid AND RVOL <= LowEffortThreshold;
+HighDirectionalResult = EffortDirectionalResultValid
+                        AND AbsDirectionalProgress >= HighDirectionalResultThreshold;
+LowDirectionalResult = EffortDirectionalResultValid
+                       AND AbsDirectionalProgress <= LowDirectionalResultThreshold;
+_SECTION_END();
+
+_SECTION_BEGIN("10. State Codes");
+// Codes are categorical selectors for Exploration text; they are not scores.
+RVOLStateCode = IIf(NOT RVOLValid, 0,
+                IIf(RVOL < RVOLBandExtremelyLowMax, 1,
+                IIf(RVOL <= RVOLBandLowMax, 2,
+                IIf(RVOL < RVOLBandNormalMax, 3,
+                IIf(RVOL < RVOLBandHighMax, 4,
+                IIf(RVOL < RVOLBandVeryHighMax, 5, 6))))));
+RVOLStateText = "INSUFFICIENT DATA\nEXTREMELY LOW\nLOW\nNORMAL\nHIGH\nVERY HIGH\nULTRA HIGH";
+
+RSpreadStateCode = IIf(NOT RSpreadValid, 0,
+                   IIf(RSpread < RSpreadBandVeryNarrowMax, 1,
+                   IIf(RSpread < RSpreadBandNarrowMax, 2,
+                   IIf(RSpread < RSpreadBandNormalMax, 3,
+                   IIf(RSpread < RSpreadBandWideMax, 4, 5)))));
+RSpreadStateText = "INSUFFICIENT DATA\nVERY NARROW\nNARROW\nNORMAL\nWIDE\nVERY WIDE";
+
+CloseStateCode = IIf(NOT ClosePositionValid, 0,
+                 IIf(ClosePosition < CloseBandWeakMax, 1,
+                 IIf(ClosePosition < CloseBandLowerMax, 2,
+                 IIf(ClosePosition <= CloseBandMidMax, 3,
+                 IIf(ClosePosition <= CloseBandUpperMax, 4, 5)))));
+CloseStateText = "INSUFFICIENT DATA\nWEAK CLOSE\nLOWER CLOSE\nMID CLOSE\nUPPER CLOSE\nSTRONG CLOSE";
+
+// 1..9 follow High, Normal, Low effort crossed with High, Normal, Low directional result.
+EffortDirectionalResultStateCode = IIf(NOT ThresholdConfigValid, 10,
+                                   IIf(NOT EffortDirectionalResultDataValid, 0,
+                                   IIf(HighEffort,
+                                       IIf(HighDirectionalResult, 1, IIf(LowDirectionalResult, 3, 2)),
+                                   IIf(LowEffort,
+                                       IIf(HighDirectionalResult, 7, IIf(LowDirectionalResult, 9, 8)),
+                                       IIf(HighDirectionalResult, 4, IIf(LowDirectionalResult, 6, 5))))));
+EffortDirectionalResultStateText = "INSUFFICIENT DATA\nHIGH EFFORT / HIGH DIRECTIONAL RESULT\nHIGH EFFORT / NORMAL DIRECTIONAL RESULT\nHIGH EFFORT / LOW DIRECTIONAL RESULT\nNORMAL EFFORT / HIGH DIRECTIONAL RESULT\nNORMAL EFFORT / NORMAL DIRECTIONAL RESULT\nNORMAL EFFORT / LOW DIRECTIONAL RESULT\nLOW EFFORT / HIGH DIRECTIONAL RESULT\nLOW EFFORT / NORMAL DIRECTIONAL RESULT\nLOW EFFORT / LOW DIRECTIONAL RESULT\nINVALID THRESHOLD CONFIG";
+
+// WriteIf is intentionally limited to the selected-bar chart title.
+RVOLState = WriteIf(RVOLStateCode == 0, "INSUFFICIENT DATA",
+             WriteIf(RVOLStateCode == 1, "EXTREMELY LOW",
+             WriteIf(RVOLStateCode == 2, "LOW",
+             WriteIf(RVOLStateCode == 3, "NORMAL",
+             WriteIf(RVOLStateCode == 4, "HIGH",
+             WriteIf(RVOLStateCode == 5, "VERY HIGH", "ULTRA HIGH"))))));
+RSpreadState = WriteIf(RSpreadStateCode == 0, "INSUFFICIENT DATA",
+                WriteIf(RSpreadStateCode == 1, "VERY NARROW",
+                WriteIf(RSpreadStateCode == 2, "NARROW",
+                WriteIf(RSpreadStateCode == 3, "NORMAL",
+                WriteIf(RSpreadStateCode == 4, "WIDE", "VERY WIDE")))));
+CloseState = WriteIf(CloseStateCode == 0, "INSUFFICIENT DATA",
+              WriteIf(CloseStateCode == 1, "WEAK CLOSE",
+              WriteIf(CloseStateCode == 2, "LOWER CLOSE",
+              WriteIf(CloseStateCode == 3, "MID CLOSE",
+              WriteIf(CloseStateCode == 4, "UPPER CLOSE", "STRONG CLOSE")))));
+EffortDirectionalResultState = WriteIf(EffortDirectionalResultStateCode == 10, "INVALID THRESHOLD CONFIG",
+                                WriteIf(EffortDirectionalResultStateCode == 0, "INSUFFICIENT DATA",
+                                WriteIf(EffortDirectionalResultStateCode == 1, "HIGH EFFORT / HIGH DIRECTIONAL RESULT",
+                                WriteIf(EffortDirectionalResultStateCode == 2, "HIGH EFFORT / NORMAL DIRECTIONAL RESULT",
+                                WriteIf(EffortDirectionalResultStateCode == 3, "HIGH EFFORT / LOW DIRECTIONAL RESULT",
+                                WriteIf(EffortDirectionalResultStateCode == 4, "NORMAL EFFORT / HIGH DIRECTIONAL RESULT",
+                                WriteIf(EffortDirectionalResultStateCode == 5, "NORMAL EFFORT / NORMAL DIRECTIONAL RESULT",
+                                WriteIf(EffortDirectionalResultStateCode == 6, "NORMAL EFFORT / LOW DIRECTIONAL RESULT",
+                                WriteIf(EffortDirectionalResultStateCode == 7, "LOW EFFORT / HIGH DIRECTIONAL RESULT",
+                                WriteIf(EffortDirectionalResultStateCode == 8, "LOW EFFORT / NORMAL DIRECTIONAL RESULT",
+                                        "LOW EFFORT / LOW DIRECTIONAL RESULT"))))))))));
+_SECTION_END();
+
+_SECTION_BEGIN("11. Chart Output");
+SetChartOptions(0, chartShowArrows | chartShowDates);
+Plot(Close, "Price", colorDefault, styleCandle);
+
+if (ShowDebugTitle)
+{
+    Title = Name() + " | " + Date()
+          + "\nRVOL: " + WriteVal(RVOL, 1.2) + " (" + RVOLState + ")"
+          + " | RSpread: " + WriteVal(RSpread, 1.2) + " (" + RSpreadState + ")"
+          + "\nClose Position: " + WriteVal(ClosePosition, 1.2) + " (" + CloseState + ")"
+          + " | Directional Progress: " + WriteVal(DirectionalProgress, 1.2) + " ATR"
+          + "\nEffort vs Directional Result: " + EffortDirectionalResultState;
+}
+else
+{
+    Title = Name() + " | " + Date() + " | Close: " + WriteVal(Close, 1.2);
+}
+_SECTION_END();
+
+_SECTION_BEGIN("12. Exploration");
+Filter = 1;
+AddTextColumn(Name(), "Symbol");
+AddColumn(DateTime(), "Date", formatDateTime);
+AddColumn(BarNumber, "BarIndex", 1.0);
+AddColumn(Close, "Close", 1.4);
+AddColumn(Volume, "Volume", 1.0);
+AddColumn(CurrentCloseValid, "Current Close Valid", 1.0);
+AddColumn(CurrentVolumeValid, "Current Volume Valid", 1.0);
+AddColumn(PriorVolumeValidCount, "Prior Volume Valid Count", 1.0);
+AddColumn(PriorVolumeBase, "Prior Volume Base", 1.2);
+AddColumn(RVOL, "RVOL", 1.3);
+AddColumn(RVOLStateCode, "RVOL State Code", 1.0);
+AddMultiTextColumn(RVOLStateCode, RVOLStateText, "RVOL State");
+AddColumn(RawSpread, "RawSpread", 1.4);
+AddColumn(CurrentSpreadValid, "Current Spread Valid", 1.0);
+AddColumn(PriorSpreadValidCount, "Prior Spread Valid Count", 1.0);
+AddColumn(PriorSpreadBase, "Prior Spread Base", 1.6);
+AddColumn(RSpread, "RSpread", 1.3);
+AddColumn(RSpreadStateCode, "RSpread State Code", 1.0);
+AddMultiTextColumn(RSpreadStateCode, RSpreadStateText, "RSpread State");
+AddColumn(ClosePosition, "ClosePosition", 1.3);
+AddColumn(CloseStateCode, "Close State Code", 1.0);
+AddMultiTextColumn(CloseStateCode, CloseStateText, "Close State");
+AddColumn(PreviousClose, "PreviousClose", 1.4);
+AddColumn(RawDirectionalMove, "RawDirectionalMove", 1.4);
+AddColumn(PriorATR, "PriorATR", 1.4);
+AddColumn(PriorATRWarm, "Prior ATR Warm", 1.0);
+AddColumn(DirectionalProgress, "DirectionalProgress", 1.3);
+AddColumn(AbsDirectionalProgress, "AbsDirectionalProgress", 1.3);
+AddColumn(LowEffortThreshold, "Low Effort Threshold", 1.2);
+AddColumn(HighEffortThreshold, "High Effort Threshold", 1.2);
+AddColumn(LowDirectionalResultThreshold, "Low Directional Result Threshold", 1.2);
+AddColumn(HighDirectionalResultThreshold, "High Directional Result Threshold", 1.2);
+AddColumn(ThresholdConfigValid, "Threshold Config Valid", 1.0);
+AddColumn(EffortDirectionalResultStateCode, "Effort/Directional Result State Code", 1.0);
+AddMultiTextColumn(EffortDirectionalResultStateCode, EffortDirectionalResultStateText,
+                   "Effort/Directional Result State");
+_SECTION_END();
