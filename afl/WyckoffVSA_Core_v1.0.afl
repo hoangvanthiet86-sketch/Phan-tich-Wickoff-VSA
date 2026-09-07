@@ -105,10 +105,70 @@ ClosePosition = IIf(NOT PriceInputValid, Null,
 ClosePositionValid = PriceInputValid AND NOT IsNull(ClosePosition);
 _SECTION_END();
 
-_SECTION_BEGIN("8. Prior ATR and Directional Progress");
+_SECTION_BEGIN("8. Robust ATR and Directional Progress");
 PreviousClose = Ref(Close, -1);
 PreviousCloseValid = IIf(IsNull(PreviousClose), 0, IIf(PreviousClose > 0, 1, 0));
-ATRCurrent = ATR(ATRPeriod);
+
+// Bar zero uses H-L because no previous Close exists; later bars require it.
+RobustTRValid = PriceInputValid AND IIf(BarNumber == 0, 1, PreviousCloseValid);
+RobustTRCandidate = Max(High - Low,
+                        Max(abs(High - PreviousClose), abs(Low - PreviousClose)));
+RobustTR = IIf(RobustTRValid,
+               IIf(BarNumber == 0, High - Low, RobustTRCandidate), Null);
+
+// One state machine serves initial startup and every post-error rebuild.
+RobustATR = Null;
+SeedSum = 0;
+ConsecutiveValidTR = 0;
+InternalSeed = 0;
+SeedReady = 0;
+ATRActive = 0;
+ActiveATR = 0;
+
+for (bar = 0; bar < BarCount; bar++)
+{
+    if (RobustTRValid[bar])
+    {
+        if (ATRActive)
+        {
+            ActiveATR = (ActiveATR * (ATRPeriod - 1) + RobustTR[bar]) / ATRPeriod;
+            RobustATR[bar] = ActiveATR;
+        }
+        else
+        {
+            if (SeedReady)
+            {
+                ActiveATR = (InternalSeed * (ATRPeriod - 1) + RobustTR[bar]) / ATRPeriod;
+                RobustATR[bar] = ActiveATR;
+                ATRActive = 1;
+            }
+            else
+            {
+                ConsecutiveValidTR++;
+                SeedSum += RobustTR[bar];
+
+                if (ConsecutiveValidTR == ATRPeriod)
+                {
+                    InternalSeed = SeedSum / ATRPeriod;
+                    SeedReady = 1;
+                }
+            }
+        }
+    }
+    else
+    {
+        // A data-quality hole clears all Wilder state; no value is carried across it.
+        RobustATR[bar] = Null;
+        SeedSum = 0;
+        ConsecutiveValidTR = 0;
+        InternalSeed = 0;
+        SeedReady = 0;
+        ATRActive = 0;
+        ActiveATR = 0;
+    }
+}
+
+ATRCurrent = RobustATR;
 PriorATR = Ref(ATRCurrent, -1);
 PriorATRWarm = BarNumber >= ATRPeriod;
 PriorATRValid = PriorATRWarm AND NOT IsNull(PriorATR) AND PriorATR > 0;
