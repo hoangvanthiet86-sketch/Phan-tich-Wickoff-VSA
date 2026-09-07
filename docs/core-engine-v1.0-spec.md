@@ -108,20 +108,32 @@ RawSpread và PriorSpreadBase có cùng đơn vị giá nên ratio tự triệt 
 | 4 | `0.60 < x <= 0.75` | UPPER CLOSE |
 | 5 | `> 0.75` | STRONG CLOSE |
 
-## 7. Directional Progress — current move vs prior ATR
+## 7. Directional Progress — current move vs prior Robust ATR
+
+Built-in ATR could retain a positive numeric value after invalid synthetic OHLC, so v1.0 uses an explicitly resettable Robust Wilder ATR as the denominator source.
+
+ATR input structure requires non-Null High/Low/Close, `Close > 0`, `High >= Low`, and `Low <= Close <= High`; Open is not required. At BarIndex 0, valid `RobustTR = High - Low`. At later bars, PreviousClose must be non-Null and positive, then:
 
 ```text
-PreviousClose_t          = Ref(Close, -1)
-RawDirectionalMove_t     = Close_t - PreviousClose_t
-ATRCurrent_t             = AmiBroker built-in ATR(ATRPeriod)_t
-PriorATR_t                = Ref(ATRCurrent, -1)
-DirectionalProgress_t    = RawDirectionalMove_t / PriorATR_t
-AbsDirectionalProgress_t = abs(DirectionalProgress_t)
+RobustTR = max(High - Low, abs(High - PreviousClose), abs(Low - PreviousClose))
 ```
 
-Current Close và Previous Close phải hợp lệ; PriorATR phải không `Null` và `> 0`. Current High/Low không phải dependency của DirectionalProgress. PriorATR eligibility yêu cầu `BarIndex() >= ATRPeriod` ngoài non-Null positive previous-bar ATR. Gate này làm warm-up deterministic và độc lập với built-in early initialization behavior. Passing warm-up không tự buộc DirectionalProgress valid; mọi dependency khác vẫn phải hợp lệ.
+Zero TR is valid. While inactive, the state machine collects `P = ATRPeriod` consecutive valid TRs. The P-th observation creates the internal arithmetic seed but visible RobustATR remains `Null`. The next valid observation (P+1) produces the first visible value using Wilder continuation; every later valid observation continues the same recurrence. For clean `P=14` data, bars 0..13 form the seed, bar 14 is first visible RobustATR, and bar 15 is first able to use PriorATR.
 
-Current ATR không làm denominator: current True Range có thể tăng current ATR và tự thay đổi thước đo đánh giá current event. PriorATR đại diện volatility regime đã biết trước bar hiện tại. `PriorATR` là previous-bar value của AmiBroker built-in `ATR(ATRPeriod)`, hàm này sử dụng **Wilder smoothing**; stable definition v1.0 không phải simple moving average của True Range.
+```text
+FirstVisibleRobustATR = (InternalSeed * (P - 1) + RobustTR) / P
+ContinuedRobustATR    = (PreviousRobustATR * (P - 1) + RobustTR) / P
+ATRCurrent            = RobustATR
+PriorATR              = Ref(ATRCurrent, -1)
+DirectionalProgress   = (Close - PreviousClose) / PriorATR
+AbsDirectionalProgress = abs(DirectionalProgress)
+```
+
+Any invalid ATR input outputs `RobustTR = Null` and `RobustATR = Null`, clears seed/count/active state, and requires a fresh P-valid-TR seed plus the P+1 observation. There is no forward-fill, interpolation, skipped invalid observation, retained state, or heuristic cap.
+
+Same-bar dependencies remain intentionally separated: invalid current H/L resets current RobustATR, but DirectionalProgress may still use a valid prior RobustATR when CurrentClose and PreviousClose are valid. Invalid current Close makes same-bar DirectionalProgress and RobustATR Null; the next bar also has invalid TR because PreviousClose is invalid. High below Low or Close outside `[Low, High]` resets ATR. `High = Low = Close` yields valid zero TR. Null Open has no effect.
+
+`PriorATRWarm = BarIndex() >= ATRPeriod` remains a minimum eligibility gate. `PriorATRValid` additionally requires non-Null positive PriorATR, so it can remain false during post-error rebuilding even while warm is true. On uninterrupted valid data RobustATR is required to match AmiBroker Wilder `ATR(ATRPeriod)` within `0.00001`.
 
 ## 8. Effort vs Directional Result
 
