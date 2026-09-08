@@ -63,7 +63,7 @@ NoDemandCandidateCode = IIf(NOT NoDemandCandidateValid, 0,
                             IIf(NoDemandCandidate, 2, 1));
 NoSupplyCandidateCode = IIf(NOT NoSupplyCandidateValid, 0,
                             IIf(NoSupplyCandidate, 2, 1));
-CandidateStateText = "INSUFFICIENT DATA\nNOT PRESENT\nBASIC CANDIDATE — UNCONFIRMED";
+CandidateStateText = "INSUFFICIENT DATA\nNOT PRESENT\nBASIC CANDIDATE - UNCONFIRMED";
 _SECTION_END();
 
 _SECTION_BEGIN("15. Candidate Exploration");
