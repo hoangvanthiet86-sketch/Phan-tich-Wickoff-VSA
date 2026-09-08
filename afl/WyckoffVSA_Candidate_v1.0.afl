@@ -1,0 +1,90 @@
+/*
+    Wyckoff VSA Candidate Engine v1.0
+    Basic local candidates only; no context, confirmation or trading signal.
+
+    Requires WyckoffVSA_Core_v1.0.afl in AmiBroker's standard include path.
+*/
+
+#include_once <WyckoffVSA_Core_v1.0.afl>
+
+_SECTION_BEGIN("13. Candidate Input Components");
+CandidateDirectionValid = CurrentCloseValid AND PreviousCloseValid;
+UpBarByClose = IIf(CandidateDirectionValid,
+                   IIf(Close > PreviousClose, 1, 0), 0);
+DownBarByClose = IIf(CandidateDirectionValid,
+                     IIf(Close < PreviousClose, 1, 0), 0);
+FlatBarByClose = IIf(CandidateDirectionValid,
+                     IIf(Close == PreviousClose, 1, 0), 0);
+
+PriorVolume1 = Ref(Volume, -1);
+PriorVolume2 = Ref(Volume, -2);
+PriorVolume1Valid = IIf(IsNull(PriorVolume1), 0,
+                        IIf(PriorVolume1 >= 0, 1, 0));
+PriorVolume2Valid = IIf(IsNull(PriorVolume2), 0,
+                        IIf(PriorVolume2 >= 0, 1, 0));
+PriorTwoVolumeValid = CurrentVolumeValid
+                      AND PriorVolume1Valid
+                      AND PriorVolume2Valid;
+
+SafeCurrentVolume = IIf(CurrentVolumeValid, Volume, 0);
+SafePriorVolume1 = IIf(PriorVolume1Valid, PriorVolume1, 0);
+SafePriorVolume2 = IIf(PriorVolume2Valid, PriorVolume2, 0);
+VolumeBelowPriorTwo = IIf(PriorTwoVolumeValid,
+                          IIf(SafeCurrentVolume < SafePriorVolume1
+                              AND SafeCurrentVolume < SafePriorVolume2, 1, 0),
+                          0);
+
+SafeCandidateRSpread = IIf(RSpreadValid, RSpread, 1);
+NarrowSpread = IIf(RSpreadValid,
+                   IIf(SafeCandidateRSpread < 0.80, 1, 0), 0);
+
+CandidateInputValid = PriceInputValid
+                      AND PreviousCloseValid
+                      AND PriorTwoVolumeValid
+                      AND RSpreadValid;
+_SECTION_END();
+
+_SECTION_BEGIN("14. Basic VSA Candidates");
+NoDemandCandidateValid = CandidateInputValid;
+NoDemandCandidate = IIf(NoDemandCandidateValid,
+                        IIf(UpBarByClose
+                            AND VolumeBelowPriorTwo
+                            AND NarrowSpread, 1, 0),
+                        0);
+
+NoSupplyCandidateValid = CandidateInputValid;
+NoSupplyCandidate = IIf(NoSupplyCandidateValid,
+                        IIf(DownBarByClose
+                            AND VolumeBelowPriorTwo
+                            AND NarrowSpread, 1, 0),
+                        0);
+
+NoDemandCandidateCode = IIf(NOT NoDemandCandidateValid, 0,
+                            IIf(NoDemandCandidate, 2, 1));
+NoSupplyCandidateCode = IIf(NOT NoSupplyCandidateValid, 0,
+                            IIf(NoSupplyCandidate, 2, 1));
+CandidateStateText = "INSUFFICIENT DATA\nNOT PRESENT\nBASIC CANDIDATE - UNCONFIRMED";
+_SECTION_END();
+
+_SECTION_BEGIN("15. Candidate Exploration");
+AddColumn(CandidateDirectionValid, "Candidate Direction Valid", 1.0);
+AddColumn(UpBarByClose, "Up Bar By Close", 1.0);
+AddColumn(DownBarByClose, "Down Bar By Close", 1.0);
+AddColumn(FlatBarByClose, "Flat Bar By Close", 1.0);
+AddColumn(PriorVolume1, "Prior Volume 1", 1.0);
+AddColumn(PriorVolume1Valid, "Prior Volume 1 Valid", 1.0);
+AddColumn(PriorVolume2, "Prior Volume 2", 1.0);
+AddColumn(PriorVolume2Valid, "Prior Volume 2 Valid", 1.0);
+AddColumn(PriorTwoVolumeValid, "Prior Two Volume Valid", 1.0);
+AddColumn(VolumeBelowPriorTwo, "Volume Below Prior Two", 1.0);
+AddColumn(NarrowSpread, "Narrow Spread", 1.0);
+AddColumn(CandidateInputValid, "Candidate Input Valid", 1.0);
+AddColumn(NoDemandCandidateValid, "No Demand Candidate Valid", 1.0);
+AddColumn(NoDemandCandidateCode, "No Demand Candidate Code", 1.0);
+AddMultiTextColumn(NoDemandCandidateCode, CandidateStateText,
+                   "No Demand Candidate");
+AddColumn(NoSupplyCandidateValid, "No Supply Candidate Valid", 1.0);
+AddColumn(NoSupplyCandidateCode, "No Supply Candidate Code", 1.0);
+AddMultiTextColumn(NoSupplyCandidateCode, CandidateStateText,
+                   "No Supply Candidate");
+_SECTION_END();
