@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "status": "APPROVED_FIXTURES_RUNTIME_NOT_RUN",
+  "approved_on": "2026-09-08",
+  "canonical_commit": "c848fcc81f02a9ee1e3e419e3925f4b27d88d08d",
+  "archive_name": "SL_v1.0_Test_Fixtures.zip",
+  "archive_sha256": "54d1113ca28a8f37e4fe41a33268d1c793d2fc744e4f2cac455e285b9166ebc1",
+  "manifest_sha256": "8bd4fbfd33e21ab322a9f882f825b8d011e3d569c5c4cb15aaaa08f70cb1b256",
+  "official_case_count": 63,
+  "scenario_count": 109,
+  "input_row_count": 5890,
+  "expected_column_count": 184,
+  "reference_validation": {
+    "checks": 405,
+    "compared_values": 1858294,
+    "tool_tests_passed": 12,
+    "amibroker_runtime": "NOT_RUN"
+  },
+  "native_append": {
+    "prefix_bars": 240,
+    "append_bars": 80,
+    "total_bars": 320,
+    "symbol": "WVSL1T"
+  },
+  "real_ohlcv": "WAITING_FOR_SOURCE",
+  "policy": "Immutable approved reference. Do not modify expected results to make an implementation pass. Corrections require a separately reviewed fixture version. No Core/Candidate changes, no automatic merge, no release before runtime acceptance."
+}
