@@ -188,7 +188,7 @@ AddColumn(CE_ContextMLocationValid,"CE_ContextMLocationValid",1.0);
 AddColumn(CE_ContextMLocation,"CE_ContextMLocation",1.12);
 AddColumn(CE_ContextLReferenceStatusCode,"CE_ContextLReferenceStatusCode",1.0);
 AddColumn(CE_ContextLPositionStateCode,"CE_ContextLPositionStateCode",1.0);
-AddColumn(CE_ContextLLocationValid,"CE_ContextLLocationValid",1.12);
+AddColumn(CE_ContextLLocationValid,"CE_ContextLLocationValid",1.0);
 AddColumn(CE_ContextLLocation,"CE_ContextLLocation",1.12);
 AddColumn(CE_ContextPivotHighLatestValid,"CE_ContextPivotHighLatestValid",1.0);
 AddColumn(CE_ContextPivotHighLatestPrice,"CE_ContextPivotHighLatestPrice",1.12);
