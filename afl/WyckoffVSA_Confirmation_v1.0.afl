@@ -1,0 +1,209 @@
+/*
+    Wyckoff VSA Confirmation Engine v1.0
+    Basic next-completed-bar price response only. No trading signal.
+    Specification: docs/confirmation-engine-v1.0-spec.md
+    Approved document blob: 60c199bde596aaa944eeb7d83befffdcdd47bccd
+    Base merge commit: b12d7a1bf287cdf9a60571f64d729ece928b78ae
+    Target: AmiBroker 6.20.01 (6.20+).
+    The final bar is provisional until the source bar is completed.
+*/
+#include_once <WyckoffVSA_StructureLocation_v1.0.afl>
+
+_SECTION_BEGIN("21. Confirmation input contract");
+function CE_Finite( CE_x )
+{
+    return IIf( IsNull(CE_x), 0, IIf(IsFinite(CE_x),1,0) );
+}
+function CE_ValidCode( CE_x )
+{
+    return IIf( CE_Finite(CE_x),
+                IIf(CE_x>=0 AND CE_x<=2 AND CE_x==floor(CE_x),1,0),0 );
+}
+function CE_SafeSub( CE_a, CE_b )
+{
+    local CE_v;
+    CE_v = CE_a-CE_b;
+    return IIf(CE_Finite(CE_a) AND CE_Finite(CE_b) AND CE_Finite(CE_v),CE_v,Null);
+}
+CE_SourceBarIndex = BarIndex();
+CE_SourceDateTime = DateTime();
+CE_PriorNDCodeRaw = Ref(NoDemandCandidateCode,-1);
+CE_PriorNSCodeRaw = Ref(NoSupplyCandidateCode,-1);
+CE_PriorNDCodeValid = CE_ValidCode(CE_PriorNDCodeRaw);
+CE_PriorNSCodeValid = CE_ValidCode(CE_PriorNSCodeRaw);
+CE_PriorNDCodeSafe = IIf(CE_PriorNDCodeValid,CE_PriorNDCodeRaw,-1);
+CE_PriorNSCodeSafe = IIf(CE_PriorNSCodeValid,CE_PriorNSCodeRaw,-1);
+CE_PriorCandidatePairWellFormed = IIf(
+    CE_PriorNDCodeValid AND CE_PriorNSCodeValid
+    AND ((CE_PriorNDCodeSafe==0 AND CE_PriorNSCodeSafe==0)
+         OR (CE_PriorNDCodeSafe>0 AND CE_PriorNSCodeSafe>0))
+    AND NOT (CE_PriorNDCodeSafe==2 AND CE_PriorNSCodeSafe==2),1,0);
+CE_PriorCandidateDataValid = IIf(CE_PriorCandidatePairWellFormed
+    AND CE_PriorNDCodeSafe>0 AND CE_PriorNSCodeSafe>0,1,0);
+CE_PriorCloseRaw = Ref(Close,-1);
+CE_PriorCloseValid = CE_Finite(CE_PriorCloseRaw) AND CE_PriorCloseRaw>0;
+CE_CurrentResponseCloseValid = CurrentCloseValid AND CE_Finite(Close) AND Close>0;
+CE_StatusText = "INSUFFICIENT DATA\nNO PRIOR CANDIDATE\nRESPONSE NOT CONFIRMED\nBASIC PRICE RESPONSE CONFIRMED";
+_SECTION_END();
+
+_SECTION_BEGIN("22. No Demand next-bar response");
+CE_NoDemand_PriorCandidateCode = IIf(CE_PriorNDCodeValid,CE_PriorNDCodeRaw,Null);
+CE_NoDemand_OpportunityPresent = IIf(CE_PriorCandidateDataValid AND CE_PriorNDCodeSafe==2,1,0);
+CE_NoDemand_ResponseCloseValid = IIf(CE_NoDemand_OpportunityPresent
+    AND CE_CurrentResponseCloseValid AND CE_PriorCloseValid,1,0);
+CE_NoDemand_EvaluationValid = CE_NoDemand_ResponseCloseValid;
+CE_NoDemand_StatusCode = IIf(NOT CE_PriorCandidateDataValid,0,
+    IIf(NOT CE_NoDemand_OpportunityPresent,1,
+    IIf(NOT CE_NoDemand_ResponseCloseValid,0,
+    IIf(Close<CE_PriorCloseRaw,3,2))));
+CE_NoDemand_StatusValid = IIf(CE_NoDemand_StatusCode>0,1,0);
+CE_NoDemand_Confirmed = IIf(CE_NoDemand_StatusCode==3,1,0);
+CE_NoDemand_CandidateBarIndex = IIf(CE_NoDemand_OpportunityPresent,Ref(CE_SourceBarIndex,-1),Null);
+CE_NoDemand_CandidateDateTime = IIf(CE_NoDemand_OpportunityPresent,Ref(CE_SourceDateTime,-1),Null);
+CE_NoDemand_CandidateClose = IIf(CE_NoDemand_OpportunityPresent AND CE_PriorCloseValid,CE_PriorCloseRaw,Null);
+CE_NoDemand_EvaluationBarIndex = IIf(CE_NoDemand_OpportunityPresent,CE_SourceBarIndex,Null);
+CE_NoDemand_EvaluationDateTime = IIf(CE_NoDemand_OpportunityPresent,CE_SourceDateTime,Null);
+CE_NoDemand_ConfirmationLag = IIf(CE_NoDemand_OpportunityPresent,1,Null);
+CE_NoDemand_ResponseClose = IIf(CE_NoDemand_EvaluationValid,Close,Null);
+CE_NoDemand_ResponseDelta = IIf(CE_NoDemand_EvaluationValid,CE_SafeSub(Close,CE_PriorCloseRaw),Null);
+CE_NoDemand_ResponseDirectionCode = IIf(CE_NoDemand_EvaluationValid,
+    IIf(Close<CE_PriorCloseRaw,-1,IIf(Close>CE_PriorCloseRaw,1,0)),Null);
+_SECTION_END();
+
+_SECTION_BEGIN("23. No Supply next-bar response");
+CE_NoSupply_PriorCandidateCode = IIf(CE_PriorNSCodeValid,CE_PriorNSCodeRaw,Null);
+CE_NoSupply_OpportunityPresent = IIf(CE_PriorCandidateDataValid AND CE_PriorNSCodeSafe==2,1,0);
+CE_NoSupply_ResponseCloseValid = IIf(CE_NoSupply_OpportunityPresent
+    AND CE_CurrentResponseCloseValid AND CE_PriorCloseValid,1,0);
+CE_NoSupply_EvaluationValid = CE_NoSupply_ResponseCloseValid;
+CE_NoSupply_StatusCode = IIf(NOT CE_PriorCandidateDataValid,0,
+    IIf(NOT CE_NoSupply_OpportunityPresent,1,
+    IIf(NOT CE_NoSupply_ResponseCloseValid,0,
+    IIf(Close>CE_PriorCloseRaw,3,2))));
+CE_NoSupply_StatusValid = IIf(CE_NoSupply_StatusCode>0,1,0);
+CE_NoSupply_Confirmed = IIf(CE_NoSupply_StatusCode==3,1,0);
+CE_NoSupply_CandidateBarIndex = IIf(CE_NoSupply_OpportunityPresent,Ref(CE_SourceBarIndex,-1),Null);
+CE_NoSupply_CandidateDateTime = IIf(CE_NoSupply_OpportunityPresent,Ref(CE_SourceDateTime,-1),Null);
+CE_NoSupply_CandidateClose = IIf(CE_NoSupply_OpportunityPresent AND CE_PriorCloseValid,CE_PriorCloseRaw,Null);
+CE_NoSupply_EvaluationBarIndex = IIf(CE_NoSupply_OpportunityPresent,CE_SourceBarIndex,Null);
+CE_NoSupply_EvaluationDateTime = IIf(CE_NoSupply_OpportunityPresent,CE_SourceDateTime,Null);
+CE_NoSupply_ConfirmationLag = IIf(CE_NoSupply_OpportunityPresent,1,Null);
+CE_NoSupply_ResponseClose = IIf(CE_NoSupply_EvaluationValid,Close,Null);
+CE_NoSupply_ResponseDelta = IIf(CE_NoSupply_EvaluationValid,CE_SafeSub(Close,CE_PriorCloseRaw),Null);
+CE_NoSupply_ResponseDirectionCode = IIf(CE_NoSupply_EvaluationValid,
+    IIf(Close<CE_PriorCloseRaw,-1,IIf(Close>CE_PriorCloseRaw,1,0)),Null);
+_SECTION_END();
+
+_SECTION_BEGIN("24. Candidate-time context snapshot");
+CE_ContextSnapshotPresent = IIf(CE_NoDemand_OpportunityPresent OR CE_NoSupply_OpportunityPresent,1,0);
+CE_ContextCandidateKindCode = IIf(CE_ContextSnapshotPresent,
+    IIf(CE_NoDemand_OpportunityPresent,1,2),Null);
+CE_ContextCandidateBarIndex = IIf(CE_ContextSnapshotPresent,Ref(CE_SourceBarIndex,-1),Null);
+CE_ContextCandidateDateTime = IIf(CE_ContextSnapshotPresent,Ref(CE_SourceDateTime,-1),Null);
+
+// Preserve each upstream field independently, including its invalid code/Null.
+// Latest (through k), not LatestPrior (through k-1), is the correct pivot source.
+CE_ContextSReferenceStatusCode = IIf(CE_ContextSnapshotPresent,Ref(SL_S_ReferenceStatusCode,-1),Null);
+CE_ContextSPositionStateCode = IIf(CE_ContextSnapshotPresent,Ref(SL_S_PositionStateCode,-1),Null);
+CE_ContextSLocationValid = IIf(CE_ContextSnapshotPresent,Ref(SL_S_LocationValid,-1),Null);
+CE_ContextSLocation = IIf(CE_ContextSnapshotPresent,Ref(SL_S_Location,-1),Null);
+CE_ContextMReferenceStatusCode = IIf(CE_ContextSnapshotPresent,Ref(SL_M_ReferenceStatusCode,-1),Null);
+CE_ContextMPositionStateCode = IIf(CE_ContextSnapshotPresent,Ref(SL_M_PositionStateCode,-1),Null);
+CE_ContextMLocationValid = IIf(CE_ContextSnapshotPresent,Ref(SL_M_LocationValid,-1),Null);
+CE_ContextMLocation = IIf(CE_ContextSnapshotPresent,Ref(SL_M_Location,-1),Null);
+CE_ContextLReferenceStatusCode = IIf(CE_ContextSnapshotPresent,Ref(SL_L_ReferenceStatusCode,-1),Null);
+CE_ContextLPositionStateCode = IIf(CE_ContextSnapshotPresent,Ref(SL_L_PositionStateCode,-1),Null);
+CE_ContextLLocationValid = IIf(CE_ContextSnapshotPresent,Ref(SL_L_LocationValid,-1),Null);
+CE_ContextLLocation = IIf(CE_ContextSnapshotPresent,Ref(SL_L_Location,-1),Null);
+CE_ContextPivotHighLatestValid = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotHighLatestValid,-1),Null);
+CE_ContextPivotHighLatestPrice = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotHighLatestPrice,-1),Null);
+CE_ContextPivotHighLatestExtremeBarIndex = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotHighLatestExtremeBarIndex,-1),Null);
+CE_ContextPivotHighLatestExtremeDateTime = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotHighLatestExtremeDateTime,-1),Null);
+CE_ContextPivotHighLatestConfirmBarIndex = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotHighLatestConfirmBarIndex,-1),Null);
+CE_ContextPivotHighLatestConfirmDateTime = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotHighLatestConfirmDateTime,-1),Null);
+CE_ContextPivotLowLatestValid = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotLowLatestValid,-1),Null);
+CE_ContextPivotLowLatestPrice = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotLowLatestPrice,-1),Null);
+CE_ContextPivotLowLatestExtremeBarIndex = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotLowLatestExtremeBarIndex,-1),Null);
+CE_ContextPivotLowLatestExtremeDateTime = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotLowLatestExtremeDateTime,-1),Null);
+CE_ContextPivotLowLatestConfirmBarIndex = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotLowLatestConfirmBarIndex,-1),Null);
+CE_ContextPivotLowLatestConfirmDateTime = IIf(CE_ContextSnapshotPresent,Ref(SL_PivotLowLatestConfirmDateTime,-1),Null);
+_SECTION_END();
+
+_SECTION_BEGIN("25. Confirmation exploration");
+// Upstream columns and Filter=1 remain untouched.
+AddColumn(CE_SourceBarIndex,"CE_SourceBarIndex",1.0);
+AddColumn(CE_SourceDateTime,"CE_SourceDateTime",formatDateTime);
+AddColumn(Close,"CE_InputClose",1.12);
+AddColumn(CurrentCloseValid,"CE_InputCurrentCloseValid",1.0);
+AddColumn(NoDemandCandidateCode,"CE_InputNoDemandCandidateCode",1.0);
+AddColumn(NoSupplyCandidateCode,"CE_InputNoSupplyCandidateCode",1.0);
+AddColumn(NoDemandCandidateValid,"CE_InputNoDemandCandidateValid",1.0);
+AddColumn(NoSupplyCandidateValid,"CE_InputNoSupplyCandidateValid",1.0);
+AddColumn(CandidateInputValid,"CE_InputCandidateInputValid",1.0);
+AddColumn(CE_PriorCandidatePairWellFormed,"CE_PriorCandidatePairWellFormed",1.0);
+AddColumn(CE_PriorCandidateDataValid,"CE_PriorCandidateDataValid",1.0);
+AddColumn(CE_ContextSnapshotPresent,"CE_ContextSnapshotPresent",1.0);
+AddColumn(CE_ContextCandidateKindCode,"CE_ContextCandidateKindCode",1.0);
+AddColumn(CE_ContextCandidateBarIndex,"CE_ContextCandidateBarIndex",1.0);
+AddColumn(CE_ContextCandidateDateTime,"CE_ContextCandidateDateTime",formatDateTime);
+AddColumn(CE_NoDemand_PriorCandidateCode,"CE_NoDemand_PriorCandidateCode",1.0);
+AddColumn(CE_NoDemand_OpportunityPresent,"CE_NoDemand_OpportunityPresent",1.0);
+AddColumn(CE_NoDemand_ResponseCloseValid,"CE_NoDemand_ResponseCloseValid",1.0);
+AddColumn(CE_NoDemand_EvaluationValid,"CE_NoDemand_EvaluationValid",1.0);
+AddColumn(CE_NoDemand_StatusValid,"CE_NoDemand_StatusValid",1.0);
+AddColumn(CE_NoDemand_StatusCode,"CE_NoDemand_StatusCode",1.0);
+AddColumn(CE_NoDemand_Confirmed,"CE_NoDemand_Confirmed",1.0);
+AddColumn(CE_NoDemand_CandidateBarIndex,"CE_NoDemand_CandidateBarIndex",1.0);
+AddColumn(CE_NoDemand_CandidateDateTime,"CE_NoDemand_CandidateDateTime",formatDateTime);
+AddColumn(CE_NoDemand_CandidateClose,"CE_NoDemand_CandidateClose",1.12);
+AddColumn(CE_NoDemand_EvaluationBarIndex,"CE_NoDemand_EvaluationBarIndex",1.0);
+AddColumn(CE_NoDemand_EvaluationDateTime,"CE_NoDemand_EvaluationDateTime",formatDateTime);
+AddColumn(CE_NoDemand_ConfirmationLag,"CE_NoDemand_ConfirmationLag",1.0);
+AddColumn(CE_NoDemand_ResponseClose,"CE_NoDemand_ResponseClose",1.12);
+AddColumn(CE_NoDemand_ResponseDelta,"CE_NoDemand_ResponseDelta",1.12);
+AddColumn(CE_NoDemand_ResponseDirectionCode,"CE_NoDemand_ResponseDirectionCode",1.0);
+AddColumn(CE_NoSupply_PriorCandidateCode,"CE_NoSupply_PriorCandidateCode",1.0);
+AddColumn(CE_NoSupply_OpportunityPresent,"CE_NoSupply_OpportunityPresent",1.0);
+AddColumn(CE_NoSupply_ResponseCloseValid,"CE_NoSupply_ResponseCloseValid",1.0);
+AddColumn(CE_NoSupply_EvaluationValid,"CE_NoSupply_EvaluationValid",1.0);
+AddColumn(CE_NoSupply_StatusValid,"CE_NoSupply_StatusValid",1.0);
+AddColumn(CE_NoSupply_StatusCode,"CE_NoSupply_StatusCode",1.0);
+AddColumn(CE_NoSupply_Confirmed,"CE_NoSupply_Confirmed",1.0);
+AddColumn(CE_NoSupply_CandidateBarIndex,"CE_NoSupply_CandidateBarIndex",1.0);
+AddColumn(CE_NoSupply_CandidateDateTime,"CE_NoSupply_CandidateDateTime",formatDateTime);
+AddColumn(CE_NoSupply_CandidateClose,"CE_NoSupply_CandidateClose",1.12);
+AddColumn(CE_NoSupply_EvaluationBarIndex,"CE_NoSupply_EvaluationBarIndex",1.0);
+AddColumn(CE_NoSupply_EvaluationDateTime,"CE_NoSupply_EvaluationDateTime",formatDateTime);
+AddColumn(CE_NoSupply_ConfirmationLag,"CE_NoSupply_ConfirmationLag",1.0);
+AddColumn(CE_NoSupply_ResponseClose,"CE_NoSupply_ResponseClose",1.12);
+AddColumn(CE_NoSupply_ResponseDelta,"CE_NoSupply_ResponseDelta",1.12);
+AddColumn(CE_NoSupply_ResponseDirectionCode,"CE_NoSupply_ResponseDirectionCode",1.0);
+AddColumn(CE_ContextSReferenceStatusCode,"CE_ContextSReferenceStatusCode",1.0);
+AddColumn(CE_ContextSPositionStateCode,"CE_ContextSPositionStateCode",1.0);
+AddColumn(CE_ContextSLocationValid,"CE_ContextSLocationValid",1.0);
+AddColumn(CE_ContextSLocation,"CE_ContextSLocation",1.12);
+AddColumn(CE_ContextMReferenceStatusCode,"CE_ContextMReferenceStatusCode",1.0);
+AddColumn(CE_ContextMPositionStateCode,"CE_ContextMPositionStateCode",1.0);
+AddColumn(CE_ContextMLocationValid,"CE_ContextMLocationValid",1.0);
+AddColumn(CE_ContextMLocation,"CE_ContextMLocation",1.12);
+AddColumn(CE_ContextLReferenceStatusCode,"CE_ContextLReferenceStatusCode",1.0);
+AddColumn(CE_ContextLPositionStateCode,"CE_ContextLPositionStateCode",1.0);
+AddColumn(CE_ContextLLocationValid,"CE_ContextLLocationValid",1.0);
+AddColumn(CE_ContextLLocation,"CE_ContextLLocation",1.12);
+AddColumn(CE_ContextPivotHighLatestValid,"CE_ContextPivotHighLatestValid",1.0);
+AddColumn(CE_ContextPivotHighLatestPrice,"CE_ContextPivotHighLatestPrice",1.12);
+AddColumn(CE_ContextPivotHighLatestExtremeBarIndex,"CE_ContextPivotHighLatestExtremeBarIndex",1.0);
+AddColumn(CE_ContextPivotHighLatestExtremeDateTime,"CE_ContextPivotHighLatestExtremeDateTime",formatDateTime);
+AddColumn(CE_ContextPivotHighLatestConfirmBarIndex,"CE_ContextPivotHighLatestConfirmBarIndex",1.0);
+AddColumn(CE_ContextPivotHighLatestConfirmDateTime,"CE_ContextPivotHighLatestConfirmDateTime",formatDateTime);
+AddColumn(CE_ContextPivotLowLatestValid,"CE_ContextPivotLowLatestValid",1.0);
+AddColumn(CE_ContextPivotLowLatestPrice,"CE_ContextPivotLowLatestPrice",1.12);
+AddColumn(CE_ContextPivotLowLatestExtremeBarIndex,"CE_ContextPivotLowLatestExtremeBarIndex",1.0);
+AddColumn(CE_ContextPivotLowLatestExtremeDateTime,"CE_ContextPivotLowLatestExtremeDateTime",formatDateTime);
+AddColumn(CE_ContextPivotLowLatestConfirmBarIndex,"CE_ContextPivotLowLatestConfirmBarIndex",1.0);
+AddColumn(CE_ContextPivotLowLatestConfirmDateTime,"CE_ContextPivotLowLatestConfirmDateTime",formatDateTime);
+CE_NoDemand_Status = CE_StatusText;
+AddMultiTextColumn(CE_NoDemand_StatusCode,CE_NoDemand_Status,"CE_NoDemand_Status");
+CE_NoSupply_Status = CE_StatusText;
+AddMultiTextColumn(CE_NoSupply_StatusCode,CE_NoSupply_Status,"CE_NoSupply_Status");
+_SECTION_END();
