@@ -1,0 +1,512 @@
+/*
+    Wyckoff VSA Structure / Location Engine v1.0
+    Measurement only. No trading signal, prediction, or Wyckoff event.
+    Canonical specification: c848fcc81f02a9ee1e3e419e3925f4b27d88d08d
+    Locked fixtures: f51ff1736a6b0b2722eb20af49d8bfa1b90fb2cb
+    Requires the released Candidate v1.0.0 and Core v1.0.0.
+    This source is not a released or runtime-accepted version.
+*/
+SetBarsRequired( sbrAll, sbrAll );
+#include_once <WyckoffVSA_Candidate_v1.0.afl>
+
+_SECTION_BEGIN("16. Structure / Location parameters");
+// SL_CONFIG_BEGIN: the controlled harness substitutes only this block.
+SL_S_Lookback = Param("SL Short Lookback",20,2,500,1);
+SL_M_Lookback = Param("SL Medium Lookback",60,2,500,1);
+SL_L_Lookback = Param("SL Long Lookback",120,2,500,1);
+SL_PivotLeft = Param("SL Pivot Left",3,1,20,1);
+SL_PivotRight = Param("SL Pivot Right",3,1,20,1);
+// SL_CONFIG_END
+_SECTION_END();
+
+_SECTION_BEGIN("17. Structure / Location safe arithmetic");
+function SL_Finite( x )
+{
+    return IIf( IsNull(x), 0, IIf(IsFinite(x),1,0) );
+}
+function SL_SafeNumber( x )
+{
+    return IIf( SL_Finite(x), x, Null );
+}
+function SL_SafeSub( a, b )
+{
+    local v;
+    v = a-b;
+    return IIf( SL_Finite(a) AND SL_Finite(b), SL_SafeNumber(v), Null );
+}
+function SL_SafeAdd( a, b )
+{
+    local v;
+    v = a+b;
+    return IIf( SL_Finite(a) AND SL_Finite(b), SL_SafeNumber(v), Null );
+}
+function SL_SafeMul( a, b )
+{
+    local v;
+    v = a*b;
+    return IIf( SL_Finite(a) AND SL_Finite(b), SL_SafeNumber(v), Null );
+}
+function SL_SafeDiv( a, b )
+{
+    local good, safeB, v;
+    good = SL_Finite(a) AND SL_Finite(b) AND b>0;
+    safeB = IIf(good,b,1);
+    v = a/safeB;
+    return IIf(good,SL_SafeNumber(v),Null);
+}
+function SL_ValidInteger( x, low, high )
+{
+    return IIf(SL_Finite(x),
+               IIf(x>=low AND x<=high AND x==floor(x),1,0),0);
+}
+
+// A logical array offset is not a source BarIndex. Keep both identities.
+SL_SourceBarIndex = BarIndex();
+SL_SourceDateTime = DateTime();
+SL_SourceOffset = Cum(1)-1;
+SL_SourcePriceValid = PriceInputValid AND SL_Finite(High)
+                      AND SL_Finite(Low) AND SL_Finite(Close);
+SL_CurrentPriceValid = SL_SourcePriceValid;
+SL_ReferenceStatusText = "INSUFFICIENT HISTORY\nINVALID REFERENCE DATA\nZERO WIDTH REFERENCE\nREADY\nINVALID CONFIG";
+SL_PositionStatusText = "INSUFFICIENT DATA\nBELOW LOWER\nAT LOWER\nINSIDE\nAT UPPER\nABOVE UPPER\nZERO WIDTH REFERENCE";
+SL_PivotWindowStatusText = "INSUFFICIENT HISTORY\nINVALID REFERENCE DATA\nREADY\nINVALID CONFIG";
+SL_PivotEventText = "INSUFFICIENT DATA\nNOT PRESENT\nCONFIRMED PIVOT";
+_SECTION_END();
+
+_SECTION_BEGIN("18. Independent prior reference windows");
+function SL_CalcReference( tag, requestedN, validPrice, srcH, srcL, srcC, srcBI, srcDT, offset )
+{
+    local p, cfg, N, safeH, safeL, prefixCount, priorCount, full;
+    local upper0, lower0, width0, good, upper, lower, width, refValid, rangeValid, slRefStatus;
+    local cur, loc, locValid, dU, dL, distanceValid, penU, penL, penetrationValid;
+    local mid, widthPct, upperPct, lowerPct, widthPctValid, upperPctValid, lowerPctValid;
+    local boundaryValid, intersectsU, intersectsL, outsideU, outsideL, position;
+    p = "SL_"+tag+"_";
+    cfg = SL_ValidInteger(requestedN,2,500);
+    N = IIf(cfg,requestedN,2); // Internal safe period, never a fallback output.
+    safeH = IIf(validPrice,srcH,0);
+    safeL = IIf(validPrice,srcL,0);
+    prefixCount = Cum(validPrice);
+    priorCount = IIf(offset<N,Nz(Ref(prefixCount,-1),0),
+                     Ref(Sum(validPrice,N),-1));
+    full = cfg AND offset>=N;
+    upper0 = Ref(HHV(safeH,N),-1);
+    lower0 = Ref(LLV(safeL,N),-1);
+    width0 = SL_SafeSub(upper0,lower0);
+    good = full AND priorCount==N AND SL_Finite(upper0)
+           AND SL_Finite(lower0) AND SL_Finite(width0) AND width0>=0;
+    upper = IIf(good,upper0,Null);
+    lower = IIf(good,lower0,Null);
+    width = IIf(good,width0,Null);
+    refValid = IIf(good,1,0);
+    rangeValid = IIf(good AND width0>0,1,0);
+    slRefStatus = IIf(NOT cfg,4,IIf(NOT full,0,IIf(NOT good,1,
+             IIf(width0==0,2,3))));
+    VarSet(p+"Lookback",IIf(cfg,requestedN,Null));
+    VarSet(p+"ConfigValid",IIf(cfg,1,0));
+    VarSet(p+"PriorValidCount",IIf(cfg,priorCount,Null));
+    VarSet(p+"ReferenceStatusCode",slRefStatus);
+    VarSet(p+"ReferenceValid",refValid);
+    VarSet(p+"ReferenceRangeValid",rangeValid);
+    VarSet(p+"WindowStartBarIndex",IIf(full,Ref(srcBI,-N),Null));
+    VarSet(p+"WindowEndBarIndex",IIf(full,Ref(srcBI,-1),Null));
+    VarSet(p+"WindowStartDateTime",IIf(full,Ref(srcDT,-N),Null));
+    VarSet(p+"WindowEndDateTime",IIf(full,Ref(srcDT,-1),Null));
+    VarSet(p+"ReferenceAvailableBarIndex",IIf(full,srcBI,Null));
+    VarSet(p+"ReferenceAvailableDateTime",IIf(full,srcDT,Null));
+    VarSet(p+"Upper",upper);
+    VarSet(p+"Lower",lower);
+    VarSet(p+"Width",width);
+
+    cur = validPrice AND refValid;
+    dU = SL_SafeSub(srcC,upper);
+    dL = SL_SafeSub(srcC,lower);
+    distanceValid = cur AND SL_Finite(dU) AND SL_Finite(dL);
+    VarSet(p+"DistanceValid",IIf(distanceValid,1,0));
+    VarSet(p+"CloseDistanceUpper",IIf(distanceValid,dU,Null));
+    VarSet(p+"CloseDistanceLower",IIf(distanceValid,dL,Null));
+    penU = SL_SafeNumber(Max(SL_SafeSub(srcH,upper),0));
+    penL = SL_SafeNumber(Max(SL_SafeSub(lower,srcL),0));
+    penetrationValid = cur AND SL_Finite(penU) AND SL_Finite(penL);
+    VarSet(p+"PenetrationValid",IIf(penetrationValid,1,0));
+    VarSet(p+"HighPenetrationUpper",IIf(penetrationValid,penU,Null));
+    VarSet(p+"LowPenetrationLower",IIf(penetrationValid,penL,Null));
+
+    // L+W/2 avoids unnecessary overflow in (U+L)/2.
+    mid = SL_SafeAdd(lower,SL_SafeDiv(width,2));
+    widthPct = SL_SafeMul(SL_SafeDiv(width,mid),100);
+    widthPctValid = refValid AND SL_Finite(widthPct);
+    upperPct = SL_SafeMul(SL_SafeSub(SL_SafeDiv(srcC,upper),1),100);
+    lowerPct = SL_SafeMul(SL_SafeSub(SL_SafeDiv(srcC,lower),1),100);
+    upperPctValid = cur AND SL_Finite(upperPct);
+    lowerPctValid = cur AND SL_Finite(lowerPct);
+    VarSet(p+"WidthPercentValid",IIf(widthPctValid,1,0));
+    VarSet(p+"WidthPercent",IIf(widthPctValid,widthPct,Null));
+    VarSet(p+"CloseUpperPctValid",IIf(upperPctValid,1,0));
+    VarSet(p+"CloseUpperPct",IIf(upperPctValid,upperPct,Null));
+    VarSet(p+"CloseLowerPctValid",IIf(lowerPctValid,1,0));
+    VarSet(p+"CloseLowerPct",IIf(lowerPctValid,lowerPct,Null));
+
+    boundaryValid = cur;
+    intersectsU = IIf(boundaryValid AND srcH>=upper AND srcL<=upper,1,0);
+    intersectsL = IIf(boundaryValid AND srcH>=lower AND srcL<=lower,1,0);
+    outsideU = IIf(boundaryValid AND srcC>upper,1,0);
+    outsideL = IIf(boundaryValid AND srcC<lower,1,0);
+    VarSet(p+"BoundaryRelationValid",IIf(boundaryValid,1,0));
+    VarSet(p+"IntersectsUpper",intersectsU);
+    VarSet(p+"IntersectsLower",intersectsL);
+    VarSet(p+"CloseOutsideUpper",outsideU);
+    VarSet(p+"CloseOutsideLower",outsideL);
+
+    loc = SL_SafeDiv(SL_SafeSub(srcC,lower),width);
+    locValid = cur AND rangeValid AND SL_Finite(loc);
+    VarSet(p+"LocationValid",IIf(locValid,1,0));
+    VarSet(p+"Location",IIf(locValid,loc,Null));
+    position = IIf(NOT cur,0,IIf(width==0,6,
+               IIf(srcC<lower,1,IIf(srcC==lower,2,
+               IIf(srcC>upper,5,IIf(srcC==upper,4,3))))));
+    VarSet(p+"PositionStateCode",position);
+    return 1;
+}
+SL_S_Calculated = SL_CalcReference("S",SL_S_Lookback,SL_SourcePriceValid,
+                        High,Low,Close,SL_SourceBarIndex,SL_SourceDateTime,SL_SourceOffset);
+SL_M_Calculated = SL_CalcReference("M",SL_M_Lookback,SL_SourcePriceValid,
+                        High,Low,Close,SL_SourceBarIndex,SL_SourceDateTime,SL_SourceOffset);
+SL_L_Calculated = SL_CalcReference("L",SL_L_Lookback,SL_SourcePriceValid,
+                        High,Low,Close,SL_SourceBarIndex,SL_SourceDateTime,SL_SourceOffset);
+_SECTION_END();
+
+_SECTION_BEGIN("19. Point-in-time pivot confirmations");
+function SL_CalcPivotKind( kind, highKind, prices, windowValid, A, B, srcBI, srcDT )
+{
+    local p, eventValid, eventCode, eventPrice, extremeBI, extremeDT, confirmBI, confirmDT, lag;
+    local latestValid, latestPrice, latestExtremeBI, latestExtremeDT, latestConfirmBI, latestConfirmDT, latestAge, latestSince;
+    local priorValid, priorPrice, priorExtremeBI, priorExtremeDT, priorConfirmBI, priorConfirmDT, priorAge, priorSince;
+    local storedValid, storedPrice, storedExtremeBI, storedExtremeDT, storedConfirmBI, storedConfirmDT;
+    local storedExtremeOffset, storedConfirmOffset, i, j, k, ok, value, code;
+    p = "SL_Pivot"+kind;
+    eventValid = 0; eventCode = 0; eventPrice = Null;
+    extremeBI = Null; extremeDT = Null; confirmBI = Null; confirmDT = Null; lag = Null;
+    latestValid = 0; latestPrice = Null; latestExtremeBI = Null; latestExtremeDT = Null;
+    latestConfirmBI = Null; latestConfirmDT = Null; latestAge = Null; latestSince = Null;
+    priorValid = 0; priorPrice = Null; priorExtremeBI = Null; priorExtremeDT = Null;
+    priorConfirmBI = Null; priorConfirmDT = Null; priorAge = Null; priorSince = Null;
+    storedValid = 0; storedPrice = Null; storedExtremeBI = Null; storedExtremeDT = Null;
+    storedConfirmBI = Null; storedConfirmDT = Null; storedExtremeOffset = Null; storedConfirmOffset = Null;
+    for(i=0;i<BarCount;i++)
+    {
+        // Snapshot contains confirmations through i-1, with ages measured at i.
+        priorValid[i] = storedValid;
+        if(storedValid)
+        {
+            priorPrice[i] = storedPrice;
+            priorExtremeBI[i] = storedExtremeBI;
+            priorExtremeDT[i] = storedExtremeDT;
+            priorConfirmBI[i] = storedConfirmBI;
+            priorConfirmDT[i] = storedConfirmDT;
+            priorAge[i] = i-storedExtremeOffset;
+            priorSince[i] = i-storedConfirmOffset;
+        }
+        code = 0;
+        eventValid[i] = windowValid[i];
+        if(windowValid[i])
+        {
+            code = 1;
+            k = i-B;
+            value = prices[k];
+            ok = 1;
+            // Strict left and inclusive right: no future index and no backfill.
+            for(j=k-A;j<k;j++)
+            {
+                if(highKind)
+                {
+                    if(NOT (value>prices[j])) ok=0;
+                }
+                else
+                {
+                    if(NOT (value<prices[j])) ok=0;
+                }
+            }
+            for(j=k+1;j<=i;j++)
+            {
+                if(highKind)
+                {
+                    if(NOT (value>=prices[j])) ok=0;
+                }
+                else
+                {
+                    if(NOT (value<=prices[j])) ok=0;
+                }
+            }
+            if(ok)
+            {
+                code=2;
+                eventPrice[i]=value;
+                extremeBI[i]=srcBI[k];
+                extremeDT[i]=srcDT[k];
+                confirmBI[i]=srcBI[i];
+                confirmDT[i]=srcDT[i];
+                lag[i]=B;
+                storedValid=1;
+                storedPrice=value;
+                storedExtremeBI=srcBI[k];
+                storedExtremeDT=srcDT[k];
+                storedConfirmBI=srcBI[i];
+                storedConfirmDT=srcDT[i];
+                storedExtremeOffset=k;
+                storedConfirmOffset=i;
+            }
+        }
+        eventCode[i]=code;
+        latestValid[i]=storedValid;
+        if(storedValid)
+        {
+            latestPrice[i]=storedPrice;
+            latestExtremeBI[i]=storedExtremeBI;
+            latestExtremeDT[i]=storedExtremeDT;
+            latestConfirmBI[i]=storedConfirmBI;
+            latestConfirmDT[i]=storedConfirmDT;
+            latestAge[i]=i-storedExtremeOffset;
+            latestSince[i]=i-storedConfirmOffset;
+        }
+    }
+    VarSet(p+"EventValid",eventValid);
+    VarSet(p+"EventCode",eventCode);
+    VarSet(p+"EventPrice",eventPrice);
+    VarSet(p+"ExtremeBarIndex",extremeBI);
+    VarSet(p+"ExtremeDateTime",extremeDT);
+    VarSet(p+"ConfirmBarIndex",confirmBI);
+    VarSet(p+"ConfirmDateTime",confirmDT);
+    VarSet(p+"ConfirmationLag",lag);
+    VarSet(p+"LatestValid",latestValid);
+    VarSet(p+"LatestPrice",latestPrice);
+    VarSet(p+"LatestExtremeBarIndex",latestExtremeBI);
+    VarSet(p+"LatestExtremeDateTime",latestExtremeDT);
+    VarSet(p+"LatestConfirmBarIndex",latestConfirmBI);
+    VarSet(p+"LatestConfirmDateTime",latestConfirmDT);
+    VarSet(p+"LatestAge",latestAge);
+    VarSet(p+"LatestBarsSinceConfirmation",latestSince);
+    VarSet(p+"LatestPriorValid",priorValid);
+    VarSet(p+"LatestPriorPrice",priorPrice);
+    VarSet(p+"LatestPriorExtremeBarIndex",priorExtremeBI);
+    VarSet(p+"LatestPriorExtremeDateTime",priorExtremeDT);
+    VarSet(p+"LatestPriorConfirmBarIndex",priorConfirmBI);
+    VarSet(p+"LatestPriorConfirmDateTime",priorConfirmDT);
+    VarSet(p+"LatestPriorAge",priorAge);
+    VarSet(p+"LatestPriorBarsSinceConfirmation",priorSince);
+    return 1;
+}
+
+SL_PivotConfigValid = SL_ValidInteger(SL_PivotLeft,1,20)
+                       AND SL_ValidInteger(SL_PivotRight,1,20);
+SL_PivotA = IIf(SL_PivotConfigValid,SL_PivotLeft,1);
+SL_PivotB = IIf(SL_PivotConfigValid,SL_PivotRight,1);
+SL_PivotLength = SL_PivotA+SL_PivotB+1;
+SL_PivotPrefixCount = Cum(SL_SourcePriceValid);
+SL_PivotWindowValidCount = IIf(SL_PivotConfigValid,
+            IIf(SL_SourceOffset<SL_PivotLength,SL_PivotPrefixCount,
+                SL_PivotPrefixCount-Nz(Ref(SL_PivotPrefixCount,-SL_PivotLength),0)),Null);
+SL_PivotFull = SL_PivotConfigValid AND SL_SourceOffset>=SL_PivotA+SL_PivotB;
+SL_PivotWindowStatusCode = IIf(NOT SL_PivotConfigValid,3,
+    IIf(NOT SL_PivotFull,0,IIf(SL_PivotWindowValidCount==SL_PivotLength,2,1)));
+SL_PivotWindowValid = IIf(SL_PivotWindowStatusCode==2,1,0);
+SL_PivotLeft = IIf(SL_PivotConfigValid,SL_PivotLeft,Null);
+SL_PivotRight = IIf(SL_PivotConfigValid,SL_PivotRight,Null);
+SL_PivotWindowStartBarIndex = IIf(SL_PivotFull,
+            Ref(SL_SourceBarIndex,-(SL_PivotA+SL_PivotB)),Null);
+SL_PivotWindowEndBarIndex = IIf(SL_PivotFull,SL_SourceBarIndex,Null);
+SL_PivotWindowStartDateTime = IIf(SL_PivotFull,
+            Ref(SL_SourceDateTime,-(SL_PivotA+SL_PivotB)),Null);
+SL_PivotWindowEndDateTime = IIf(SL_PivotFull,SL_SourceDateTime,Null);
+SL_PivotCandidateBarIndex = IIf(SL_PivotFull,Ref(SL_SourceBarIndex,-SL_PivotB),Null);
+SL_PivotCandidateDateTime = IIf(SL_PivotFull,Ref(SL_SourceDateTime,-SL_PivotB),Null);
+SL_ConfigValid = VarGet("SL_S_ConfigValid") AND VarGet("SL_M_ConfigValid")
+                 AND VarGet("SL_L_ConfigValid") AND SL_PivotConfigValid;
+SL_HighCalculated = SL_CalcPivotKind("High",1,High,SL_PivotWindowValid,
+                         SL_PivotA,SL_PivotB,SL_SourceBarIndex,SL_SourceDateTime);
+SL_LowCalculated = SL_CalcPivotKind("Low",0,Low,SL_PivotWindowValid,
+                         SL_PivotA,SL_PivotB,SL_SourceBarIndex,SL_SourceDateTime);
+_SECTION_END();
+
+_SECTION_BEGIN("20. Structure / Location exploration");
+// Existing Core/Candidate columns and Filter=1 remain untouched.
+AddColumn(Open,"Open",1.12);
+AddColumn(High,"High",1.12);
+AddColumn(Low,"Low",1.12);
+AddColumn(VarGet("SL_CurrentPriceValid"),"SL_CurrentPriceValid",1.0);
+AddColumn(VarGet("SL_ConfigValid"),"SL_ConfigValid",1.0);
+AddColumn(VarGet("SL_S_Lookback"),"SL_S_Lookback",1.0);
+AddColumn(VarGet("SL_S_ConfigValid"),"SL_S_ConfigValid",1.0);
+AddColumn(VarGet("SL_S_PriorValidCount"),"SL_S_PriorValidCount",1.0);
+AddColumn(VarGet("SL_S_WindowStartBarIndex"),"SL_S_WindowStartBarIndex",1.0);
+AddColumn(VarGet("SL_S_WindowEndBarIndex"),"SL_S_WindowEndBarIndex",1.0);
+AddColumn(VarGet("SL_S_WindowStartDateTime"),"SL_S_WindowStartDateTime",formatDateTime);
+AddColumn(VarGet("SL_S_WindowEndDateTime"),"SL_S_WindowEndDateTime",formatDateTime);
+AddColumn(VarGet("SL_S_ReferenceAvailableBarIndex"),"SL_S_ReferenceAvailableBarIndex",1.0);
+AddColumn(VarGet("SL_S_ReferenceAvailableDateTime"),"SL_S_ReferenceAvailableDateTime",formatDateTime);
+AddColumn(VarGet("SL_S_Upper"),"SL_S_Upper",1.12);
+AddColumn(VarGet("SL_S_Lower"),"SL_S_Lower",1.12);
+AddColumn(VarGet("SL_S_Width"),"SL_S_Width",1.12);
+AddColumn(VarGet("SL_S_ReferenceValid"),"SL_S_ReferenceValid",1.0);
+AddColumn(VarGet("SL_S_ReferenceRangeValid"),"SL_S_ReferenceRangeValid",1.0);
+AddColumn(VarGet("SL_S_ReferenceStatusCode"),"SL_S_ReferenceStatusCode",1.0);
+AddMultiTextColumn(VarGet("SL_S_ReferenceStatusCode"),SL_ReferenceStatusText,"SL_S_ReferenceStatus");
+AddColumn(VarGet("SL_S_Location"),"SL_S_Location",1.12);
+AddColumn(VarGet("SL_S_CloseDistanceUpper"),"SL_S_CloseDistanceUpper",1.12);
+AddColumn(VarGet("SL_S_CloseDistanceLower"),"SL_S_CloseDistanceLower",1.12);
+AddColumn(VarGet("SL_S_HighPenetrationUpper"),"SL_S_HighPenetrationUpper",1.12);
+AddColumn(VarGet("SL_S_LowPenetrationLower"),"SL_S_LowPenetrationLower",1.12);
+AddColumn(VarGet("SL_S_WidthPercent"),"SL_S_WidthPercent",1.12);
+AddColumn(VarGet("SL_S_CloseUpperPct"),"SL_S_CloseUpperPct",1.12);
+AddColumn(VarGet("SL_S_CloseLowerPct"),"SL_S_CloseLowerPct",1.12);
+AddColumn(VarGet("SL_S_LocationValid"),"SL_S_LocationValid",1.0);
+AddColumn(VarGet("SL_S_DistanceValid"),"SL_S_DistanceValid",1.0);
+AddColumn(VarGet("SL_S_PenetrationValid"),"SL_S_PenetrationValid",1.0);
+AddColumn(VarGet("SL_S_WidthPercentValid"),"SL_S_WidthPercentValid",1.0);
+AddColumn(VarGet("SL_S_CloseUpperPctValid"),"SL_S_CloseUpperPctValid",1.0);
+AddColumn(VarGet("SL_S_CloseLowerPctValid"),"SL_S_CloseLowerPctValid",1.0);
+AddColumn(VarGet("SL_S_BoundaryRelationValid"),"SL_S_BoundaryRelationValid",1.0);
+AddColumn(VarGet("SL_S_IntersectsUpper"),"SL_S_IntersectsUpper",1.12);
+AddColumn(VarGet("SL_S_IntersectsLower"),"SL_S_IntersectsLower",1.12);
+AddColumn(VarGet("SL_S_CloseOutsideUpper"),"SL_S_CloseOutsideUpper",1.12);
+AddColumn(VarGet("SL_S_CloseOutsideLower"),"SL_S_CloseOutsideLower",1.12);
+AddColumn(VarGet("SL_S_PositionStateCode"),"SL_S_PositionStateCode",1.0);
+AddMultiTextColumn(VarGet("SL_S_PositionStateCode"),SL_PositionStatusText,"SL_S_PositionState");
+AddColumn(VarGet("SL_M_Lookback"),"SL_M_Lookback",1.0);
+AddColumn(VarGet("SL_M_ConfigValid"),"SL_M_ConfigValid",1.0);
+AddColumn(VarGet("SL_M_PriorValidCount"),"SL_M_PriorValidCount",1.0);
+AddColumn(VarGet("SL_M_WindowStartBarIndex"),"SL_M_WindowStartBarIndex",1.0);
+AddColumn(VarGet("SL_M_WindowEndBarIndex"),"SL_M_WindowEndBarIndex",1.0);
+AddColumn(VarGet("SL_M_WindowStartDateTime"),"SL_M_WindowStartDateTime",formatDateTime);
+AddColumn(VarGet("SL_M_WindowEndDateTime"),"SL_M_WindowEndDateTime",formatDateTime);
+AddColumn(VarGet("SL_M_ReferenceAvailableBarIndex"),"SL_M_ReferenceAvailableBarIndex",1.0);
+AddColumn(VarGet("SL_M_ReferenceAvailableDateTime"),"SL_M_ReferenceAvailableDateTime",formatDateTime);
+AddColumn(VarGet("SL_M_Upper"),"SL_M_Upper",1.12);
+AddColumn(VarGet("SL_M_Lower"),"SL_M_Lower",1.12);
+AddColumn(VarGet("SL_M_Width"),"SL_M_Width",1.12);
+AddColumn(VarGet("SL_M_ReferenceValid"),"SL_M_ReferenceValid",1.0);
+AddColumn(VarGet("SL_M_ReferenceRangeValid"),"SL_M_ReferenceRangeValid",1.0);
+AddColumn(VarGet("SL_M_ReferenceStatusCode"),"SL_M_ReferenceStatusCode",1.0);
+AddMultiTextColumn(VarGet("SL_M_ReferenceStatusCode"),SL_ReferenceStatusText,"SL_M_ReferenceStatus");
+AddColumn(VarGet("SL_M_Location"),"SL_M_Location",1.12);
+AddColumn(VarGet("SL_M_CloseDistanceUpper"),"SL_M_CloseDistanceUpper",1.12);
+AddColumn(VarGet("SL_M_CloseDistanceLower"),"SL_M_CloseDistanceLower",1.12);
+AddColumn(VarGet("SL_M_HighPenetrationUpper"),"SL_M_HighPenetrationUpper",1.12);
+AddColumn(VarGet("SL_M_LowPenetrationLower"),"SL_M_LowPenetrationLower",1.12);
+AddColumn(VarGet("SL_M_WidthPercent"),"SL_M_WidthPercent",1.12);
+AddColumn(VarGet("SL_M_CloseUpperPct"),"SL_M_CloseUpperPct",1.12);
+AddColumn(VarGet("SL_M_CloseLowerPct"),"SL_M_CloseLowerPct",1.12);
+AddColumn(VarGet("SL_M_LocationValid"),"SL_M_LocationValid",1.0);
+AddColumn(VarGet("SL_M_DistanceValid"),"SL_M_DistanceValid",1.0);
+AddColumn(VarGet("SL_M_PenetrationValid"),"SL_M_PenetrationValid",1.0);
+AddColumn(VarGet("SL_M_WidthPercentValid"),"SL_M_WidthPercentValid",1.0);
+AddColumn(VarGet("SL_M_CloseUpperPctValid"),"SL_M_CloseUpperPctValid",1.0);
+AddColumn(VarGet("SL_M_CloseLowerPctValid"),"SL_M_CloseLowerPctValid",1.0);
+AddColumn(VarGet("SL_M_BoundaryRelationValid"),"SL_M_BoundaryRelationValid",1.0);
+AddColumn(VarGet("SL_M_IntersectsUpper"),"SL_M_IntersectsUpper",1.12);
+AddColumn(VarGet("SL_M_IntersectsLower"),"SL_M_IntersectsLower",1.12);
+AddColumn(VarGet("SL_M_CloseOutsideUpper"),"SL_M_CloseOutsideUpper",1.12);
+AddColumn(VarGet("SL_M_CloseOutsideLower"),"SL_M_CloseOutsideLower",1.12);
+AddColumn(VarGet("SL_M_PositionStateCode"),"SL_M_PositionStateCode",1.0);
+AddMultiTextColumn(VarGet("SL_M_PositionStateCode"),SL_PositionStatusText,"SL_M_PositionState");
+AddColumn(VarGet("SL_L_Lookback"),"SL_L_Lookback",1.0);
+AddColumn(VarGet("SL_L_ConfigValid"),"SL_L_ConfigValid",1.0);
+AddColumn(VarGet("SL_L_PriorValidCount"),"SL_L_PriorValidCount",1.0);
+AddColumn(VarGet("SL_L_WindowStartBarIndex"),"SL_L_WindowStartBarIndex",1.0);
+AddColumn(VarGet("SL_L_WindowEndBarIndex"),"SL_L_WindowEndBarIndex",1.0);
+AddColumn(VarGet("SL_L_WindowStartDateTime"),"SL_L_WindowStartDateTime",formatDateTime);
+AddColumn(VarGet("SL_L_WindowEndDateTime"),"SL_L_WindowEndDateTime",formatDateTime);
+AddColumn(VarGet("SL_L_ReferenceAvailableBarIndex"),"SL_L_ReferenceAvailableBarIndex",1.0);
+AddColumn(VarGet("SL_L_ReferenceAvailableDateTime"),"SL_L_ReferenceAvailableDateTime",formatDateTime);
+AddColumn(VarGet("SL_L_Upper"),"SL_L_Upper",1.12);
+AddColumn(VarGet("SL_L_Lower"),"SL_L_Lower",1.12);
+AddColumn(VarGet("SL_L_Width"),"SL_L_Width",1.12);
+AddColumn(VarGet("SL_L_ReferenceValid"),"SL_L_ReferenceValid",1.0);
+AddColumn(VarGet("SL_L_ReferenceRangeValid"),"SL_L_ReferenceRangeValid",1.0);
+AddColumn(VarGet("SL_L_ReferenceStatusCode"),"SL_L_ReferenceStatusCode",1.0);
+AddMultiTextColumn(VarGet("SL_L_ReferenceStatusCode"),SL_ReferenceStatusText,"SL_L_ReferenceStatus");
+AddColumn(VarGet("SL_L_Location"),"SL_L_Location",1.12);
+AddColumn(VarGet("SL_L_CloseDistanceUpper"),"SL_L_CloseDistanceUpper",1.12);
+AddColumn(VarGet("SL_L_CloseDistanceLower"),"SL_L_CloseDistanceLower",1.12);
+AddColumn(VarGet("SL_L_HighPenetrationUpper"),"SL_L_HighPenetrationUpper",1.12);
+AddColumn(VarGet("SL_L_LowPenetrationLower"),"SL_L_LowPenetrationLower",1.12);
+AddColumn(VarGet("SL_L_WidthPercent"),"SL_L_WidthPercent",1.12);
+AddColumn(VarGet("SL_L_CloseUpperPct"),"SL_L_CloseUpperPct",1.12);
+AddColumn(VarGet("SL_L_CloseLowerPct"),"SL_L_CloseLowerPct",1.12);
+AddColumn(VarGet("SL_L_LocationValid"),"SL_L_LocationValid",1.0);
+AddColumn(VarGet("SL_L_DistanceValid"),"SL_L_DistanceValid",1.0);
+AddColumn(VarGet("SL_L_PenetrationValid"),"SL_L_PenetrationValid",1.0);
+AddColumn(VarGet("SL_L_WidthPercentValid"),"SL_L_WidthPercentValid",1.0);
+AddColumn(VarGet("SL_L_CloseUpperPctValid"),"SL_L_CloseUpperPctValid",1.0);
+AddColumn(VarGet("SL_L_CloseLowerPctValid"),"SL_L_CloseLowerPctValid",1.0);
+AddColumn(VarGet("SL_L_BoundaryRelationValid"),"SL_L_BoundaryRelationValid",1.0);
+AddColumn(VarGet("SL_L_IntersectsUpper"),"SL_L_IntersectsUpper",1.12);
+AddColumn(VarGet("SL_L_IntersectsLower"),"SL_L_IntersectsLower",1.12);
+AddColumn(VarGet("SL_L_CloseOutsideUpper"),"SL_L_CloseOutsideUpper",1.12);
+AddColumn(VarGet("SL_L_CloseOutsideLower"),"SL_L_CloseOutsideLower",1.12);
+AddColumn(VarGet("SL_L_PositionStateCode"),"SL_L_PositionStateCode",1.0);
+AddMultiTextColumn(VarGet("SL_L_PositionStateCode"),SL_PositionStatusText,"SL_L_PositionState");
+AddColumn(VarGet("SL_PivotLeft"),"SL_PivotLeft",1.12);
+AddColumn(VarGet("SL_PivotRight"),"SL_PivotRight",1.12);
+AddColumn(VarGet("SL_PivotConfigValid"),"SL_PivotConfigValid",1.0);
+AddColumn(VarGet("SL_PivotWindowValidCount"),"SL_PivotWindowValidCount",1.0);
+AddColumn(VarGet("SL_PivotWindowStartBarIndex"),"SL_PivotWindowStartBarIndex",1.0);
+AddColumn(VarGet("SL_PivotWindowEndBarIndex"),"SL_PivotWindowEndBarIndex",1.0);
+AddColumn(VarGet("SL_PivotWindowStartDateTime"),"SL_PivotWindowStartDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotWindowEndDateTime"),"SL_PivotWindowEndDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotCandidateBarIndex"),"SL_PivotCandidateBarIndex",1.0);
+AddColumn(VarGet("SL_PivotCandidateDateTime"),"SL_PivotCandidateDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotWindowStatusCode"),"SL_PivotWindowStatusCode",1.0);
+AddMultiTextColumn(VarGet("SL_PivotWindowStatusCode"),SL_PivotWindowStatusText,"SL_PivotWindowStatus");
+AddColumn(VarGet("SL_PivotWindowValid"),"SL_PivotWindowValid",1.0);
+AddColumn(VarGet("SL_PivotHighLatestPriorValid"),"SL_PivotHighLatestPriorValid",1.0);
+AddColumn(VarGet("SL_PivotHighLatestPriorPrice"),"SL_PivotHighLatestPriorPrice",1.12);
+AddColumn(VarGet("SL_PivotHighLatestPriorExtremeBarIndex"),"SL_PivotHighLatestPriorExtremeBarIndex",1.0);
+AddColumn(VarGet("SL_PivotHighLatestPriorExtremeDateTime"),"SL_PivotHighLatestPriorExtremeDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotHighLatestPriorConfirmBarIndex"),"SL_PivotHighLatestPriorConfirmBarIndex",1.0);
+AddColumn(VarGet("SL_PivotHighLatestPriorConfirmDateTime"),"SL_PivotHighLatestPriorConfirmDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotHighLatestPriorAge"),"SL_PivotHighLatestPriorAge",1.0);
+AddColumn(VarGet("SL_PivotHighLatestPriorBarsSinceConfirmation"),"SL_PivotHighLatestPriorBarsSinceConfirmation",1.0);
+AddColumn(VarGet("SL_PivotHighEventValid"),"SL_PivotHighEventValid",1.0);
+AddColumn(VarGet("SL_PivotHighEventCode"),"SL_PivotHighEventCode",1.0);
+AddMultiTextColumn(VarGet("SL_PivotHighEventCode"),SL_PivotEventText,"SL_PivotHighEvent");
+AddColumn(VarGet("SL_PivotHighEventPrice"),"SL_PivotHighEventPrice",1.12);
+AddColumn(VarGet("SL_PivotHighExtremeBarIndex"),"SL_PivotHighExtremeBarIndex",1.0);
+AddColumn(VarGet("SL_PivotHighExtremeDateTime"),"SL_PivotHighExtremeDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotHighConfirmBarIndex"),"SL_PivotHighConfirmBarIndex",1.0);
+AddColumn(VarGet("SL_PivotHighConfirmDateTime"),"SL_PivotHighConfirmDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotHighConfirmationLag"),"SL_PivotHighConfirmationLag",1.0);
+AddColumn(VarGet("SL_PivotHighLatestValid"),"SL_PivotHighLatestValid",1.0);
+AddColumn(VarGet("SL_PivotHighLatestPrice"),"SL_PivotHighLatestPrice",1.12);
+AddColumn(VarGet("SL_PivotHighLatestExtremeBarIndex"),"SL_PivotHighLatestExtremeBarIndex",1.0);
+AddColumn(VarGet("SL_PivotHighLatestExtremeDateTime"),"SL_PivotHighLatestExtremeDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotHighLatestConfirmBarIndex"),"SL_PivotHighLatestConfirmBarIndex",1.0);
+AddColumn(VarGet("SL_PivotHighLatestConfirmDateTime"),"SL_PivotHighLatestConfirmDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotHighLatestAge"),"SL_PivotHighLatestAge",1.0);
+AddColumn(VarGet("SL_PivotHighLatestBarsSinceConfirmation"),"SL_PivotHighLatestBarsSinceConfirmation",1.0);
+AddColumn(VarGet("SL_PivotLowLatestPriorValid"),"SL_PivotLowLatestPriorValid",1.0);
+AddColumn(VarGet("SL_PivotLowLatestPriorPrice"),"SL_PivotLowLatestPriorPrice",1.12);
+AddColumn(VarGet("SL_PivotLowLatestPriorExtremeBarIndex"),"SL_PivotLowLatestPriorExtremeBarIndex",1.0);
+AddColumn(VarGet("SL_PivotLowLatestPriorExtremeDateTime"),"SL_PivotLowLatestPriorExtremeDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotLowLatestPriorConfirmBarIndex"),"SL_PivotLowLatestPriorConfirmBarIndex",1.0);
+AddColumn(VarGet("SL_PivotLowLatestPriorConfirmDateTime"),"SL_PivotLowLatestPriorConfirmDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotLowLatestPriorAge"),"SL_PivotLowLatestPriorAge",1.0);
+AddColumn(VarGet("SL_PivotLowLatestPriorBarsSinceConfirmation"),"SL_PivotLowLatestPriorBarsSinceConfirmation",1.0);
+AddColumn(VarGet("SL_PivotLowEventValid"),"SL_PivotLowEventValid",1.0);
+AddColumn(VarGet("SL_PivotLowEventCode"),"SL_PivotLowEventCode",1.0);
+AddMultiTextColumn(VarGet("SL_PivotLowEventCode"),SL_PivotEventText,"SL_PivotLowEvent");
+AddColumn(VarGet("SL_PivotLowEventPrice"),"SL_PivotLowEventPrice",1.12);
+AddColumn(VarGet("SL_PivotLowExtremeBarIndex"),"SL_PivotLowExtremeBarIndex",1.0);
+AddColumn(VarGet("SL_PivotLowExtremeDateTime"),"SL_PivotLowExtremeDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotLowConfirmBarIndex"),"SL_PivotLowConfirmBarIndex",1.0);
+AddColumn(VarGet("SL_PivotLowConfirmDateTime"),"SL_PivotLowConfirmDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotLowConfirmationLag"),"SL_PivotLowConfirmationLag",1.0);
+AddColumn(VarGet("SL_PivotLowLatestValid"),"SL_PivotLowLatestValid",1.0);
+AddColumn(VarGet("SL_PivotLowLatestPrice"),"SL_PivotLowLatestPrice",1.12);
+AddColumn(VarGet("SL_PivotLowLatestExtremeBarIndex"),"SL_PivotLowLatestExtremeBarIndex",1.0);
+AddColumn(VarGet("SL_PivotLowLatestExtremeDateTime"),"SL_PivotLowLatestExtremeDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotLowLatestConfirmBarIndex"),"SL_PivotLowLatestConfirmBarIndex",1.0);
+AddColumn(VarGet("SL_PivotLowLatestConfirmDateTime"),"SL_PivotLowLatestConfirmDateTime",formatDateTime);
+AddColumn(VarGet("SL_PivotLowLatestAge"),"SL_PivotLowLatestAge",1.0);
+AddColumn(VarGet("SL_PivotLowLatestBarsSinceConfirmation"),"SL_PivotLowLatestBarsSinceConfirmation",1.0);
+_SECTION_END();
