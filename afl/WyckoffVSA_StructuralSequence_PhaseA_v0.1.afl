@@ -1,0 +1,765 @@
+/*
+    Wyckoff VSA Structural Sequence Engine v0.1
+    PS / SC / Automatic Rally / ST and PSY / BC / Automatic Reaction / ST
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    Approved specification: PR #20, merge commit e3a2c342c435aa2fd905fff4ae7ea14d060dafcf
+
+    This layer publishes structural -LIKE labels only.
+    It does NOT publish Accumulation, Distribution, Reaccumulation,
+    Redistribution or canonical Phase A. No trading signal.
+*/
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_v0.1.afl>
+
+_SECTION_BEGIN("50. Structural Sequence contracts");
+function WS_Finite( x )
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WS_SourceBarIndex = BarIndex();
+WS_SourceDateTime = DateTime();
+WS_Zero = 0 * WS_SourceBarIndex;
+WS_Null = Null + WS_Zero;
+
+WS_SeedStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nCLIMAX SEED";
+WS_PairStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nCONFIRMED -LIKE PAIR";
+WS_PreliminaryStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nPRELIMINARY-LIKE";
+WS_STStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nST-LIKE";
+WS_LowerSTRelationText = "INSUFFICIENT DATA\nABOVE SC LOW\nAT SC LOW\nBELOW SC LOW";
+WS_UpperSTRelationText = "INSUFFICIENT DATA\nBELOW BC HIGH\nAT BC HIGH\nABOVE BC HIGH";
+WS_LowerSTQualityText = "INSUFFICIENT QUALITY DATA\nSUPPLY NOT CLEARLY DIMINISHED\nMIXED TEST QUALITY\nDIMINISHED SUPPLY EVIDENCE";
+WS_UpperSTQualityText = "INSUFFICIENT QUALITY DATA\nDEMAND NOT CLEARLY DIMINISHED\nMIXED TEST QUALITY\nDIMINISHED DEMAND EVIDENCE";
+WS_MorphologyText = "NO ACTIVE PAIR\nPAIR CONFIRMED / NO ST YET\nSTOPPING SEQUENCE-LIKE OBSERVED";
+
+// Event outputs. Defaults are NOT PRESENT; step-specific insufficient states are set in the loop.
+WS_LowerClimaxSeedCode = 1 + WS_Zero;
+WS_UpperClimaxSeedCode = 1 + WS_Zero;
+WS_SCLikeCode = 1 + WS_Zero;
+WS_AutomaticRallyLikeCode = 1 + WS_Zero;
+WS_PSLikeCode = 1 + WS_Zero;
+WS_BCLikeCode = 1 + WS_Zero;
+WS_AutomaticReactionLikeCode = 1 + WS_Zero;
+WS_PSYLikeCode = 1 + WS_Zero;
+WS_LowerSTLikeCode = 1 + WS_Zero;
+WS_UpperSTLikeCode = 1 + WS_Zero;
+WS_LowerSameSideRetestPivotObservation = WS_Zero;
+WS_UpperSameSideRetestPivotObservation = WS_Zero;
+
+WS_LowerClimaxSeedExtremeBarIndex = WS_Null;
+WS_LowerClimaxSeedExtremeDateTime = WS_Null;
+WS_LowerClimaxSeedConfirmBarIndex = WS_Null;
+WS_LowerClimaxSeedConfirmDateTime = WS_Null;
+WS_UpperClimaxSeedExtremeBarIndex = WS_Null;
+WS_UpperClimaxSeedExtremeDateTime = WS_Null;
+WS_UpperClimaxSeedConfirmBarIndex = WS_Null;
+WS_UpperClimaxSeedConfirmDateTime = WS_Null;
+
+WS_SCOriginExtremeBarIndex = WS_Null;
+WS_SCOriginExtremeDateTime = WS_Null;
+WS_SCOriginPivotConfirmBarIndex = WS_Null;
+WS_SCOriginPivotConfirmDateTime = WS_Null;
+WS_SCKnownAtBarIndex = WS_Null;
+WS_SCKnownAtDateTime = WS_Null;
+WS_SCLow = WS_Null;
+WS_SCHigh = WS_Null;
+WS_SCRVOL = WS_Null;
+WS_SCRSpread = WS_Null;
+WS_SCStoppingVolumeContext = WS_Null;
+WS_SCAbsorptionContext = WS_Null;
+
+WS_ARExtremeBarIndex = WS_Null;
+WS_ARExtremeDateTime = WS_Null;
+WS_ARConfirmBarIndex = WS_Null;
+WS_ARConfirmDateTime = WS_Null;
+WS_ARHigh = WS_Null;
+WS_ARExcursion = WS_Null;
+WS_ARExcursionATR = WS_Null;
+WS_ARExcursionSpread = WS_Null;
+WS_SCExtremeToARExtremeBars = WS_Null;
+WS_SCConfirmToARConfirmBars = WS_Null;
+
+WS_BCOriginExtremeBarIndex = WS_Null;
+WS_BCOriginExtremeDateTime = WS_Null;
+WS_BCOriginPivotConfirmBarIndex = WS_Null;
+WS_BCOriginPivotConfirmDateTime = WS_Null;
+WS_BCKnownAtBarIndex = WS_Null;
+WS_BCKnownAtDateTime = WS_Null;
+WS_BCHigh = WS_Null;
+WS_BCLow = WS_Null;
+WS_BCRVOL = WS_Null;
+WS_BCRSpread = WS_Null;
+WS_BCAbsorptionContext = WS_Null;
+
+WS_AutomaticReactionExtremeBarIndex = WS_Null;
+WS_AutomaticReactionExtremeDateTime = WS_Null;
+WS_AutomaticReactionConfirmBarIndex = WS_Null;
+WS_AutomaticReactionConfirmDateTime = WS_Null;
+WS_AutomaticReactionLow = WS_Null;
+WS_AutomaticReactionExcursion = WS_Null;
+WS_AutomaticReactionExcursionATR = WS_Null;
+WS_AutomaticReactionExcursionSpread = WS_Null;
+WS_BCExtremeToReactionExtremeBars = WS_Null;
+WS_BCConfirmToReactionConfirmBars = WS_Null;
+
+WS_LowerRangeLowerBoundary = WS_Null;
+WS_LowerRangeUpperBoundary = WS_Null;
+WS_LowerRangeWidth = WS_Null;
+WS_UpperRangeLowerBoundary = WS_Null;
+WS_UpperRangeUpperBoundary = WS_Null;
+WS_UpperRangeWidth = WS_Null;
+
+WS_EligiblePSCount = WS_Null;
+WS_PSExtremeBarIndex = WS_Null;
+WS_PSExtremeDateTime = WS_Null;
+WS_PSConfirmBarIndex = WS_Null;
+WS_PSConfirmDateTime = WS_Null;
+WS_PSLow = WS_Null;
+WS_EligiblePSYCount = WS_Null;
+WS_PSYExtremeBarIndex = WS_Null;
+WS_PSYExtremeDateTime = WS_Null;
+WS_PSYConfirmBarIndex = WS_Null;
+WS_PSYConfirmDateTime = WS_Null;
+WS_PSYHigh = WS_Null;
+
+WS_LowerSequenceOrdinal = WS_Null;
+WS_UpperSequenceOrdinal = WS_Null;
+WS_LowerSupersededSequenceOrdinal = WS_Null;
+WS_UpperSupersededSequenceOrdinal = WS_Null;
+WS_LowerActiveSequenceOrdinal = WS_Null;
+WS_UpperActiveSequenceOrdinal = WS_Null;
+WS_LowerStoppingSequenceMorphologyCode = WS_Zero;
+WS_UpperStoppingSequenceMorphologyCode = WS_Zero;
+
+WS_LowerSTOrdinal = WS_Null;
+WS_LowerSTExtremeBarIndex = WS_Null;
+WS_LowerSTExtremeDateTime = WS_Null;
+WS_LowerSTConfirmBarIndex = WS_Null;
+WS_LowerSTConfirmDateTime = WS_Null;
+WS_LowerSTLow = WS_Null;
+WS_LowerSTRelationCode = WS_Zero;
+WS_LowerSTQualityCode = WS_Zero;
+WS_LowerSTVolumeContractedVsSC = WS_Null;
+WS_LowerSTSpreadContractedVsSC = WS_Null;
+WS_LowerSTAnchorSCExtremeBarIndex = WS_Null;
+WS_LowerSTAnchorARExtremeBarIndex = WS_Null;
+WS_LowerSTAnchorRangeLower = WS_Null;
+WS_LowerSTAnchorRangeUpper = WS_Null;
+
+WS_UpperSTOrdinal = WS_Null;
+WS_UpperSTExtremeBarIndex = WS_Null;
+WS_UpperSTExtremeDateTime = WS_Null;
+WS_UpperSTConfirmBarIndex = WS_Null;
+WS_UpperSTConfirmDateTime = WS_Null;
+WS_UpperSTHigh = WS_Null;
+WS_UpperSTRelationCode = WS_Zero;
+WS_UpperSTQualityCode = WS_Zero;
+WS_UpperSTVolumeContractedVsBC = WS_Null;
+WS_UpperSTSpreadContractedVsBC = WS_Null;
+WS_UpperSTAnchorBCExtremeBarIndex = WS_Null;
+WS_UpperSTAnchorReactionExtremeBarIndex = WS_Null;
+WS_UpperSTAnchorRangeLower = WS_Null;
+WS_UpperSTAnchorRangeUpper = WS_Null;
+_SECTION_END();
+
+_SECTION_BEGIN("51. Causal lower and upper state machines");
+// Candidate lower climax seed state.
+WS_LSeedActive = 0;
+WS_LSeedOffset = -1;
+WS_LSeedLow = 0;
+WS_LSeedHigh = 0;
+WS_LSeedClose = 0;
+WS_LSeedExtremeBI = 0;
+WS_LSeedExtremeDT = 0;
+WS_LSeedConfirmBI = 0;
+WS_LSeedConfirmDT = 0;
+WS_LSeedRVOL = 0;
+WS_LSeedRVOLValid = 0;
+WS_LSeedRSpread = 0;
+WS_LSeedRSpreadValid = 0;
+WS_LSeedPriorATR = 0;
+WS_LSeedPriorATRValid = 0;
+WS_LSeedRawSpread = 0;
+WS_LSeedRawSpreadValid = 0;
+WS_LSeedStopping = 0;
+WS_LSeedAbsorption = 0;
+
+// Candidate upper climax seed state.
+WS_USeedActive = 0;
+WS_USeedOffset = -1;
+WS_USeedLow = 0;
+WS_USeedHigh = 0;
+WS_USeedClose = 0;
+WS_USeedExtremeBI = 0;
+WS_USeedExtremeDT = 0;
+WS_USeedConfirmBI = 0;
+WS_USeedConfirmDT = 0;
+WS_USeedRVOL = 0;
+WS_USeedRVOLValid = 0;
+WS_USeedRSpread = 0;
+WS_USeedRSpreadValid = 0;
+WS_USeedPriorATR = 0;
+WS_USeedPriorATRValid = 0;
+WS_USeedRawSpread = 0;
+WS_USeedRawSpreadValid = 0;
+WS_USeedAbsorption = 0;
+
+// Active lower sequence anchor for future STs.
+WS_LSeqActive = 0;
+WS_LSeqCounter = 0;
+WS_LSeqOrdinalScalar = 0;
+WS_LSeqSTCount = 0;
+WS_LSeqSCLow = 0;
+WS_LSeqSCHigh = 0;
+WS_LSeqSCExtremeBI = 0;
+WS_LSeqSCExtremeDT = 0;
+WS_LSeqSCConfirmBI = 0;
+WS_LSeqSCConfirmDT = 0;
+WS_LSeqSCRVOL = 0;
+WS_LSeqSCRVOLValid = 0;
+WS_LSeqSCRSpread = 0;
+WS_LSeqSCRSpreadValid = 0;
+WS_LSeqARExtremeBI = 0;
+WS_LSeqARExtremeDT = 0;
+WS_LSeqARConfirmBI = 0;
+WS_LSeqARConfirmDT = 0;
+WS_LSeqARHigh = 0;
+WS_LSeqRangeLower = 0;
+WS_LSeqRangeUpper = 0;
+
+// Active upper sequence anchor for future STs.
+WS_USeqActive = 0;
+WS_USeqCounter = 0;
+WS_USeqOrdinalScalar = 0;
+WS_USeqSTCount = 0;
+WS_USeqBCHigh = 0;
+WS_USeqBCLow = 0;
+WS_USeqBCExtremeBI = 0;
+WS_USeqBCExtremeDT = 0;
+WS_USeqBCConfirmBI = 0;
+WS_USeqBCConfirmDT = 0;
+WS_USeqBCRVOL = 0;
+WS_USeqBCRVOLValid = 0;
+WS_USeqBCRSpread = 0;
+WS_USeqBCRSpreadValid = 0;
+WS_USeqReactionExtremeBI = 0;
+WS_USeqReactionExtremeDT = 0;
+WS_USeqReactionConfirmBI = 0;
+WS_USeqReactionConfirmDT = 0;
+WS_USeqReactionLow = 0;
+WS_USeqRangeLower = 0;
+WS_USeqRangeUpper = 0;
+
+for (WS_i=0; WS_i<BarCount; WS_i++)
+{
+    // -------------------------------------------------------------
+    // A. Confirmed Pivot Low may be: lower ST, upper Automatic Reaction,
+    //    and/or a new lower climax seed. Process existing anchors first.
+    // -------------------------------------------------------------
+    if (SL_PivotLowEventCode[WS_i] == 2)
+    {
+        WS_LowLag = SL_PivotLowConfirmationLag[WS_i];
+        WS_LowOff = WS_i - WS_LowLag;
+        WS_LowExtremeBI = SL_PivotLowExtremeBarIndex[WS_i];
+        WS_LowExtremeDT = SL_PivotLowExtremeDateTime[WS_i];
+        WS_LowPrice = SL_PivotLowEventPrice[WS_i];
+
+        // A1. Lower ST against existing SC/AR anchor.
+        if (WS_LSeqActive AND WS_LowExtremeBI > WS_LSeqARExtremeBI)
+        {
+            WS_LowerSameSideRetestPivotObservation[WS_i] = 1;
+            if (WS_LowPrice <= WS_LSeqSCHigh)
+            {
+                WS_LSeqSTCount++;
+                WS_LowerSTLikeCode[WS_i] = 2;
+                WS_LowerSTOrdinal[WS_i] = WS_LSeqSTCount;
+                WS_LowerSTExtremeBarIndex[WS_i] = WS_LowExtremeBI;
+                WS_LowerSTExtremeDateTime[WS_i] = WS_LowExtremeDT;
+                WS_LowerSTConfirmBarIndex[WS_i] = SL_PivotLowConfirmBarIndex[WS_i];
+                WS_LowerSTConfirmDateTime[WS_i] = SL_PivotLowConfirmDateTime[WS_i];
+                WS_LowerSTLow[WS_i] = WS_LowPrice;
+                WS_LowerSTRelationCode[WS_i] = IIf(WS_LowPrice > WS_LSeqSCLow,1,IIf(WS_LowPrice == WS_LSeqSCLow,2,3));
+                WS_LowerSTAnchorSCExtremeBarIndex[WS_i] = WS_LSeqSCExtremeBI;
+                WS_LowerSTAnchorARExtremeBarIndex[WS_i] = WS_LSeqARExtremeBI;
+                WS_LowerSTAnchorRangeLower[WS_i] = WS_LSeqRangeLower;
+                WS_LowerSTAnchorRangeUpper[WS_i] = WS_LSeqRangeUpper;
+
+                WS_ST_RVOLValid = RVOLValid[WS_LowOff] AND WS_LSeqSCRVOLValid;
+                WS_ST_RSpreadValid = RSpreadValid[WS_LowOff] AND WS_LSeqSCRSpreadValid;
+                if (WS_ST_RVOLValid AND WS_ST_RSpreadValid)
+                {
+                    WS_ST_VolContract = RVOL[WS_LowOff] < WS_LSeqSCRVOL;
+                    WS_ST_SpreadContract = RSpread[WS_LowOff] < WS_LSeqSCRSpread;
+                    WS_LowerSTVolumeContractedVsSC[WS_i] = WS_ST_VolContract;
+                    WS_LowerSTSpreadContractedVsSC[WS_i] = WS_ST_SpreadContract;
+                    WS_LowerSTQualityCode[WS_i] = IIf(WS_ST_VolContract AND WS_ST_SpreadContract,3,
+                                                     IIf(WS_ST_VolContract OR WS_ST_SpreadContract,2,1));
+                }
+                else
+                {
+                    WS_LowerSTQualityCode[WS_i] = 0;
+                }
+            }
+        }
+
+        // A2. First confirmed Pivot Low after an active upper seed = Automatic Reaction candidate.
+        if (WS_USeedActive AND WS_LowExtremeBI > WS_USeedExtremeBI)
+        {
+            WS_TerminalOK = 1;
+            for (WS_q=WS_USeedOffset; WS_q<=WS_LowOff; WS_q++)
+            {
+                if (High[WS_q] > WS_USeedHigh) WS_TerminalOK = 0;
+            }
+            WS_ReactionWidth = WS_USeedHigh - WS_LowPrice;
+            if (WS_TerminalOK AND WS_Finite(WS_ReactionWidth) AND WS_ReactionWidth > 0)
+            {
+                // Pair known now: BC-like + Automatic-Reaction-like.
+                WS_BCLikeCode[WS_i] = 2;
+                WS_AutomaticReactionLikeCode[WS_i] = 2;
+                WS_BCOriginExtremeBarIndex[WS_i] = WS_USeedExtremeBI;
+                WS_BCOriginExtremeDateTime[WS_i] = WS_USeedExtremeDT;
+                WS_BCOriginPivotConfirmBarIndex[WS_i] = WS_USeedConfirmBI;
+                WS_BCOriginPivotConfirmDateTime[WS_i] = WS_USeedConfirmDT;
+                WS_BCKnownAtBarIndex[WS_i] = WS_SourceBarIndex[WS_i];
+                WS_BCKnownAtDateTime[WS_i] = WS_SourceDateTime[WS_i];
+                WS_BCHigh[WS_i] = WS_USeedHigh;
+                WS_BCLow[WS_i] = WS_USeedLow;
+                WS_BCRVOL[WS_i] = IIf(WS_USeedRVOLValid,WS_USeedRVOL,Null);
+                WS_BCRSpread[WS_i] = IIf(WS_USeedRSpreadValid,WS_USeedRSpread,Null);
+                WS_BCAbsorptionContext[WS_i] = WS_USeedAbsorption;
+
+                WS_AutomaticReactionExtremeBarIndex[WS_i] = WS_LowExtremeBI;
+                WS_AutomaticReactionExtremeDateTime[WS_i] = WS_LowExtremeDT;
+                WS_AutomaticReactionConfirmBarIndex[WS_i] = SL_PivotLowConfirmBarIndex[WS_i];
+                WS_AutomaticReactionConfirmDateTime[WS_i] = SL_PivotLowConfirmDateTime[WS_i];
+                WS_AutomaticReactionLow[WS_i] = WS_LowPrice;
+                WS_AutomaticReactionExcursion[WS_i] = WS_ReactionWidth;
+                WS_AutomaticReactionExcursionATR[WS_i] = IIf(WS_USeedPriorATRValid,WS_ReactionWidth/WS_USeedPriorATR,Null);
+                WS_AutomaticReactionExcursionSpread[WS_i] = IIf(WS_USeedRawSpreadValid AND WS_USeedRawSpread>0,WS_ReactionWidth/WS_USeedRawSpread,Null);
+                WS_BCExtremeToReactionExtremeBars[WS_i] = WS_LowExtremeBI - WS_USeedExtremeBI;
+                WS_BCConfirmToReactionConfirmBars[WS_i] = SL_PivotLowConfirmBarIndex[WS_i] - WS_USeedConfirmBI;
+                WS_UpperRangeLowerBoundary[WS_i] = WS_LowPrice;
+                WS_UpperRangeUpperBoundary[WS_i] = WS_USeedHigh;
+                WS_UpperRangeWidth[WS_i] = WS_ReactionWidth;
+
+                // Optional PSY-like search: nearest eligible prior confirmed Pivot High.
+                WS_PSYCount = 0;
+                WS_PSYUnknown = 0;
+                WS_PSYBestConfirmIndex = -1;
+                WS_PSYBestExtremeBI = -1;
+                for (WS_j=0; WS_j<WS_i; WS_j++)
+                {
+                    if (SL_PivotHighEventCode[WS_j] == 2)
+                    {
+                        WS_CandBI = SL_PivotHighExtremeBarIndex[WS_j];
+                        WS_CandPrice = SL_PivotHighEventPrice[WS_j];
+                        if (WS_CandBI < WS_USeedExtremeBI AND WS_CandPrice < WS_USeedHigh)
+                        {
+                            WS_HasPause = 0;
+                            for (WS_p=0; WS_p<WS_i; WS_p++)
+                            {
+                                if (SL_PivotLowEventCode[WS_p] == 2
+                                    AND SL_PivotLowExtremeBarIndex[WS_p] > WS_CandBI
+                                    AND SL_PivotLowExtremeBarIndex[WS_p] < WS_USeedExtremeBI)
+                                    WS_HasPause = 1;
+                            }
+                            if (WS_HasPause)
+                            {
+                                WS_CandOff = WS_j - SL_PivotHighConfirmationLag[WS_j];
+                                WS_CandEvidenceValid = WE_ER_PressureDescriptorValid[WS_CandOff]
+                                                       AND WE_ER_ElevatedExpansionValid[WS_CandOff];
+                                if (WS_CandEvidenceValid)
+                                {
+                                    if (WE_ER_UpsidePressureObserved[WS_CandOff] == 1
+                                        AND WE_ER_ElevatedExpansionObservation[WS_CandOff] == 1)
+                                    {
+                                        WS_PSYCount++;
+                                        if (WS_CandBI > WS_PSYBestExtremeBI)
+                                        {
+                                            WS_PSYBestExtremeBI = WS_CandBI;
+                                            WS_PSYBestConfirmIndex = WS_j;
+                                        }
+                                    }
+                                }
+                                else WS_PSYUnknown = 1;
+                            }
+                        }
+                    }
+                }
+                WS_EligiblePSYCount[WS_i] = WS_PSYCount;
+                if (WS_PSYCount > 0)
+                {
+                    WS_PSYLikeCode[WS_i] = 2;
+                    WS_PSYExtremeBarIndex[WS_i] = SL_PivotHighExtremeBarIndex[WS_PSYBestConfirmIndex];
+                    WS_PSYExtremeDateTime[WS_i] = SL_PivotHighExtremeDateTime[WS_PSYBestConfirmIndex];
+                    WS_PSYConfirmBarIndex[WS_i] = SL_PivotHighConfirmBarIndex[WS_PSYBestConfirmIndex];
+                    WS_PSYConfirmDateTime[WS_i] = SL_PivotHighConfirmDateTime[WS_PSYBestConfirmIndex];
+                    WS_PSYHigh[WS_i] = SL_PivotHighEventPrice[WS_PSYBestConfirmIndex];
+                }
+                else if (WS_PSYUnknown) WS_PSYLikeCode[WS_i] = 0;
+                else WS_PSYLikeCode[WS_i] = 1;
+
+                // Supersede only future-ST anchor after pair completion.
+                if (WS_USeqActive) WS_UpperSupersededSequenceOrdinal[WS_i] = WS_USeqOrdinalScalar;
+                WS_USeqCounter++;
+                WS_USeqOrdinalScalar = WS_USeqCounter;
+                WS_USeqActive = 1;
+                WS_USeqSTCount = 0;
+                WS_USeqBCHigh = WS_USeedHigh;
+                WS_USeqBCLow = WS_USeedLow;
+                WS_USeqBCExtremeBI = WS_USeedExtremeBI;
+                WS_USeqBCExtremeDT = WS_USeedExtremeDT;
+                WS_USeqBCConfirmBI = WS_USeedConfirmBI;
+                WS_USeqBCConfirmDT = WS_USeedConfirmDT;
+                WS_USeqBCRVOL = WS_USeedRVOL;
+                WS_USeqBCRVOLValid = WS_USeedRVOLValid;
+                WS_USeqBCRSpread = WS_USeedRSpread;
+                WS_USeqBCRSpreadValid = WS_USeedRSpreadValid;
+                WS_USeqReactionExtremeBI = WS_LowExtremeBI;
+                WS_USeqReactionExtremeDT = WS_LowExtremeDT;
+                WS_USeqReactionConfirmBI = SL_PivotLowConfirmBarIndex[WS_i];
+                WS_USeqReactionConfirmDT = SL_PivotLowConfirmDateTime[WS_i];
+                WS_USeqReactionLow = WS_LowPrice;
+                WS_USeqRangeLower = WS_LowPrice;
+                WS_USeqRangeUpper = WS_USeedHigh;
+                WS_UpperSequenceOrdinal[WS_i] = WS_USeqOrdinalScalar;
+            }
+            // First confirmed counter-pivot consumes the candidate whether valid or invalid.
+            WS_USeedActive = 0;
+        }
+
+        // A3. This Pivot Low itself may create/supersede a lower climax seed.
+        if (WS_LowOff >= 0)
+        {
+            WS_LSeedEvidenceValid = WE_ER_ClimacticEffortValid[WS_LowOff]
+                                    AND WE_ER_PressureDescriptorValid[WS_LowOff];
+            if (NOT WS_LSeedEvidenceValid)
+            {
+                WS_LowerClimaxSeedCode[WS_i] = 0;
+            }
+            else if (WE_ER_ClimacticEffortCode[WS_LowOff] == 2
+                     AND WE_ER_DownsidePressureObserved[WS_LowOff] == 1)
+            {
+                WS_LowerClimaxSeedCode[WS_i] = 2;
+                WS_LowerClimaxSeedExtremeBarIndex[WS_i] = WS_LowExtremeBI;
+                WS_LowerClimaxSeedExtremeDateTime[WS_i] = WS_LowExtremeDT;
+                WS_LowerClimaxSeedConfirmBarIndex[WS_i] = SL_PivotLowConfirmBarIndex[WS_i];
+                WS_LowerClimaxSeedConfirmDateTime[WS_i] = SL_PivotLowConfirmDateTime[WS_i];
+
+                if ((NOT WS_LSeedActive) OR WS_LowPrice < WS_LSeedLow)
+                {
+                    WS_LSeedActive = 1;
+                    WS_LSeedOffset = WS_LowOff;
+                    WS_LSeedLow = WS_LowPrice;
+                    WS_LSeedHigh = High[WS_LowOff];
+                    WS_LSeedClose = Close[WS_LowOff];
+                    WS_LSeedExtremeBI = WS_LowExtremeBI;
+                    WS_LSeedExtremeDT = WS_LowExtremeDT;
+                    WS_LSeedConfirmBI = SL_PivotLowConfirmBarIndex[WS_i];
+                    WS_LSeedConfirmDT = SL_PivotLowConfirmDateTime[WS_i];
+                    WS_LSeedRVOLValid = RVOLValid[WS_LowOff];
+                    WS_LSeedRVOL = IIf(WS_LSeedRVOLValid,RVOL[WS_LowOff],0);
+                    WS_LSeedRSpreadValid = RSpreadValid[WS_LowOff];
+                    WS_LSeedRSpread = IIf(WS_LSeedRSpreadValid,RSpread[WS_LowOff],0);
+                    WS_LSeedPriorATRValid = PriorATRValid[WS_LowOff];
+                    WS_LSeedPriorATR = IIf(WS_LSeedPriorATRValid,PriorATR[WS_LowOff],0);
+                    WS_LSeedRawSpreadValid = RawSpreadValid[WS_LowOff];
+                    WS_LSeedRawSpread = IIf(WS_LSeedRawSpreadValid,RawSpread[WS_LowOff],0);
+                    WS_LSeedStopping = IIf(WE_ER_StoppingVolumeValid[WS_LowOff],WE_ER_StoppingVolumeCode[WS_LowOff],0);
+                    WS_LSeedAbsorption = IIf(WE_ER_AbsorptionValid[WS_LowOff],WE_ER_AbsorptionCode[WS_LowOff],0);
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------
+    // B. Confirmed Pivot High may be: upper ST, lower Automatic Rally,
+    //    and/or a new upper climax seed.
+    // -------------------------------------------------------------
+    if (SL_PivotHighEventCode[WS_i] == 2)
+    {
+        WS_HighLag = SL_PivotHighConfirmationLag[WS_i];
+        WS_HighOff = WS_i - WS_HighLag;
+        WS_HighExtremeBI = SL_PivotHighExtremeBarIndex[WS_i];
+        WS_HighExtremeDT = SL_PivotHighExtremeDateTime[WS_i];
+        WS_HighPrice = SL_PivotHighEventPrice[WS_i];
+
+        // B1. Upper ST against existing BC/Automatic-Reaction anchor.
+        if (WS_USeqActive AND WS_HighExtremeBI > WS_USeqReactionExtremeBI)
+        {
+            WS_UpperSameSideRetestPivotObservation[WS_i] = 1;
+            if (WS_HighPrice >= WS_USeqBCLow)
+            {
+                WS_USeqSTCount++;
+                WS_UpperSTLikeCode[WS_i] = 2;
+                WS_UpperSTOrdinal[WS_i] = WS_USeqSTCount;
+                WS_UpperSTExtremeBarIndex[WS_i] = WS_HighExtremeBI;
+                WS_UpperSTExtremeDateTime[WS_i] = WS_HighExtremeDT;
+                WS_UpperSTConfirmBarIndex[WS_i] = SL_PivotHighConfirmBarIndex[WS_i];
+                WS_UpperSTConfirmDateTime[WS_i] = SL_PivotHighConfirmDateTime[WS_i];
+                WS_UpperSTHigh[WS_i] = WS_HighPrice;
+                WS_UpperSTRelationCode[WS_i] = IIf(WS_HighPrice < WS_USeqBCHigh,1,IIf(WS_HighPrice == WS_USeqBCHigh,2,3));
+                WS_UpperSTAnchorBCExtremeBarIndex[WS_i] = WS_USeqBCExtremeBI;
+                WS_UpperSTAnchorReactionExtremeBarIndex[WS_i] = WS_USeqReactionExtremeBI;
+                WS_UpperSTAnchorRangeLower[WS_i] = WS_USeqRangeLower;
+                WS_UpperSTAnchorRangeUpper[WS_i] = WS_USeqRangeUpper;
+
+                WS_ST_RVOLValid = RVOLValid[WS_HighOff] AND WS_USeqBCRVOLValid;
+                WS_ST_RSpreadValid = RSpreadValid[WS_HighOff] AND WS_USeqBCRSpreadValid;
+                if (WS_ST_RVOLValid AND WS_ST_RSpreadValid)
+                {
+                    WS_ST_VolContract = RVOL[WS_HighOff] < WS_USeqBCRVOL;
+                    WS_ST_SpreadContract = RSpread[WS_HighOff] < WS_USeqBCRSpread;
+                    WS_UpperSTVolumeContractedVsBC[WS_i] = WS_ST_VolContract;
+                    WS_UpperSTSpreadContractedVsBC[WS_i] = WS_ST_SpreadContract;
+                    WS_UpperSTQualityCode[WS_i] = IIf(WS_ST_VolContract AND WS_ST_SpreadContract,3,
+                                                     IIf(WS_ST_VolContract OR WS_ST_SpreadContract,2,1));
+                }
+                else
+                {
+                    WS_UpperSTQualityCode[WS_i] = 0;
+                }
+            }
+        }
+
+        // B2. First confirmed Pivot High after active lower seed = Automatic Rally candidate.
+        if (WS_LSeedActive AND WS_HighExtremeBI > WS_LSeedExtremeBI)
+        {
+            WS_TerminalOK = 1;
+            for (WS_q=WS_LSeedOffset; WS_q<=WS_HighOff; WS_q++)
+            {
+                if (Low[WS_q] < WS_LSeedLow) WS_TerminalOK = 0;
+            }
+            WS_RallyWidth = WS_HighPrice - WS_LSeedLow;
+            if (WS_TerminalOK AND WS_Finite(WS_RallyWidth) AND WS_RallyWidth > 0)
+            {
+                WS_SCLikeCode[WS_i] = 2;
+                WS_AutomaticRallyLikeCode[WS_i] = 2;
+                WS_SCOriginExtremeBarIndex[WS_i] = WS_LSeedExtremeBI;
+                WS_SCOriginExtremeDateTime[WS_i] = WS_LSeedExtremeDT;
+                WS_SCOriginPivotConfirmBarIndex[WS_i] = WS_LSeedConfirmBI;
+                WS_SCOriginPivotConfirmDateTime[WS_i] = WS_LSeedConfirmDT;
+                WS_SCKnownAtBarIndex[WS_i] = WS_SourceBarIndex[WS_i];
+                WS_SCKnownAtDateTime[WS_i] = WS_SourceDateTime[WS_i];
+                WS_SCLow[WS_i] = WS_LSeedLow;
+                WS_SCHigh[WS_i] = WS_LSeedHigh;
+                WS_SCRVOL[WS_i] = IIf(WS_LSeedRVOLValid,WS_LSeedRVOL,Null);
+                WS_SCRSpread[WS_i] = IIf(WS_LSeedRSpreadValid,WS_LSeedRSpread,Null);
+                WS_SCStoppingVolumeContext[WS_i] = WS_LSeedStopping;
+                WS_SCAbsorptionContext[WS_i] = WS_LSeedAbsorption;
+
+                WS_ARExtremeBarIndex[WS_i] = WS_HighExtremeBI;
+                WS_ARExtremeDateTime[WS_i] = WS_HighExtremeDT;
+                WS_ARConfirmBarIndex[WS_i] = SL_PivotHighConfirmBarIndex[WS_i];
+                WS_ARConfirmDateTime[WS_i] = SL_PivotHighConfirmDateTime[WS_i];
+                WS_ARHigh[WS_i] = WS_HighPrice;
+                WS_ARExcursion[WS_i] = WS_RallyWidth;
+                WS_ARExcursionATR[WS_i] = IIf(WS_LSeedPriorATRValid,WS_RallyWidth/WS_LSeedPriorATR,Null);
+                WS_ARExcursionSpread[WS_i] = IIf(WS_LSeedRawSpreadValid AND WS_LSeedRawSpread>0,WS_RallyWidth/WS_LSeedRawSpread,Null);
+                WS_SCExtremeToARExtremeBars[WS_i] = WS_HighExtremeBI - WS_LSeedExtremeBI;
+                WS_SCConfirmToARConfirmBars[WS_i] = SL_PivotHighConfirmBarIndex[WS_i] - WS_LSeedConfirmBI;
+                WS_LowerRangeLowerBoundary[WS_i] = WS_LSeedLow;
+                WS_LowerRangeUpperBoundary[WS_i] = WS_HighPrice;
+                WS_LowerRangeWidth[WS_i] = WS_RallyWidth;
+
+                // Optional PS-like search: nearest eligible prior confirmed Pivot Low.
+                WS_PSCount = 0;
+                WS_PSUnknown = 0;
+                WS_PSBestConfirmIndex = -1;
+                WS_PSBestExtremeBI = -1;
+                for (WS_j=0; WS_j<WS_i; WS_j++)
+                {
+                    if (SL_PivotLowEventCode[WS_j] == 2)
+                    {
+                        WS_CandBI = SL_PivotLowExtremeBarIndex[WS_j];
+                        WS_CandPrice = SL_PivotLowEventPrice[WS_j];
+                        if (WS_CandBI < WS_LSeedExtremeBI AND WS_CandPrice > WS_LSeedLow)
+                        {
+                            WS_HasPause = 0;
+                            for (WS_p=0; WS_p<WS_i; WS_p++)
+                            {
+                                if (SL_PivotHighEventCode[WS_p] == 2
+                                    AND SL_PivotHighExtremeBarIndex[WS_p] > WS_CandBI
+                                    AND SL_PivotHighExtremeBarIndex[WS_p] < WS_LSeedExtremeBI)
+                                    WS_HasPause = 1;
+                            }
+                            if (WS_HasPause)
+                            {
+                                WS_CandOff = WS_j - SL_PivotLowConfirmationLag[WS_j];
+                                WS_CandPressureValid = WE_ER_PressureDescriptorValid[WS_CandOff];
+                                WS_CandElevatedValid = WE_ER_ElevatedExpansionValid[WS_CandOff];
+                                WS_CandStoppingValid = WE_ER_StoppingVolumeValid[WS_CandOff];
+                                if (WS_CandPressureValid AND (WS_CandElevatedValid OR WS_CandStoppingValid))
+                                {
+                                    if (WE_ER_DownsidePressureObserved[WS_CandOff] == 1
+                                        AND ((WS_CandElevatedValid AND WE_ER_ElevatedExpansionObservation[WS_CandOff] == 1)
+                                             OR (WS_CandStoppingValid AND WE_ER_StoppingVolumeCode[WS_CandOff] == 2)))
+                                    {
+                                        WS_PSCount++;
+                                        if (WS_CandBI > WS_PSBestExtremeBI)
+                                        {
+                                            WS_PSBestExtremeBI = WS_CandBI;
+                                            WS_PSBestConfirmIndex = WS_j;
+                                        }
+                                    }
+                                }
+                                else WS_PSUnknown = 1;
+                            }
+                        }
+                    }
+                }
+                WS_EligiblePSCount[WS_i] = WS_PSCount;
+                if (WS_PSCount > 0)
+                {
+                    WS_PSLikeCode[WS_i] = 2;
+                    WS_PSExtremeBarIndex[WS_i] = SL_PivotLowExtremeBarIndex[WS_PSBestConfirmIndex];
+                    WS_PSExtremeDateTime[WS_i] = SL_PivotLowExtremeDateTime[WS_PSBestConfirmIndex];
+                    WS_PSConfirmBarIndex[WS_i] = SL_PivotLowConfirmBarIndex[WS_PSBestConfirmIndex];
+                    WS_PSConfirmDateTime[WS_i] = SL_PivotLowConfirmDateTime[WS_PSBestConfirmIndex];
+                    WS_PSLow[WS_i] = SL_PivotLowEventPrice[WS_PSBestConfirmIndex];
+                }
+                else if (WS_PSUnknown) WS_PSLikeCode[WS_i] = 0;
+                else WS_PSLikeCode[WS_i] = 1;
+
+                if (WS_LSeqActive) WS_LowerSupersededSequenceOrdinal[WS_i] = WS_LSeqOrdinalScalar;
+                WS_LSeqCounter++;
+                WS_LSeqOrdinalScalar = WS_LSeqCounter;
+                WS_LSeqActive = 1;
+                WS_LSeqSTCount = 0;
+                WS_LSeqSCLow = WS_LSeedLow;
+                WS_LSeqSCHigh = WS_LSeedHigh;
+                WS_LSeqSCExtremeBI = WS_LSeedExtremeBI;
+                WS_LSeqSCExtremeDT = WS_LSeedExtremeDT;
+                WS_LSeqSCConfirmBI = WS_LSeedConfirmBI;
+                WS_LSeqSCConfirmDT = WS_LSeedConfirmDT;
+                WS_LSeqSCRVOL = WS_LSeedRVOL;
+                WS_LSeqSCRVOLValid = WS_LSeedRVOLValid;
+                WS_LSeqSCRSpread = WS_LSeedRSpread;
+                WS_LSeqSCRSpreadValid = WS_LSeedRSpreadValid;
+                WS_LSeqARExtremeBI = WS_HighExtremeBI;
+                WS_LSeqARExtremeDT = WS_HighExtremeDT;
+                WS_LSeqARConfirmBI = SL_PivotHighConfirmBarIndex[WS_i];
+                WS_LSeqARConfirmDT = SL_PivotHighConfirmDateTime[WS_i];
+                WS_LSeqARHigh = WS_HighPrice;
+                WS_LSeqRangeLower = WS_LSeedLow;
+                WS_LSeqRangeUpper = WS_HighPrice;
+                WS_LowerSequenceOrdinal[WS_i] = WS_LSeqOrdinalScalar;
+            }
+            WS_LSeedActive = 0;
+        }
+
+        // B3. This Pivot High itself may create/supersede an upper climax seed.
+        if (WS_HighOff >= 0)
+        {
+            WS_USeedEvidenceValid = WE_ER_ClimacticEffortValid[WS_HighOff]
+                                    AND WE_ER_PressureDescriptorValid[WS_HighOff];
+            if (NOT WS_USeedEvidenceValid)
+            {
+                WS_UpperClimaxSeedCode[WS_i] = 0;
+            }
+            else if (WE_ER_ClimacticEffortCode[WS_HighOff] == 2
+                     AND WE_ER_UpsidePressureObserved[WS_HighOff] == 1)
+            {
+                WS_UpperClimaxSeedCode[WS_i] = 2;
+                WS_UpperClimaxSeedExtremeBarIndex[WS_i] = WS_HighExtremeBI;
+                WS_UpperClimaxSeedExtremeDateTime[WS_i] = WS_HighExtremeDT;
+                WS_UpperClimaxSeedConfirmBarIndex[WS_i] = SL_PivotHighConfirmBarIndex[WS_i];
+                WS_UpperClimaxSeedConfirmDateTime[WS_i] = SL_PivotHighConfirmDateTime[WS_i];
+
+                if ((NOT WS_USeedActive) OR WS_HighPrice > WS_USeedHigh)
+                {
+                    WS_USeedActive = 1;
+                    WS_USeedOffset = WS_HighOff;
+                    WS_USeedLow = Low[WS_HighOff];
+                    WS_USeedHigh = WS_HighPrice;
+                    WS_USeedClose = Close[WS_HighOff];
+                    WS_USeedExtremeBI = WS_HighExtremeBI;
+                    WS_USeedExtremeDT = WS_HighExtremeDT;
+                    WS_USeedConfirmBI = SL_PivotHighConfirmBarIndex[WS_i];
+                    WS_USeedConfirmDT = SL_PivotHighConfirmDateTime[WS_i];
+                    WS_USeedRVOLValid = RVOLValid[WS_HighOff];
+                    WS_USeedRVOL = IIf(WS_USeedRVOLValid,RVOL[WS_HighOff],0);
+                    WS_USeedRSpreadValid = RSpreadValid[WS_HighOff];
+                    WS_USeedRSpread = IIf(WS_USeedRSpreadValid,RSpread[WS_HighOff],0);
+                    WS_USeedPriorATRValid = PriorATRValid[WS_HighOff];
+                    WS_USeedPriorATR = IIf(WS_USeedPriorATRValid,PriorATR[WS_HighOff],0);
+                    WS_USeedRawSpreadValid = RawSpreadValid[WS_HighOff];
+                    WS_USeedRawSpread = IIf(WS_USeedRawSpreadValid,RawSpread[WS_HighOff],0);
+                    WS_USeedAbsorption = IIf(WE_ER_AbsorptionValid[WS_HighOff],WE_ER_AbsorptionCode[WS_HighOff],0);
+                }
+            }
+        }
+    }
+
+    // Active state is exposed after processing current confirmations.
+    if (WS_LSeqActive)
+    {
+        WS_LowerActiveSequenceOrdinal[WS_i] = WS_LSeqOrdinalScalar;
+        WS_LowerStoppingSequenceMorphologyCode[WS_i] = IIf(WS_LSeqSTCount>0,2,1);
+    }
+    if (WS_USeqActive)
+    {
+        WS_UpperActiveSequenceOrdinal[WS_i] = WS_USeqOrdinalScalar;
+        WS_UpperStoppingSequenceMorphologyCode[WS_i] = IIf(WS_USeqSTCount>0,2,1);
+    }
+}
+_SECTION_END();
+
+_SECTION_BEGIN("52. Structural Sequence exploration");
+// Upstream Filter remains unchanged. This layer only appends evidence columns.
+AddColumn(WS_LowerClimaxSeedCode,"WS_LowerClimaxSeedCode",1.0);
+AddColumn(WS_LowerClimaxSeedExtremeBarIndex,"WS_LowerClimaxSeedExtremeBarIndex",1.0);
+AddColumn(WS_LowerClimaxSeedConfirmBarIndex,"WS_LowerClimaxSeedConfirmBarIndex",1.0);
+AddColumn(WS_SCLikeCode,"WS_SCLikeCode",1.0);
+AddColumn(WS_SCOriginExtremeBarIndex,"WS_SCOriginExtremeBarIndex",1.0);
+AddColumn(WS_SCKnownAtBarIndex,"WS_SCKnownAtBarIndex",1.0);
+AddColumn(WS_AutomaticRallyLikeCode,"WS_AutomaticRallyLikeCode",1.0);
+AddColumn(WS_ARExtremeBarIndex,"WS_ARExtremeBarIndex",1.0);
+AddColumn(WS_ARConfirmBarIndex,"WS_ARConfirmBarIndex",1.0);
+AddColumn(WS_LowerRangeLowerBoundary,"WS_LowerRangeLowerBoundary",1.4);
+AddColumn(WS_LowerRangeUpperBoundary,"WS_LowerRangeUpperBoundary",1.4);
+AddColumn(WS_LowerRangeWidth,"WS_LowerRangeWidth",1.4);
+AddColumn(WS_PSLikeCode,"WS_PSLikeCode",1.0);
+AddColumn(WS_EligiblePSCount,"WS_EligiblePSCount",1.0);
+AddColumn(WS_PSExtremeBarIndex,"WS_PSExtremeBarIndex",1.0);
+AddColumn(WS_LowerSameSideRetestPivotObservation,"WS_LowerSameSideRetestPivotObservation",1.0);
+AddColumn(WS_LowerSTLikeCode,"WS_LowerSTLikeCode",1.0);
+AddColumn(WS_LowerSTOrdinal,"WS_LowerSTOrdinal",1.0);
+AddColumn(WS_LowerSTExtremeBarIndex,"WS_LowerSTExtremeBarIndex",1.0);
+AddColumn(WS_LowerSTRelationCode,"WS_LowerSTRelationCode",1.0);
+AddColumn(WS_LowerSTQualityCode,"WS_LowerSTQualityCode",1.0);
+AddColumn(WS_LowerSTVolumeContractedVsSC,"WS_LowerSTVolumeContractedVsSC",1.0);
+AddColumn(WS_LowerSTSpreadContractedVsSC,"WS_LowerSTSpreadContractedVsSC",1.0);
+AddColumn(WS_LowerSequenceOrdinal,"WS_LowerSequenceOrdinal",1.0);
+AddColumn(WS_LowerActiveSequenceOrdinal,"WS_LowerActiveSequenceOrdinal",1.0);
+AddColumn(WS_LowerSupersededSequenceOrdinal,"WS_LowerSupersededSequenceOrdinal",1.0);
+AddColumn(WS_LowerStoppingSequenceMorphologyCode,"WS_LowerStoppingSequenceMorphologyCode",1.0);
+
+AddColumn(WS_UpperClimaxSeedCode,"WS_UpperClimaxSeedCode",1.0);
+AddColumn(WS_UpperClimaxSeedExtremeBarIndex,"WS_UpperClimaxSeedExtremeBarIndex",1.0);
+AddColumn(WS_UpperClimaxSeedConfirmBarIndex,"WS_UpperClimaxSeedConfirmBarIndex",1.0);
+AddColumn(WS_BCLikeCode,"WS_BCLikeCode",1.0);
+AddColumn(WS_BCOriginExtremeBarIndex,"WS_BCOriginExtremeBarIndex",1.0);
+AddColumn(WS_BCKnownAtBarIndex,"WS_BCKnownAtBarIndex",1.0);
+AddColumn(WS_AutomaticReactionLikeCode,"WS_AutomaticReactionLikeCode",1.0);
+AddColumn(WS_AutomaticReactionExtremeBarIndex,"WS_AutomaticReactionExtremeBarIndex",1.0);
+AddColumn(WS_AutomaticReactionConfirmBarIndex,"WS_AutomaticReactionConfirmBarIndex",1.0);
+AddColumn(WS_UpperRangeLowerBoundary,"WS_UpperRangeLowerBoundary",1.4);
+AddColumn(WS_UpperRangeUpperBoundary,"WS_UpperRangeUpperBoundary",1.4);
+AddColumn(WS_UpperRangeWidth,"WS_UpperRangeWidth",1.4);
+AddColumn(WS_PSYLikeCode,"WS_PSYLikeCode",1.0);
+AddColumn(WS_EligiblePSYCount,"WS_EligiblePSYCount",1.0);
+AddColumn(WS_PSYExtremeBarIndex,"WS_PSYExtremeBarIndex",1.0);
+AddColumn(WS_UpperSameSideRetestPivotObservation,"WS_UpperSameSideRetestPivotObservation",1.0);
+AddColumn(WS_UpperSTLikeCode,"WS_UpperSTLikeCode",1.0);
+AddColumn(WS_UpperSTOrdinal,"WS_UpperSTOrdinal",1.0);
+AddColumn(WS_UpperSTExtremeBarIndex,"WS_UpperSTExtremeBarIndex",1.0);
+AddColumn(WS_UpperSTRelationCode,"WS_UpperSTRelationCode",1.0);
+AddColumn(WS_UpperSTQualityCode,"WS_UpperSTQualityCode",1.0);
+AddColumn(WS_UpperSTVolumeContractedVsBC,"WS_UpperSTVolumeContractedVsBC",1.0);
+AddColumn(WS_UpperSTSpreadContractedVsBC,"WS_UpperSTSpreadContractedVsBC",1.0);
+AddColumn(WS_UpperSequenceOrdinal,"WS_UpperSequenceOrdinal",1.0);
+AddColumn(WS_UpperActiveSequenceOrdinal,"WS_UpperActiveSequenceOrdinal",1.0);
+AddColumn(WS_UpperSupersededSequenceOrdinal,"WS_UpperSupersededSequenceOrdinal",1.0);
+AddColumn(WS_UpperStoppingSequenceMorphologyCode,"WS_UpperStoppingSequenceMorphologyCode",1.0);
+_SECTION_END();
