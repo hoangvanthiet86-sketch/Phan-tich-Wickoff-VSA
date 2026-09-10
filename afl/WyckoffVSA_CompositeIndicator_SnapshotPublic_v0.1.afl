@@ -1,0 +1,34 @@
+/*
+    Wyckoff VSA Composite Indicator v0.1 — snapshot public facade
+
+    Extension of the approved Composite projection layer for the
+    Timeframe Snapshot Publisher/Consumer contract. No new Wyckoff/VSA
+    interpretation is introduced here.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
+
+_SECTION_BEGIN("88. Composite snapshot public diagnostics");
+WCI_PublicSchemaMajor = 1;
+WCI_PublicSchemaMinor = 0;
+
+// D09 projection, preserved independently for each RangeContext so a
+// multiple-context snapshot never needs to select a winner.
+WCI_L_EvidenceBalanceCode = IIf(
+    WPC_L_BullishEvidenceState AND WPC_L_BearishEvidenceState,3,
+    IIf(WPC_L_BullishEvidenceState,1,
+    IIf(WPC_L_BearishEvidenceState,2,0)));
+
+WCI_U_EvidenceBalanceCode = IIf(
+    WPC_U_BullishEvidenceState AND WPC_U_BearishEvidenceState,3,
+    IIf(WPC_U_BullishEvidenceState,1,
+    IIf(WPC_U_BearishEvidenceState,2,0)));
+
+AddColumn(WCI_PublicSchemaMajor,"WCI_PublicSchemaMajor",1.0);
+AddColumn(WCI_PublicSchemaMinor,"WCI_PublicSchemaMinor",1.0);
+AddColumn(WCI_L_EvidenceBalanceCode,"WCI_L_EvidenceBalanceCode",1.0);
+AddMultiTextColumn(WCI_L_EvidenceBalanceCode,WCI_EvidenceBalanceText,"WCI_L_EvidenceBalance");
+AddColumn(WCI_U_EvidenceBalanceCode,"WCI_U_EvidenceBalanceCode",1.0);
+AddMultiTextColumn(WCI_U_EvidenceBalanceCode,WCI_EvidenceBalanceText,"WCI_U_EvidenceBalance");
+_SECTION_END();
