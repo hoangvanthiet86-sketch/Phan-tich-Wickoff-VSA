@@ -18,6 +18,6 @@ Nguồn upstream khóa tại thời điểm thiết kế:
 
 Bộ fixture đã được chạy qua mô hình độc lập trước khi upload. Các kiểm tra khóa gồm: chạm đúng hỗ trợ, đúng biên 0,50 ATR, vượt biên, xuyên hỗ trợ, xác nhận, bác bỏ, lỗi tọa độ, dữ liệu đánh giá lỗi, không xác nhận muộn, ứng viên chồng lấn và pivot mới tại k+1 không được thay support snapshot.
 
-**Trạng thái hiện tại:** đặc tả + kế hoạch + mô hình + fixture + expected đã sẵn sàng để rà soát trước khi tạo nhánh AFL Event.
+**Trạng thái hiện tại:** đặc tả, kế hoạch, mô hình, fixture và expected đã đủ điều kiện để trình hợp nhất tài liệu. Chưa có AFL Event.
 
 Không được sửa expected sau khi xem kết quả AFL chỉ để ép PASS. Mọi thay đổi đặc tả hoặc ngưỡng 0,50 ATR sau khóa phải có quyết định riêng và kéo theo tái tạo fixture/expected trước khi tiếp tục lập trình.
