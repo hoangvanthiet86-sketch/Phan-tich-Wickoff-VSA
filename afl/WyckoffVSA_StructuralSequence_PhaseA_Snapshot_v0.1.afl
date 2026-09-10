@@ -1,0 +1,513 @@
+/*
+    Wyckoff VSA Structural Sequence v0.1 — D29 Frozen Snapshot Interface
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    Approved specification: PR #20, merge commit e3a2c342c435aa2fd905fff4ae7ea14d060dafcf
+
+    Public downstream facade for Phase/Context development.
+    It includes the Structural Sequence state machine and adds the complete
+    frozen snapshot contract required by D29. No trading signal.
+*/
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_v0.1.afl>
+
+_SECTION_BEGIN("53. D29 frozen snapshot contracts");
+WSS_SourceBI = BarIndex();
+WSS_Zero = 0 * WSS_SourceBI;
+WSS_Null = Null + WSS_Zero;
+
+// Pair-known snapshots — lower side.
+WSS_SCOpen = WSS_Null;
+WSS_SCHigh = WSS_Null;
+WSS_SCLow = WSS_Null;
+WSS_SCClose = WSS_Null;
+WSS_SCRVOL = WSS_Null;
+WSS_SCRVOLValid = WSS_Null;
+WSS_SCRSpread = WSS_Null;
+WSS_SCRSpreadValid = WSS_Null;
+WSS_SCClosePosition = WSS_Null;
+WSS_SCClosePositionValid = WSS_Null;
+WSS_SCDirectionalProgress = WSS_Null;
+WSS_SCDirectionalProgressValid = WSS_Null;
+WSS_SCClimacticDirectionCode = WSS_Null;
+WSS_SCClimacticDirectionValid = WSS_Null;
+WSS_SCStoppingVolumeCode = WSS_Null;
+WSS_SCStoppingVolumeValid = WSS_Null;
+WSS_SCAbsorptionCode = WSS_Null;
+WSS_SCAbsorptionValid = WSS_Null;
+WSS_SCDownsidePressureObserved = WSS_Null;
+WSS_SCElevatedExpansionObservation = WSS_Null;
+WSS_SCUltraEffortFlag = WSS_Null;
+
+WSS_AROpen = WSS_Null;
+WSS_ARHigh = WSS_Null;
+WSS_ARLow = WSS_Null;
+WSS_ARClose = WSS_Null;
+
+WSS_SCContextSReferenceStatusCode = WSS_Null;
+WSS_SCContextSPositionStateCode = WSS_Null;
+WSS_SCContextSLocationValid = WSS_Null;
+WSS_SCContextSLocation = WSS_Null;
+WSS_SCContextMReferenceStatusCode = WSS_Null;
+WSS_SCContextMPositionStateCode = WSS_Null;
+WSS_SCContextMLocationValid = WSS_Null;
+WSS_SCContextMLocation = WSS_Null;
+WSS_SCContextLReferenceStatusCode = WSS_Null;
+WSS_SCContextLPositionStateCode = WSS_Null;
+WSS_SCContextLLocationValid = WSS_Null;
+WSS_SCContextLLocation = WSS_Null;
+
+WSS_ARContextSReferenceStatusCode = WSS_Null;
+WSS_ARContextSPositionStateCode = WSS_Null;
+WSS_ARContextSLocationValid = WSS_Null;
+WSS_ARContextSLocation = WSS_Null;
+WSS_ARContextMReferenceStatusCode = WSS_Null;
+WSS_ARContextMPositionStateCode = WSS_Null;
+WSS_ARContextMLocationValid = WSS_Null;
+WSS_ARContextMLocation = WSS_Null;
+WSS_ARContextLReferenceStatusCode = WSS_Null;
+WSS_ARContextLPositionStateCode = WSS_Null;
+WSS_ARContextLLocationValid = WSS_Null;
+WSS_ARContextLLocation = WSS_Null;
+
+WSS_PSEvidenceDownsidePressure = WSS_Null;
+WSS_PSEvidenceElevatedExpansion = WSS_Null;
+WSS_PSEvidenceStoppingVolumeCode = WSS_Null;
+WSS_PSEvidenceStoppingVolumeValid = WSS_Null;
+
+// Pair-known snapshots — upper side.
+WSS_BCOpen = WSS_Null;
+WSS_BCHigh = WSS_Null;
+WSS_BCLow = WSS_Null;
+WSS_BCClose = WSS_Null;
+WSS_BCRVOL = WSS_Null;
+WSS_BCRVOLValid = WSS_Null;
+WSS_BCRSpread = WSS_Null;
+WSS_BCRSpreadValid = WSS_Null;
+WSS_BCClosePosition = WSS_Null;
+WSS_BCClosePositionValid = WSS_Null;
+WSS_BCDirectionalProgress = WSS_Null;
+WSS_BCDirectionalProgressValid = WSS_Null;
+WSS_BCClimacticDirectionCode = WSS_Null;
+WSS_BCClimacticDirectionValid = WSS_Null;
+WSS_BCStoppingVolumeCode = WSS_Null;
+WSS_BCStoppingVolumeValid = WSS_Null;
+WSS_BCAbsorptionCode = WSS_Null;
+WSS_BCAbsorptionValid = WSS_Null;
+WSS_BCUpsidePressureObserved = WSS_Null;
+WSS_BCElevatedExpansionObservation = WSS_Null;
+WSS_BCUltraEffortFlag = WSS_Null;
+
+WSS_ReactionOpen = WSS_Null;
+WSS_ReactionHigh = WSS_Null;
+WSS_ReactionLow = WSS_Null;
+WSS_ReactionClose = WSS_Null;
+
+WSS_BCContextSReferenceStatusCode = WSS_Null;
+WSS_BCContextSPositionStateCode = WSS_Null;
+WSS_BCContextSLocationValid = WSS_Null;
+WSS_BCContextSLocation = WSS_Null;
+WSS_BCContextMReferenceStatusCode = WSS_Null;
+WSS_BCContextMPositionStateCode = WSS_Null;
+WSS_BCContextMLocationValid = WSS_Null;
+WSS_BCContextMLocation = WSS_Null;
+WSS_BCContextLReferenceStatusCode = WSS_Null;
+WSS_BCContextLPositionStateCode = WSS_Null;
+WSS_BCContextLLocationValid = WSS_Null;
+WSS_BCContextLLocation = WSS_Null;
+
+WSS_ReactionContextSReferenceStatusCode = WSS_Null;
+WSS_ReactionContextSPositionStateCode = WSS_Null;
+WSS_ReactionContextSLocationValid = WSS_Null;
+WSS_ReactionContextSLocation = WSS_Null;
+WSS_ReactionContextMReferenceStatusCode = WSS_Null;
+WSS_ReactionContextMPositionStateCode = WSS_Null;
+WSS_ReactionContextMLocationValid = WSS_Null;
+WSS_ReactionContextMLocation = WSS_Null;
+WSS_ReactionContextLReferenceStatusCode = WSS_Null;
+WSS_ReactionContextLPositionStateCode = WSS_Null;
+WSS_ReactionContextLLocationValid = WSS_Null;
+WSS_ReactionContextLLocation = WSS_Null;
+
+WSS_PSYEvidenceUpsidePressure = WSS_Null;
+WSS_PSYEvidenceElevatedExpansion = WSS_Null;
+
+// Active frozen sequence snapshots for downstream Phase/Context.
+WSS_LowerActiveSnapshotValid = WSS_Zero;
+WSS_LowerActiveSequenceOrdinal = WSS_Null;
+WSS_LowerActiveSCOriginBI = WSS_Null;
+WSS_LowerActiveSCConfirmBI = WSS_Null;
+WSS_LowerActiveSCLow = WSS_Null;
+WSS_LowerActiveSCHigh = WSS_Null;
+WSS_LowerActiveSCRVOL = WSS_Null;
+WSS_LowerActiveSCRVOLValid = WSS_Null;
+WSS_LowerActiveSCRSpread = WSS_Null;
+WSS_LowerActiveSCRSpreadValid = WSS_Null;
+WSS_LowerActiveSCClosePosition = WSS_Null;
+WSS_LowerActiveSCClosePositionValid = WSS_Null;
+WSS_LowerActiveSCDirectionalProgress = WSS_Null;
+WSS_LowerActiveSCDirectionalProgressValid = WSS_Null;
+WSS_LowerActiveSCStoppingVolumeCode = WSS_Null;
+WSS_LowerActiveSCAbsorptionCode = WSS_Null;
+WSS_LowerActiveARExtremeBI = WSS_Null;
+WSS_LowerActiveARConfirmBI = WSS_Null;
+WSS_LowerActiveARHigh = WSS_Null;
+WSS_LowerActiveRangeLower = WSS_Null;
+WSS_LowerActiveRangeUpper = WSS_Null;
+WSS_LowerActiveRangeWidth = WSS_Null;
+WSS_LowerActivePSLikeCode = WSS_Null;
+WSS_LowerActivePSExtremeBI = WSS_Null;
+WSS_LowerActivePSElevatedExpansion = WSS_Null;
+WSS_LowerActivePSStoppingVolumeCode = WSS_Null;
+WSS_LowerActiveSCContextSPositionStateCode = WSS_Null;
+WSS_LowerActiveSCContextMPositionStateCode = WSS_Null;
+WSS_LowerActiveSCContextLPositionStateCode = WSS_Null;
+WSS_LowerActiveARContextSPositionStateCode = WSS_Null;
+WSS_LowerActiveARContextMPositionStateCode = WSS_Null;
+WSS_LowerActiveARContextLPositionStateCode = WSS_Null;
+
+WSS_UpperActiveSnapshotValid = WSS_Zero;
+WSS_UpperActiveSequenceOrdinal = WSS_Null;
+WSS_UpperActiveBCOriginBI = WSS_Null;
+WSS_UpperActiveBCConfirmBI = WSS_Null;
+WSS_UpperActiveBCHigh = WSS_Null;
+WSS_UpperActiveBCLow = WSS_Null;
+WSS_UpperActiveBCRVOL = WSS_Null;
+WSS_UpperActiveBCRVOLValid = WSS_Null;
+WSS_UpperActiveBCRSpread = WSS_Null;
+WSS_UpperActiveBCRSpreadValid = WSS_Null;
+WSS_UpperActiveBCClosePosition = WSS_Null;
+WSS_UpperActiveBCClosePositionValid = WSS_Null;
+WSS_UpperActiveBCDirectionalProgress = WSS_Null;
+WSS_UpperActiveBCDirectionalProgressValid = WSS_Null;
+WSS_UpperActiveBCStoppingVolumeCode = WSS_Null;
+WSS_UpperActiveBCAbsorptionCode = WSS_Null;
+WSS_UpperActiveReactionExtremeBI = WSS_Null;
+WSS_UpperActiveReactionConfirmBI = WSS_Null;
+WSS_UpperActiveReactionLow = WSS_Null;
+WSS_UpperActiveRangeLower = WSS_Null;
+WSS_UpperActiveRangeUpper = WSS_Null;
+WSS_UpperActiveRangeWidth = WSS_Null;
+WSS_UpperActivePSYLikeCode = WSS_Null;
+WSS_UpperActivePSYExtremeBI = WSS_Null;
+WSS_UpperActivePSYElevatedExpansion = WSS_Null;
+WSS_UpperActiveBCContextSPositionStateCode = WSS_Null;
+WSS_UpperActiveBCContextMPositionStateCode = WSS_Null;
+WSS_UpperActiveBCContextLPositionStateCode = WSS_Null;
+WSS_UpperActiveReactionContextSPositionStateCode = WSS_Null;
+WSS_UpperActiveReactionContextMPositionStateCode = WSS_Null;
+WSS_UpperActiveReactionContextLPositionStateCode = WSS_Null;
+
+// ST-event anchor snapshot, proving that later pivots cannot replace history.
+WSS_LowerSTAnchorSCRVOL = WSS_Null;
+WSS_LowerSTAnchorSCRSpread = WSS_Null;
+WSS_LowerSTAnchorSCClosePosition = WSS_Null;
+WSS_LowerSTAnchorSCDirectionalProgress = WSS_Null;
+WSS_LowerSTAnchorSCStoppingVolumeCode = WSS_Null;
+WSS_LowerSTAnchorSCAbsorptionCode = WSS_Null;
+WSS_LowerSTAnchorPSLikeCode = WSS_Null;
+WSS_UpperSTAnchorBCRVOL = WSS_Null;
+WSS_UpperSTAnchorBCRSpread = WSS_Null;
+WSS_UpperSTAnchorBCClosePosition = WSS_Null;
+WSS_UpperSTAnchorBCDirectionalProgress = WSS_Null;
+WSS_UpperSTAnchorBCStoppingVolumeCode = WSS_Null;
+WSS_UpperSTAnchorBCAbsorptionCode = WSS_Null;
+WSS_UpperSTAnchorPSYLikeCode = WSS_Null;
+_SECTION_END();
+
+_SECTION_BEGIN("54. Causal snapshot state machine");
+// Scalars are set only when a new confirmed pair is KnownAt.
+WSS_LActive = 0;
+WSS_LOrdinal = 0;
+WSS_LSCOriginBI = 0; WSS_LSCConfirmBI = 0; WSS_LSCLow = 0; WSS_LSCHigh = 0;
+WSS_LSCRVOL = 0; WSS_LSCRVOLValid = 0; WSS_LSCRSpread = 0; WSS_LSCRSpreadValid = 0;
+WSS_LSCCP = 0; WSS_LSCCPValid = 0; WSS_LSCDP = 0; WSS_LSCDPValid = 0;
+WSS_LSCStop = 0; WSS_LSCAbs = 0; WSS_LARExtremeBI = 0; WSS_LARConfirmBI = 0; WSS_LARHigh = 0;
+WSS_LRangeLower = 0; WSS_LRangeUpper = 0; WSS_LRangeWidth = 0;
+WSS_LPSCode = 1; WSS_LPSBI = -1; WSS_LPSElev = 0; WSS_LPSStop = 0;
+WSS_LSC_SPos = 0; WSS_LSC_MPos = 0; WSS_LSC_LPos = 0;
+WSS_LAR_SPos = 0; WSS_LAR_MPos = 0; WSS_LAR_LPos = 0;
+
+WSS_UActive = 0;
+WSS_UOrdinal = 0;
+WSS_UBCOriginBI = 0; WSS_UBCConfirmBI = 0; WSS_UBCHigh = 0; WSS_UBCLow = 0;
+WSS_UBCRVOL = 0; WSS_UBCRVOLValid = 0; WSS_UBCRSpread = 0; WSS_UBCRSpreadValid = 0;
+WSS_UBCCP = 0; WSS_UBCCPValid = 0; WSS_UBCDP = 0; WSS_UBCDPValid = 0;
+WSS_UBCStop = 0; WSS_UBCAbs = 0; WSS_UReactionExtremeBI = 0; WSS_UReactionConfirmBI = 0; WSS_UReactionLow = 0;
+WSS_URangeLower = 0; WSS_URangeUpper = 0; WSS_URangeWidth = 0;
+WSS_UPSYCode = 1; WSS_UPSYBI = -1; WSS_UPSYElev = 0;
+WSS_UBC_SPos = 0; WSS_UBC_MPos = 0; WSS_UBC_LPos = 0;
+WSS_UR_SPos = 0; WSS_UR_MPos = 0; WSS_UR_LPos = 0;
+
+for (WSS_i=0; WSS_i<BarCount; WSS_i++)
+{
+    // Mirror base-engine ordering for historical anchor correctness:
+    // lower ST -> upper pair -> upper ST -> lower pair.
+    if (WS_LowerSTLikeCode[WSS_i] == 2 AND WSS_LActive)
+    {
+        WSS_LowerSTAnchorSCRVOL[WSS_i] = IIf(WSS_LSCRVOLValid,WSS_LSCRVOL,Null);
+        WSS_LowerSTAnchorSCRSpread[WSS_i] = IIf(WSS_LSCRSpreadValid,WSS_LSCRSpread,Null);
+        WSS_LowerSTAnchorSCClosePosition[WSS_i] = IIf(WSS_LSCCPValid,WSS_LSCCP,Null);
+        WSS_LowerSTAnchorSCDirectionalProgress[WSS_i] = IIf(WSS_LSCDPValid,WSS_LSCDP,Null);
+        WSS_LowerSTAnchorSCStoppingVolumeCode[WSS_i] = WSS_LSCStop;
+        WSS_LowerSTAnchorSCAbsorptionCode[WSS_i] = WSS_LSCAbs;
+        WSS_LowerSTAnchorPSLikeCode[WSS_i] = WSS_LPSCode;
+    }
+
+    if (WS_BCLikeCode[WSS_i] == 2 AND WS_AutomaticReactionLikeCode[WSS_i] == 2)
+    {
+        WSS_BCOff = -1;
+        WSS_ROff = WSS_i - SL_PivotLowConfirmationLag[WSS_i];
+        for (WSS_j=0; WSS_j<=WSS_i; WSS_j++)
+            if (WSS_SourceBI[WSS_j] == WS_BCOriginExtremeBarIndex[WSS_i]) WSS_BCOff = WSS_j;
+
+        if (WSS_BCOff >= 0 AND WSS_ROff >= 0)
+        {
+            WSS_BCOpen[WSS_i] = Open[WSS_BCOff]; WSS_BCHigh[WSS_i] = High[WSS_BCOff];
+            WSS_BCLow[WSS_i] = Low[WSS_BCOff]; WSS_BCClose[WSS_i] = Close[WSS_BCOff];
+            WSS_BCRVOLValid[WSS_i] = RVOLValid[WSS_BCOff];
+            WSS_BCRVOL[WSS_i] = IIf(RVOLValid[WSS_BCOff],RVOL[WSS_BCOff],Null);
+            WSS_BCRSpreadValid[WSS_i] = RSpreadValid[WSS_BCOff];
+            WSS_BCRSpread[WSS_i] = IIf(RSpreadValid[WSS_BCOff],RSpread[WSS_BCOff],Null);
+            WSS_BCClosePositionValid[WSS_i] = ClosePositionValid[WSS_BCOff];
+            WSS_BCClosePosition[WSS_i] = IIf(ClosePositionValid[WSS_BCOff],ClosePosition[WSS_BCOff],Null);
+            WSS_BCDirectionalProgressValid[WSS_i] = DirectionalProgressValid[WSS_BCOff];
+            WSS_BCDirectionalProgress[WSS_i] = IIf(DirectionalProgressValid[WSS_BCOff],DirectionalProgress[WSS_BCOff],Null);
+            WSS_BCClimacticDirectionValid[WSS_i] = WE_ER_ClimacticDirectionValid[WSS_BCOff];
+            WSS_BCClimacticDirectionCode[WSS_i] = IIf(WE_ER_ClimacticDirectionValid[WSS_BCOff],WE_ER_ClimacticDirectionCode[WSS_BCOff],Null);
+            WSS_BCStoppingVolumeValid[WSS_i] = WE_ER_StoppingVolumeValid[WSS_BCOff];
+            WSS_BCStoppingVolumeCode[WSS_i] = IIf(WE_ER_StoppingVolumeValid[WSS_BCOff],WE_ER_StoppingVolumeCode[WSS_BCOff],Null);
+            WSS_BCAbsorptionValid[WSS_i] = WE_ER_AbsorptionValid[WSS_BCOff];
+            WSS_BCAbsorptionCode[WSS_i] = IIf(WE_ER_AbsorptionValid[WSS_BCOff],WE_ER_AbsorptionCode[WSS_BCOff],Null);
+            WSS_BCUpsidePressureObserved[WSS_i] = WE_ER_UpsidePressureObserved[WSS_BCOff];
+            WSS_BCElevatedExpansionObservation[WSS_i] = WE_ER_ElevatedExpansionObservation[WSS_BCOff];
+            WSS_BCUltraEffortFlag[WSS_i] = WE_ER_UltraEffortFlag[WSS_BCOff];
+
+            WSS_BCContextSReferenceStatusCode[WSS_i] = SL_S_ReferenceStatusCode[WSS_BCOff];
+            WSS_BCContextSPositionStateCode[WSS_i] = SL_S_PositionStateCode[WSS_BCOff];
+            WSS_BCContextSLocationValid[WSS_i] = SL_S_LocationValid[WSS_BCOff];
+            WSS_BCContextSLocation[WSS_i] = IIf(SL_S_LocationValid[WSS_BCOff],SL_S_Location[WSS_BCOff],Null);
+            WSS_BCContextMReferenceStatusCode[WSS_i] = SL_M_ReferenceStatusCode[WSS_BCOff];
+            WSS_BCContextMPositionStateCode[WSS_i] = SL_M_PositionStateCode[WSS_BCOff];
+            WSS_BCContextMLocationValid[WSS_i] = SL_M_LocationValid[WSS_BCOff];
+            WSS_BCContextMLocation[WSS_i] = IIf(SL_M_LocationValid[WSS_BCOff],SL_M_Location[WSS_BCOff],Null);
+            WSS_BCContextLReferenceStatusCode[WSS_i] = SL_L_ReferenceStatusCode[WSS_BCOff];
+            WSS_BCContextLPositionStateCode[WSS_i] = SL_L_PositionStateCode[WSS_BCOff];
+            WSS_BCContextLLocationValid[WSS_i] = SL_L_LocationValid[WSS_BCOff];
+            WSS_BCContextLLocation[WSS_i] = IIf(SL_L_LocationValid[WSS_BCOff],SL_L_Location[WSS_BCOff],Null);
+
+            WSS_ReactionOpen[WSS_i] = Open[WSS_ROff]; WSS_ReactionHigh[WSS_i] = High[WSS_ROff];
+            WSS_ReactionLow[WSS_i] = Low[WSS_ROff]; WSS_ReactionClose[WSS_i] = Close[WSS_ROff];
+            WSS_ReactionContextSReferenceStatusCode[WSS_i] = SL_S_ReferenceStatusCode[WSS_ROff];
+            WSS_ReactionContextSPositionStateCode[WSS_i] = SL_S_PositionStateCode[WSS_ROff];
+            WSS_ReactionContextSLocationValid[WSS_i] = SL_S_LocationValid[WSS_ROff];
+            WSS_ReactionContextSLocation[WSS_i] = IIf(SL_S_LocationValid[WSS_ROff],SL_S_Location[WSS_ROff],Null);
+            WSS_ReactionContextMReferenceStatusCode[WSS_i] = SL_M_ReferenceStatusCode[WSS_ROff];
+            WSS_ReactionContextMPositionStateCode[WSS_i] = SL_M_PositionStateCode[WSS_ROff];
+            WSS_ReactionContextMLocationValid[WSS_i] = SL_M_LocationValid[WSS_ROff];
+            WSS_ReactionContextMLocation[WSS_i] = IIf(SL_M_LocationValid[WSS_ROff],SL_M_Location[WSS_ROff],Null);
+            WSS_ReactionContextLReferenceStatusCode[WSS_i] = SL_L_ReferenceStatusCode[WSS_ROff];
+            WSS_ReactionContextLPositionStateCode[WSS_i] = SL_L_PositionStateCode[WSS_ROff];
+            WSS_ReactionContextLLocationValid[WSS_i] = SL_L_LocationValid[WSS_ROff];
+            WSS_ReactionContextLLocation[WSS_i] = IIf(SL_L_LocationValid[WSS_ROff],SL_L_Location[WSS_ROff],Null);
+
+            WSS_UPSYCode = WS_PSYLikeCode[WSS_i]; WSS_UPSYBI = -1; WSS_UPSYElev = 0;
+            if (WS_PSYLikeCode[WSS_i] == 2)
+            {
+                WSS_PSYOff = -1;
+                for (WSS_j=0; WSS_j<=WSS_i; WSS_j++)
+                    if (WSS_SourceBI[WSS_j] == WS_PSYExtremeBarIndex[WSS_i]) WSS_PSYOff = WSS_j;
+                if (WSS_PSYOff >= 0)
+                {
+                    WSS_UPSYBI = WS_PSYExtremeBarIndex[WSS_i];
+                    WSS_UPSYElev = WE_ER_ElevatedExpansionObservation[WSS_PSYOff];
+                    WSS_PSYEvidenceUpsidePressure[WSS_i] = WE_ER_UpsidePressureObserved[WSS_PSYOff];
+                    WSS_PSYEvidenceElevatedExpansion[WSS_i] = WSS_UPSYElev;
+                }
+            }
+
+            WSS_UActive = 1; WSS_UOrdinal = WS_UpperSequenceOrdinal[WSS_i];
+            WSS_UBCOriginBI = WS_BCOriginExtremeBarIndex[WSS_i]; WSS_UBCConfirmBI = WS_BCOriginPivotConfirmBarIndex[WSS_i];
+            WSS_UBCHigh = High[WSS_BCOff]; WSS_UBCLow = Low[WSS_BCOff];
+            WSS_UBCRVOLValid = RVOLValid[WSS_BCOff]; WSS_UBCRVOL = IIf(WSS_UBCRVOLValid,RVOL[WSS_BCOff],0);
+            WSS_UBCRSpreadValid = RSpreadValid[WSS_BCOff]; WSS_UBCRSpread = IIf(WSS_UBCRSpreadValid,RSpread[WSS_BCOff],0);
+            WSS_UBCCPValid = ClosePositionValid[WSS_BCOff]; WSS_UBCCP = IIf(WSS_UBCCPValid,ClosePosition[WSS_BCOff],0);
+            WSS_UBCDPValid = DirectionalProgressValid[WSS_BCOff]; WSS_UBCDP = IIf(WSS_UBCDPValid,DirectionalProgress[WSS_BCOff],0);
+            WSS_UBCStop = IIf(WE_ER_StoppingVolumeValid[WSS_BCOff],WE_ER_StoppingVolumeCode[WSS_BCOff],0);
+            WSS_UBCAbs = IIf(WE_ER_AbsorptionValid[WSS_BCOff],WE_ER_AbsorptionCode[WSS_BCOff],0);
+            WSS_UReactionExtremeBI = WS_AutomaticReactionExtremeBarIndex[WSS_i]; WSS_UReactionConfirmBI = WS_AutomaticReactionConfirmBarIndex[WSS_i];
+            WSS_UReactionLow = WS_AutomaticReactionLow[WSS_i];
+            WSS_URangeLower = WS_UpperRangeLowerBoundary[WSS_i]; WSS_URangeUpper = WS_UpperRangeUpperBoundary[WSS_i]; WSS_URangeWidth = WS_UpperRangeWidth[WSS_i];
+            WSS_UBC_SPos = SL_S_PositionStateCode[WSS_BCOff]; WSS_UBC_MPos = SL_M_PositionStateCode[WSS_BCOff]; WSS_UBC_LPos = SL_L_PositionStateCode[WSS_BCOff];
+            WSS_UR_SPos = SL_S_PositionStateCode[WSS_ROff]; WSS_UR_MPos = SL_M_PositionStateCode[WSS_ROff]; WSS_UR_LPos = SL_L_PositionStateCode[WSS_ROff];
+        }
+    }
+
+    if (WS_UpperSTLikeCode[WSS_i] == 2 AND WSS_UActive)
+    {
+        WSS_UpperSTAnchorBCRVOL[WSS_i] = IIf(WSS_UBCRVOLValid,WSS_UBCRVOL,Null);
+        WSS_UpperSTAnchorBCRSpread[WSS_i] = IIf(WSS_UBCRSpreadValid,WSS_UBCRSpread,Null);
+        WSS_UpperSTAnchorBCClosePosition[WSS_i] = IIf(WSS_UBCCPValid,WSS_UBCCP,Null);
+        WSS_UpperSTAnchorBCDirectionalProgress[WSS_i] = IIf(WSS_UBCDPValid,WSS_UBCDP,Null);
+        WSS_UpperSTAnchorBCStoppingVolumeCode[WSS_i] = WSS_UBCStop;
+        WSS_UpperSTAnchorBCAbsorptionCode[WSS_i] = WSS_UBCAbs;
+        WSS_UpperSTAnchorPSYLikeCode[WSS_i] = WSS_UPSYCode;
+    }
+
+    if (WS_SCLikeCode[WSS_i] == 2 AND WS_AutomaticRallyLikeCode[WSS_i] == 2)
+    {
+        WSS_SCOff = -1;
+        WSS_AROff = WSS_i - SL_PivotHighConfirmationLag[WSS_i];
+        for (WSS_j=0; WSS_j<=WSS_i; WSS_j++)
+            if (WSS_SourceBI[WSS_j] == WS_SCOriginExtremeBarIndex[WSS_i]) WSS_SCOff = WSS_j;
+
+        if (WSS_SCOff >= 0 AND WSS_AROff >= 0)
+        {
+            WSS_SCOpen[WSS_i] = Open[WSS_SCOff]; WSS_SCHigh[WSS_i] = High[WSS_SCOff];
+            WSS_SCLow[WSS_i] = Low[WSS_SCOff]; WSS_SCClose[WSS_i] = Close[WSS_SCOff];
+            WSS_SCRVOLValid[WSS_i] = RVOLValid[WSS_SCOff];
+            WSS_SCRVOL[WSS_i] = IIf(RVOLValid[WSS_SCOff],RVOL[WSS_SCOff],Null);
+            WSS_SCRSpreadValid[WSS_i] = RSpreadValid[WSS_SCOff];
+            WSS_SCRSpread[WSS_i] = IIf(RSpreadValid[WSS_SCOff],RSpread[WSS_SCOff],Null);
+            WSS_SCClosePositionValid[WSS_i] = ClosePositionValid[WSS_SCOff];
+            WSS_SCClosePosition[WSS_i] = IIf(ClosePositionValid[WSS_SCOff],ClosePosition[WSS_SCOff],Null);
+            WSS_SCDirectionalProgressValid[WSS_i] = DirectionalProgressValid[WSS_SCOff];
+            WSS_SCDirectionalProgress[WSS_i] = IIf(DirectionalProgressValid[WSS_SCOff],DirectionalProgress[WSS_SCOff],Null);
+            WSS_SCClimacticDirectionValid[WSS_i] = WE_ER_ClimacticDirectionValid[WSS_SCOff];
+            WSS_SCClimacticDirectionCode[WSS_i] = IIf(WE_ER_ClimacticDirectionValid[WSS_SCOff],WE_ER_ClimacticDirectionCode[WSS_SCOff],Null);
+            WSS_SCStoppingVolumeValid[WSS_i] = WE_ER_StoppingVolumeValid[WSS_SCOff];
+            WSS_SCStoppingVolumeCode[WSS_i] = IIf(WE_ER_StoppingVolumeValid[WSS_SCOff],WE_ER_StoppingVolumeCode[WSS_SCOff],Null);
+            WSS_SCAbsorptionValid[WSS_i] = WE_ER_AbsorptionValid[WSS_SCOff];
+            WSS_SCAbsorptionCode[WSS_i] = IIf(WE_ER_AbsorptionValid[WSS_SCOff],WE_ER_AbsorptionCode[WSS_SCOff],Null);
+            WSS_SCDownsidePressureObserved[WSS_i] = WE_ER_DownsidePressureObserved[WSS_SCOff];
+            WSS_SCElevatedExpansionObservation[WSS_i] = WE_ER_ElevatedExpansionObservation[WSS_SCOff];
+            WSS_SCUltraEffortFlag[WSS_i] = WE_ER_UltraEffortFlag[WSS_SCOff];
+
+            WSS_SCContextSReferenceStatusCode[WSS_i] = SL_S_ReferenceStatusCode[WSS_SCOff];
+            WSS_SCContextSPositionStateCode[WSS_i] = SL_S_PositionStateCode[WSS_SCOff];
+            WSS_SCContextSLocationValid[WSS_i] = SL_S_LocationValid[WSS_SCOff];
+            WSS_SCContextSLocation[WSS_i] = IIf(SL_S_LocationValid[WSS_SCOff],SL_S_Location[WSS_SCOff],Null);
+            WSS_SCContextMReferenceStatusCode[WSS_i] = SL_M_ReferenceStatusCode[WSS_SCOff];
+            WSS_SCContextMPositionStateCode[WSS_i] = SL_M_PositionStateCode[WSS_SCOff];
+            WSS_SCContextMLocationValid[WSS_i] = SL_M_LocationValid[WSS_SCOff];
+            WSS_SCContextMLocation[WSS_i] = IIf(SL_M_LocationValid[WSS_SCOff],SL_M_Location[WSS_SCOff],Null);
+            WSS_SCContextLReferenceStatusCode[WSS_i] = SL_L_ReferenceStatusCode[WSS_SCOff];
+            WSS_SCContextLPositionStateCode[WSS_i] = SL_L_PositionStateCode[WSS_SCOff];
+            WSS_SCContextLLocationValid[WSS_i] = SL_L_LocationValid[WSS_SCOff];
+            WSS_SCContextLLocation[WSS_i] = IIf(SL_L_LocationValid[WSS_SCOff],SL_L_Location[WSS_SCOff],Null);
+
+            WSS_AROpen[WSS_i] = Open[WSS_AROff]; WSS_ARHigh[WSS_i] = High[WSS_AROff];
+            WSS_ARLow[WSS_i] = Low[WSS_AROff]; WSS_ARClose[WSS_i] = Close[WSS_AROff];
+            WSS_ARContextSReferenceStatusCode[WSS_i] = SL_S_ReferenceStatusCode[WSS_AROff];
+            WSS_ARContextSPositionStateCode[WSS_i] = SL_S_PositionStateCode[WSS_AROff];
+            WSS_ARContextSLocationValid[WSS_i] = SL_S_LocationValid[WSS_AROff];
+            WSS_ARContextSLocation[WSS_i] = IIf(SL_S_LocationValid[WSS_AROff],SL_S_Location[WSS_AROff],Null);
+            WSS_ARContextMReferenceStatusCode[WSS_i] = SL_M_ReferenceStatusCode[WSS_AROff];
+            WSS_ARContextMPositionStateCode[WSS_i] = SL_M_PositionStateCode[WSS_AROff];
+            WSS_ARContextMLocationValid[WSS_i] = SL_M_LocationValid[WSS_AROff];
+            WSS_ARContextMLocation[WSS_i] = IIf(SL_M_LocationValid[WSS_AROff],SL_M_Location[WSS_AROff],Null);
+            WSS_ARContextLReferenceStatusCode[WSS_i] = SL_L_ReferenceStatusCode[WSS_AROff];
+            WSS_ARContextLPositionStateCode[WSS_i] = SL_L_PositionStateCode[WSS_AROff];
+            WSS_ARContextLLocationValid[WSS_i] = SL_L_LocationValid[WSS_AROff];
+            WSS_ARContextLLocation[WSS_i] = IIf(SL_L_LocationValid[WSS_AROff],SL_L_Location[WSS_AROff],Null);
+
+            WSS_LPSCode = WS_PSLikeCode[WSS_i]; WSS_LPSBI = -1; WSS_LPSElev = 0; WSS_LPSStop = 0;
+            if (WS_PSLikeCode[WSS_i] == 2)
+            {
+                WSS_PSOff = -1;
+                for (WSS_j=0; WSS_j<=WSS_i; WSS_j++)
+                    if (WSS_SourceBI[WSS_j] == WS_PSExtremeBarIndex[WSS_i]) WSS_PSOff = WSS_j;
+                if (WSS_PSOff >= 0)
+                {
+                    WSS_LPSBI = WS_PSExtremeBarIndex[WSS_i];
+                    WSS_LPSElev = WE_ER_ElevatedExpansionObservation[WSS_PSOff];
+                    WSS_LPSStop = IIf(WE_ER_StoppingVolumeValid[WSS_PSOff],WE_ER_StoppingVolumeCode[WSS_PSOff],0);
+                    WSS_PSEvidenceDownsidePressure[WSS_i] = WE_ER_DownsidePressureObserved[WSS_PSOff];
+                    WSS_PSEvidenceElevatedExpansion[WSS_i] = WSS_LPSElev;
+                    WSS_PSEvidenceStoppingVolumeValid[WSS_i] = WE_ER_StoppingVolumeValid[WSS_PSOff];
+                    WSS_PSEvidenceStoppingVolumeCode[WSS_i] = IIf(WE_ER_StoppingVolumeValid[WSS_PSOff],WE_ER_StoppingVolumeCode[WSS_PSOff],Null);
+                }
+            }
+
+            WSS_LActive = 1; WSS_LOrdinal = WS_LowerSequenceOrdinal[WSS_i];
+            WSS_LSCOriginBI = WS_SCOriginExtremeBarIndex[WSS_i]; WSS_LSCConfirmBI = WS_SCOriginPivotConfirmBarIndex[WSS_i];
+            WSS_LSCLow = Low[WSS_SCOff]; WSS_LSCHigh = High[WSS_SCOff];
+            WSS_LSCRVOLValid = RVOLValid[WSS_SCOff]; WSS_LSCRVOL = IIf(WSS_LSCRVOLValid,RVOL[WSS_SCOff],0);
+            WSS_LSCRSpreadValid = RSpreadValid[WSS_SCOff]; WSS_LSCRSpread = IIf(WSS_LSCRSpreadValid,RSpread[WSS_SCOff],0);
+            WSS_LSCCPValid = ClosePositionValid[WSS_SCOff]; WSS_LSCCP = IIf(WSS_LSCCPValid,ClosePosition[WSS_SCOff],0);
+            WSS_LSCDPValid = DirectionalProgressValid[WSS_SCOff]; WSS_LSCDP = IIf(WSS_LSCDPValid,DirectionalProgress[WSS_SCOff],0);
+            WSS_LSCStop = IIf(WE_ER_StoppingVolumeValid[WSS_SCOff],WE_ER_StoppingVolumeCode[WSS_SCOff],0);
+            WSS_LSCAbs = IIf(WE_ER_AbsorptionValid[WSS_SCOff],WE_ER_AbsorptionCode[WSS_SCOff],0);
+            WSS_LARExtremeBI = WS_ARExtremeBarIndex[WSS_i]; WSS_LARConfirmBI = WS_ARConfirmBarIndex[WSS_i]; WSS_LARHigh = WS_ARHigh[WSS_i];
+            WSS_LRangeLower = WS_LowerRangeLowerBoundary[WSS_i]; WSS_LRangeUpper = WS_LowerRangeUpperBoundary[WSS_i]; WSS_LRangeWidth = WS_LowerRangeWidth[WSS_i];
+            WSS_LSC_SPos = SL_S_PositionStateCode[WSS_SCOff]; WSS_LSC_MPos = SL_M_PositionStateCode[WSS_SCOff]; WSS_LSC_LPos = SL_L_PositionStateCode[WSS_SCOff];
+            WSS_LAR_SPos = SL_S_PositionStateCode[WSS_AROff]; WSS_LAR_MPos = SL_M_PositionStateCode[WSS_AROff]; WSS_LAR_LPos = SL_L_PositionStateCode[WSS_AROff];
+        }
+    }
+
+    if (WSS_LActive)
+    {
+        WSS_LowerActiveSnapshotValid[WSS_i] = 1;
+        WSS_LowerActiveSequenceOrdinal[WSS_i] = WSS_LOrdinal;
+        WSS_LowerActiveSCOriginBI[WSS_i] = WSS_LSCOriginBI; WSS_LowerActiveSCConfirmBI[WSS_i] = WSS_LSCConfirmBI;
+        WSS_LowerActiveSCLow[WSS_i] = WSS_LSCLow; WSS_LowerActiveSCHigh[WSS_i] = WSS_LSCHigh;
+        WSS_LowerActiveSCRVOL[WSS_i] = IIf(WSS_LSCRVOLValid,WSS_LSCRVOL,Null); WSS_LowerActiveSCRVOLValid[WSS_i] = WSS_LSCRVOLValid;
+        WSS_LowerActiveSCRSpread[WSS_i] = IIf(WSS_LSCRSpreadValid,WSS_LSCRSpread,Null); WSS_LowerActiveSCRSpreadValid[WSS_i] = WSS_LSCRSpreadValid;
+        WSS_LowerActiveSCClosePosition[WSS_i] = IIf(WSS_LSCCPValid,WSS_LSCCP,Null); WSS_LowerActiveSCClosePositionValid[WSS_i] = WSS_LSCCPValid;
+        WSS_LowerActiveSCDirectionalProgress[WSS_i] = IIf(WSS_LSCDPValid,WSS_LSCDP,Null); WSS_LowerActiveSCDirectionalProgressValid[WSS_i] = WSS_LSCDPValid;
+        WSS_LowerActiveSCStoppingVolumeCode[WSS_i] = WSS_LSCStop; WSS_LowerActiveSCAbsorptionCode[WSS_i] = WSS_LSCAbs;
+        WSS_LowerActiveARExtremeBI[WSS_i] = WSS_LARExtremeBI; WSS_LowerActiveARConfirmBI[WSS_i] = WSS_LARConfirmBI; WSS_LowerActiveARHigh[WSS_i] = WSS_LARHigh;
+        WSS_LowerActiveRangeLower[WSS_i] = WSS_LRangeLower; WSS_LowerActiveRangeUpper[WSS_i] = WSS_LRangeUpper; WSS_LowerActiveRangeWidth[WSS_i] = WSS_LRangeWidth;
+        WSS_LowerActivePSLikeCode[WSS_i] = WSS_LPSCode; WSS_LowerActivePSExtremeBI[WSS_i] = IIf(WSS_LPSBI>=0,WSS_LPSBI,Null);
+        WSS_LowerActivePSElevatedExpansion[WSS_i] = WSS_LPSElev; WSS_LowerActivePSStoppingVolumeCode[WSS_i] = WSS_LPSStop;
+        WSS_LowerActiveSCContextSPositionStateCode[WSS_i] = WSS_LSC_SPos; WSS_LowerActiveSCContextMPositionStateCode[WSS_i] = WSS_LSC_MPos; WSS_LowerActiveSCContextLPositionStateCode[WSS_i] = WSS_LSC_LPos;
+        WSS_LowerActiveARContextSPositionStateCode[WSS_i] = WSS_LAR_SPos; WSS_LowerActiveARContextMPositionStateCode[WSS_i] = WSS_LAR_MPos; WSS_LowerActiveARContextLPositionStateCode[WSS_i] = WSS_LAR_LPos;
+    }
+
+    if (WSS_UActive)
+    {
+        WSS_UpperActiveSnapshotValid[WSS_i] = 1;
+        WSS_UpperActiveSequenceOrdinal[WSS_i] = WSS_UOrdinal;
+        WSS_UpperActiveBCOriginBI[WSS_i] = WSS_UBCOriginBI; WSS_UpperActiveBCConfirmBI[WSS_i] = WSS_UBCConfirmBI;
+        WSS_UpperActiveBCHigh[WSS_i] = WSS_UBCHigh; WSS_UpperActiveBCLow[WSS_i] = WSS_UBCLow;
+        WSS_UpperActiveBCRVOL[WSS_i] = IIf(WSS_UBCRVOLValid,WSS_UBCRVOL,Null); WSS_UpperActiveBCRVOLValid[WSS_i] = WSS_UBCRVOLValid;
+        WSS_UpperActiveBCRSpread[WSS_i] = IIf(WSS_UBCRSpreadValid,WSS_UBCRSpread,Null); WSS_UpperActiveBCRSpreadValid[WSS_i] = WSS_UBCRSpreadValid;
+        WSS_UpperActiveBCClosePosition[WSS_i] = IIf(WSS_UBCCPValid,WSS_UBCCP,Null); WSS_UpperActiveBCClosePositionValid[WSS_i] = WSS_UBCCPValid;
+        WSS_UpperActiveBCDirectionalProgress[WSS_i] = IIf(WSS_UBCDPValid,WSS_UBCDP,Null); WSS_UpperActiveBCDirectionalProgressValid[WSS_i] = WSS_UBCDPValid;
+        WSS_UpperActiveBCStoppingVolumeCode[WSS_i] = WSS_UBCStop; WSS_UpperActiveBCAbsorptionCode[WSS_i] = WSS_UBCAbs;
+        WSS_UpperActiveReactionExtremeBI[WSS_i] = WSS_UReactionExtremeBI; WSS_UpperActiveReactionConfirmBI[WSS_i] = WSS_UReactionConfirmBI; WSS_UpperActiveReactionLow[WSS_i] = WSS_UReactionLow;
+        WSS_UpperActiveRangeLower[WSS_i] = WSS_URangeLower; WSS_UpperActiveRangeUpper[WSS_i] = WSS_URangeUpper; WSS_UpperActiveRangeWidth[WSS_i] = WSS_URangeWidth;
+        WSS_UpperActivePSYLikeCode[WSS_i] = WSS_UPSYCode; WSS_UpperActivePSYExtremeBI[WSS_i] = IIf(WSS_UPSYBI>=0,WSS_UPSYBI,Null); WSS_UpperActivePSYElevatedExpansion[WSS_i] = WSS_UPSYElev;
+        WSS_UpperActiveBCContextSPositionStateCode[WSS_i] = WSS_UBC_SPos; WSS_UpperActiveBCContextMPositionStateCode[WSS_i] = WSS_UBC_MPos; WSS_UpperActiveBCContextLPositionStateCode[WSS_i] = WSS_UBC_LPos;
+        WSS_UpperActiveReactionContextSPositionStateCode[WSS_i] = WSS_UR_SPos; WSS_UpperActiveReactionContextMPositionStateCode[WSS_i] = WSS_UR_MPos; WSS_UpperActiveReactionContextLPositionStateCode[WSS_i] = WSS_UR_LPos;
+    }
+}
+_SECTION_END();
+
+_SECTION_BEGIN("55. D29 snapshot exploration");
+// Diagnostic subset only; all WSS_* arrays above remain public to downstream includes.
+AddColumn(WSS_LowerActiveSnapshotValid,"WSS_LowerActiveSnapshotValid",1.0);
+AddColumn(WSS_LowerActiveSequenceOrdinal,"WSS_LowerActiveSequenceOrdinal",1.0);
+AddColumn(WSS_LowerActiveSCLow,"WSS_LowerActiveSCLow",1.4);
+AddColumn(WSS_LowerActiveSCRVOL,"WSS_LowerActiveSCRVOL",1.4);
+AddColumn(WSS_LowerActiveSCClosePosition,"WSS_LowerActiveSCClosePosition",1.4);
+AddColumn(WSS_LowerActiveSCDirectionalProgress,"WSS_LowerActiveSCDirectionalProgress",1.4);
+AddColumn(WSS_LowerActiveARHigh,"WSS_LowerActiveARHigh",1.4);
+AddColumn(WSS_LowerActiveRangeLower,"WSS_LowerActiveRangeLower",1.4);
+AddColumn(WSS_LowerActiveRangeUpper,"WSS_LowerActiveRangeUpper",1.4);
+AddColumn(WSS_LowerActivePSLikeCode,"WSS_LowerActivePSLikeCode",1.0);
+AddColumn(WSS_LowerSTAnchorSCRVOL,"WSS_LowerSTAnchorSCRVOL",1.4);
+AddColumn(WSS_LowerSTAnchorSCClosePosition,"WSS_LowerSTAnchorSCClosePosition",1.4);
+
+AddColumn(WSS_UpperActiveSnapshotValid,"WSS_UpperActiveSnapshotValid",1.0);
+AddColumn(WSS_UpperActiveSequenceOrdinal,"WSS_UpperActiveSequenceOrdinal",1.0);
+AddColumn(WSS_UpperActiveBCHigh,"WSS_UpperActiveBCHigh",1.4);
+AddColumn(WSS_UpperActiveBCRVOL,"WSS_UpperActiveBCRVOL",1.4);
+AddColumn(WSS_UpperActiveBCClosePosition,"WSS_UpperActiveBCClosePosition",1.4);
+AddColumn(WSS_UpperActiveBCDirectionalProgress,"WSS_UpperActiveBCDirectionalProgress",1.4);
+AddColumn(WSS_UpperActiveReactionLow,"WSS_UpperActiveReactionLow",1.4);
+AddColumn(WSS_UpperActiveRangeLower,"WSS_UpperActiveRangeLower",1.4);
+AddColumn(WSS_UpperActiveRangeUpper,"WSS_UpperActiveRangeUpper",1.4);
+AddColumn(WSS_UpperActivePSYLikeCode,"WSS_UpperActivePSYLikeCode",1.0);
+AddColumn(WSS_UpperSTAnchorBCRVOL,"WSS_UpperSTAnchorBCRVOL",1.4);
+AddColumn(WSS_UpperSTAnchorBCClosePosition,"WSS_UpperSTAnchorBCClosePosition",1.4);
+_SECTION_END();
