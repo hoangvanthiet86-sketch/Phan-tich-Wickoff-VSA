@@ -1,0 +1,340 @@
+/*
+    Wyckoff VSA Cross-Symbol Selection Context Publisher v0.1
+
+    Approved contract: PR #37, XS01-XS38.
+    Approval merge commit: d006959f11f5ec544f5f000c53448cec2643dc99
+
+    Role-neutral native-Daily publisher for Market/Group selection context.
+    Serialization only: canonical Composite + MTF public outputs are written
+    to persistent scalar StaticVars. No selection interpretation or ranking.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+#include_once <WyckoffVSA_MultiTimeframeContext_SelectionSnapshotPublic_v0.1.afl>
+
+_SECTION_BEGIN("110. Cross-Symbol Selection Context Publisher");
+WXS_SchemaMajor = 1;
+WXS_SchemaMinor = 0;
+WXS_ContractVersion = "0.1";
+WXS_CompositeVersion = "0.1";
+WXS_MTFVersion = "0.1";
+WXS_SourceSymbol = Name();
+WXS_SourceInterval = Interval();
+WXS_SourceBarDateTime = LastValue(DateTime());
+WXS_SourceBusinessDateKey = LastValue(Year()*10000 + Month()*100 + Day());
+WXS_CurrentCalendarBusinessDateKey = Now(8)*10000 + Now(7)*100 + Now(6);
+WXS_PublishedAtDateTime = Now(5);
+WXS_DailyCompletionDeclaration = ParamToggle("Selection snapshot: current Daily bar completed","Not declared|Completed",0);
+
+WXS_Prefix = "WVSA_SELCTX_v01_" + WXS_SourceSymbol + "_";
+WXS_WriterLockName = WXS_Prefix + "WriterLock";
+WXS_WriterLockAcquired = 0;
+WXS_PreviousGeneration = Nz(StaticVarGet(WXS_Prefix+"CommittedGenerationID"),0);
+WXS_NewGeneration = WXS_PreviousGeneration + 1;
+WXS_CompletionBasisCode = 0;
+
+// Publisher status:
+// 0 NOT RUN / INSUFFICIENT
+// 1 COMMITTED
+// 2 INVALID INTERVAL
+// 3 UPSTREAM NOT READY
+// 4 SOURCE COMPLETION NOT DECLARED
+// 5 FUTURE SOURCE BUSINESS DATE
+// 6 INVALID PAYLOAD
+// 7 WRITER BUSY
+// 8 COMMIT VERIFY FAILED
+// 9 INVALID SOURCE DATETIME / DATE KEY
+WXS_PublisherStatusCode = 0;
+WXS_PublisherStatusText = "NOT RUN / INSUFFICIENT\nCOMMITTED\nINVALID INTERVAL\nUPSTREAM NOT READY\nSOURCE COMPLETION NOT DECLARED\nFUTURE SOURCE BUSINESS DATE\nINVALID PAYLOAD\nWRITER BUSY\nCOMMIT VERIFY FAILED\nINVALID SOURCE DATETIME / DATE KEY";
+
+// XS24: canonical Composite singleton payload.
+WXS_ContextMultiplicityCode = LastValue(WCI_ContextMultiplicityCode);
+WXS_ContextAmbiguous = LastValue(WCI_ContextAmbiguous);
+WXS_CurrentRangeContextID = LastValue(WCI_CurrentRangeContextID);
+WXS_RangeStatusCode = LastValue(WCI_RangeStatusCode);
+WXS_PhaseStateCode = LastValue(WCI_PhaseStateCode);
+WXS_StructuralDevelopmentCode = LastValue(WCI_StructuralDevelopmentCode);
+WXS_FamilyHypothesisCode = LastValue(WCI_FamilyHypothesisCode);
+WXS_DirectionalContextCode = LastValue(WCI_DirectionalContextCode);
+WXS_EvidenceBalanceCode = LastValue(WCI_EvidenceBalanceCode);
+WXS_HypothesisAlignmentCode = LastValue(WCI_HypothesisAlignmentCode);
+WXS_HypothesisRevisionCode = LastValue(WCI_HypothesisRevisionCode);
+WXS_CurrentEventMask = LastValue(WCI_CurrentEventMask);
+WXS_ProvisionalFlag = LastValue(WCI_ProvisionalFlag);
+WXS_PrimaryRangeLow = LastValue(WCI_PrimaryRangeLow);
+WXS_PrimaryRangeHigh = LastValue(WCI_PrimaryRangeHigh);
+WXS_RangeAgeBars = LastValue(WCI_RangeAgeBars);
+
+// XS25: lower/upper contexts remain independent.
+WXS_L_ContextPresent = LastValue(WCI_L_ContextPresent);
+WXS_L_RangeContextID = LastValue(WCI_L_RangeContextID);
+WXS_L_RangeStatusCode = LastValue(WCI_L_RangeStatusCode);
+WXS_L_PhaseStateCode = LastValue(WCI_L_PhaseStateCode);
+WXS_L_FamilyHypothesisCode = LastValue(WCI_L_FamilyHypothesisCode);
+WXS_L_EvidenceBalanceCode = LastValue(WCI_L_EvidenceBalanceCode);
+WXS_L_MixedEvidenceReasonCode = LastValue(WCI_L_MixedEvidenceReasonCode);
+WXS_L_PrimaryRangeLow = LastValue(WCI_L_PrimaryRangeLow);
+WXS_L_PrimaryRangeHigh = LastValue(WCI_L_PrimaryRangeHigh);
+WXS_L_RangeAgeBars = LastValue(WCI_L_RangeAgeBars);
+
+WXS_U_ContextPresent = LastValue(WCI_U_ContextPresent);
+WXS_U_RangeContextID = LastValue(WCI_U_RangeContextID);
+WXS_U_RangeStatusCode = LastValue(WCI_U_RangeStatusCode);
+WXS_U_PhaseStateCode = LastValue(WCI_U_PhaseStateCode);
+WXS_U_FamilyHypothesisCode = LastValue(WCI_U_FamilyHypothesisCode);
+WXS_U_EvidenceBalanceCode = LastValue(WCI_U_EvidenceBalanceCode);
+WXS_U_MixedEvidenceReasonCode = LastValue(WCI_U_MixedEvidenceReasonCode);
+WXS_U_PrimaryRangeLow = LastValue(WCI_U_PrimaryRangeLow);
+WXS_U_PrimaryRangeHigh = LastValue(WCI_U_PrimaryRangeHigh);
+WXS_U_RangeAgeBars = LastValue(WCI_U_RangeAgeBars);
+
+// XS26/XS27: full MTF diagnostics + constituent provenance.
+WXS_MTF_SnapshotContractValid = LastValue(WMTF_SnapshotContractValid);
+WXS_MTF_DailyValid = LastValue(WMTF_DailyValid);
+WXS_MTF_WeeklyValid = LastValue(WMTF_WeeklyValid);
+WXS_MTF_MonthlyValid = LastValue(WMTF_MonthlyValid);
+WXS_MTF_D_DirectionalContextCode = LastValue(WMTF_D_DirectionalContextCode);
+WXS_MTF_W_DirectionalContextCode = LastValue(WMTF_W_DirectionalContextCode);
+WXS_MTF_M_DirectionalContextCode = LastValue(WMTF_M_DirectionalContextCode);
+WXS_MTF_D_PhaseStateCode = LastValue(WMTF_D_PhaseStateCode);
+WXS_MTF_W_PhaseStateCode = LastValue(WMTF_W_PhaseStateCode);
+WXS_MTF_M_PhaseStateCode = LastValue(WMTF_M_PhaseStateCode);
+WXS_MTF_D_FamilyHypothesisCode = LastValue(WMTF_D_FamilyHypothesisCode);
+WXS_MTF_W_FamilyHypothesisCode = LastValue(WMTF_W_FamilyHypothesisCode);
+WXS_MTF_M_FamilyHypothesisCode = LastValue(WMTF_M_FamilyHypothesisCode);
+WXS_MTF_D_EvidenceBalanceCode = LastValue(WMTF_D_EvidenceBalanceCode);
+WXS_MTF_W_EvidenceBalanceCode = LastValue(WMTF_W_EvidenceBalanceCode);
+WXS_MTF_M_EvidenceBalanceCode = LastValue(WMTF_M_EvidenceBalanceCode);
+WXS_MTF_DirectionalAlignmentCode = LastValue(WMTF_DirectionalAlignmentCode);
+WXS_MTF_EvidenceAlignmentCode = LastValue(WMTF_EvidenceAlignmentCode);
+WXS_MTF_PhaseRelationshipCode = LastValue(WMTF_PhaseRelationshipCode);
+WXS_MTF_ConflictReasonCode = LastValue(WMTF_ConflictReasonCode);
+WXS_MTF_WeeklySnapshotStatusCode = LastValue(WMTF_WeeklySnapshotStatusCode);
+WXS_MTF_MonthlySnapshotStatusCode = LastValue(WMTF_MonthlySnapshotStatusCode);
+WXS_MTF_D_SourceBarDateTime = LastValue(WMTF_D_SourceBarDateTime);
+WXS_MTF_W_SourcePeriodOrdinal = LastValue(WMTF_W_SourcePeriodOrdinal);
+WXS_MTF_M_SourcePeriodOrdinal = LastValue(WMTF_M_SourcePeriodOrdinal);
+WXS_MTF_W_SourceBarDateTime = LastValue(WMTF_W_SourceBarDateTime);
+WXS_MTF_M_SourceBarDateTime = LastValue(WMTF_M_SourceBarDateTime);
+WXS_MTF_W_GenerationID = LastValue(WMTF_W_GenerationID);
+WXS_MTF_M_GenerationID = LastValue(WMTF_M_GenerationID);
+WXS_MTF_W_SchemaMajor = LastValue(WMTF_W_SchemaMajor);
+WXS_MTF_W_SchemaMinor = LastValue(WMTF_W_SchemaMinor);
+WXS_MTF_M_SchemaMajor = LastValue(WMTF_M_SchemaMajor);
+WXS_MTF_M_SchemaMinor = LastValue(WMTF_M_SchemaMinor);
+
+WXS_SourceDateValid = NOT IsNull(WXS_SourceBarDateTime) AND NOT IsNull(WXS_SourceBusinessDateKey) AND WXS_SourceBusinessDateKey>0;
+WXS_CompositeCoreValid =
+    NOT IsNull(WXS_ContextMultiplicityCode) AND
+    NOT IsNull(WXS_ContextAmbiguous) AND
+    NOT IsNull(WXS_PhaseStateCode) AND
+    NOT IsNull(WXS_StructuralDevelopmentCode) AND
+    NOT IsNull(WXS_FamilyHypothesisCode) AND
+    NOT IsNull(WXS_DirectionalContextCode) AND
+    NOT IsNull(WXS_EvidenceBalanceCode) AND
+    NOT IsNull(WXS_HypothesisAlignmentCode) AND
+    NOT IsNull(WXS_HypothesisRevisionCode) AND
+    NOT IsNull(WXS_CurrentEventMask) AND
+    NOT IsNull(WXS_ProvisionalFlag);
+
+WXS_SingleContextPayloadValid = IIf(
+    WXS_ContextMultiplicityCode==1,
+    NOT IsNull(WXS_CurrentRangeContextID) AND NOT IsNull(WXS_PrimaryRangeLow) AND NOT IsNull(WXS_PrimaryRangeHigh),1);
+WXS_MultipleContextPayloadValid = IIf(
+    WXS_ContextMultiplicityCode==2,
+    WXS_L_ContextPresent==1 AND WXS_U_ContextPresent==1 AND
+    NOT IsNull(WXS_L_RangeContextID) AND NOT IsNull(WXS_U_RangeContextID) AND
+    NOT IsNull(WXS_L_PrimaryRangeLow) AND NOT IsNull(WXS_L_PrimaryRangeHigh) AND
+    NOT IsNull(WXS_U_PrimaryRangeLow) AND NOT IsNull(WXS_U_PrimaryRangeHigh),1);
+WXS_CompositePayloadValid = WXS_CompositeCoreValid AND WXS_SingleContextPayloadValid AND WXS_MultipleContextPayloadValid;
+
+WXS_MTFPayloadValid =
+    WXS_MTF_SnapshotContractValid==1 AND
+    WXS_MTF_DailyValid==1 AND WXS_MTF_WeeklyValid==1 AND WXS_MTF_MonthlyValid==1 AND
+    NOT IsNull(WXS_MTF_D_DirectionalContextCode) AND
+    NOT IsNull(WXS_MTF_W_DirectionalContextCode) AND
+    NOT IsNull(WXS_MTF_M_DirectionalContextCode) AND
+    NOT IsNull(WXS_MTF_DirectionalAlignmentCode) AND
+    NOT IsNull(WXS_MTF_EvidenceAlignmentCode) AND
+    NOT IsNull(WXS_MTF_PhaseRelationshipCode) AND
+    NOT IsNull(WXS_MTF_WeeklySnapshotStatusCode) AND
+    NOT IsNull(WXS_MTF_MonthlySnapshotStatusCode);
+
+WXS_UpstreamReady =
+    WXS_SourceInterval==inDaily AND
+    WCI_PublicSchemaMajor==1 AND WMTF_PublicSchemaMajor==1 AND
+    WXS_ProvisionalFlag==0 AND
+    WXS_MTFPayloadValid;
+
+if (WXS_SourceBusinessDateKey < WXS_CurrentCalendarBusinessDateKey)
+{
+    WXS_CompletionBasisCode = 1; // CALENDAR DAY ROLLED OVER
+}
+else
+if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WXS_DailyCompletionDeclaration==1)
+{
+    WXS_CompletionBasisCode = 2; // OPERATOR EOD COMPLETION DECLARATION
+}
+
+if (WXS_SourceInterval!=inDaily)
+{
+    WXS_PublisherStatusCode = 2;
+}
+else
+if (NOT WXS_SourceDateValid)
+{
+    WXS_PublisherStatusCode = 9;
+}
+else
+if (WXS_SourceBusinessDateKey > WXS_CurrentCalendarBusinessDateKey)
+{
+    WXS_PublisherStatusCode = 5;
+}
+else
+if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WXS_DailyCompletionDeclaration!=1)
+{
+    WXS_PublisherStatusCode = 4;
+}
+else
+if (NOT WXS_UpstreamReady)
+{
+    WXS_PublisherStatusCode = 3;
+}
+else
+if (NOT WXS_CompositePayloadValid OR NOT WXS_MTFPayloadValid)
+{
+    WXS_PublisherStatusCode = 6;
+}
+else
+{
+    WXS_WriterLockAcquired = StaticVarCompareExchange(WXS_WriterLockName,1,0)==0;
+    if (NOT WXS_WriterLockAcquired)
+    {
+        WXS_PublisherStatusCode = 7;
+    }
+    else
+    {
+        WXS_PreviousGeneration = Nz(StaticVarGet(WXS_Prefix+"CommittedGenerationID"),0);
+        WXS_NewGeneration = WXS_PreviousGeneration + 1;
+
+        // XS21 transaction protocol: Ready low before bundle writes.
+        StaticVarSet(WXS_Prefix+"Ready",0,True);
+
+        // Composite payload.
+        StaticVarSet(WXS_Prefix+"ContextMultiplicityCode",WXS_ContextMultiplicityCode,True);
+        StaticVarSet(WXS_Prefix+"ContextAmbiguous",WXS_ContextAmbiguous,True);
+        StaticVarSet(WXS_Prefix+"CurrentRangeContextID",WXS_CurrentRangeContextID,True);
+        StaticVarSet(WXS_Prefix+"RangeStatusCode",WXS_RangeStatusCode,True);
+        StaticVarSet(WXS_Prefix+"PhaseStateCode",WXS_PhaseStateCode,True);
+        StaticVarSet(WXS_Prefix+"StructuralDevelopmentCode",WXS_StructuralDevelopmentCode,True);
+        StaticVarSet(WXS_Prefix+"FamilyHypothesisCode",WXS_FamilyHypothesisCode,True);
+        StaticVarSet(WXS_Prefix+"DirectionalContextCode",WXS_DirectionalContextCode,True);
+        StaticVarSet(WXS_Prefix+"EvidenceBalanceCode",WXS_EvidenceBalanceCode,True);
+        StaticVarSet(WXS_Prefix+"HypothesisAlignmentCode",WXS_HypothesisAlignmentCode,True);
+        StaticVarSet(WXS_Prefix+"HypothesisRevisionCode",WXS_HypothesisRevisionCode,True);
+        StaticVarSet(WXS_Prefix+"CurrentEventMask",WXS_CurrentEventMask,True);
+        StaticVarSet(WXS_Prefix+"ProvisionalFlag",WXS_ProvisionalFlag,True);
+        StaticVarSet(WXS_Prefix+"PrimaryRangeLow",WXS_PrimaryRangeLow,True);
+        StaticVarSet(WXS_Prefix+"PrimaryRangeHigh",WXS_PrimaryRangeHigh,True);
+        StaticVarSet(WXS_Prefix+"RangeAgeBars",WXS_RangeAgeBars,True);
+
+        StaticVarSet(WXS_Prefix+"L_ContextPresent",WXS_L_ContextPresent,True);
+        StaticVarSet(WXS_Prefix+"L_RangeContextID",WXS_L_RangeContextID,True);
+        StaticVarSet(WXS_Prefix+"L_RangeStatusCode",WXS_L_RangeStatusCode,True);
+        StaticVarSet(WXS_Prefix+"L_PhaseStateCode",WXS_L_PhaseStateCode,True);
+        StaticVarSet(WXS_Prefix+"L_FamilyHypothesisCode",WXS_L_FamilyHypothesisCode,True);
+        StaticVarSet(WXS_Prefix+"L_EvidenceBalanceCode",WXS_L_EvidenceBalanceCode,True);
+        StaticVarSet(WXS_Prefix+"L_MixedEvidenceReasonCode",WXS_L_MixedEvidenceReasonCode,True);
+        StaticVarSet(WXS_Prefix+"L_PrimaryRangeLow",WXS_L_PrimaryRangeLow,True);
+        StaticVarSet(WXS_Prefix+"L_PrimaryRangeHigh",WXS_L_PrimaryRangeHigh,True);
+        StaticVarSet(WXS_Prefix+"L_RangeAgeBars",WXS_L_RangeAgeBars,True);
+
+        StaticVarSet(WXS_Prefix+"U_ContextPresent",WXS_U_ContextPresent,True);
+        StaticVarSet(WXS_Prefix+"U_RangeContextID",WXS_U_RangeContextID,True);
+        StaticVarSet(WXS_Prefix+"U_RangeStatusCode",WXS_U_RangeStatusCode,True);
+        StaticVarSet(WXS_Prefix+"U_PhaseStateCode",WXS_U_PhaseStateCode,True);
+        StaticVarSet(WXS_Prefix+"U_FamilyHypothesisCode",WXS_U_FamilyHypothesisCode,True);
+        StaticVarSet(WXS_Prefix+"U_EvidenceBalanceCode",WXS_U_EvidenceBalanceCode,True);
+        StaticVarSet(WXS_Prefix+"U_MixedEvidenceReasonCode",WXS_U_MixedEvidenceReasonCode,True);
+        StaticVarSet(WXS_Prefix+"U_PrimaryRangeLow",WXS_U_PrimaryRangeLow,True);
+        StaticVarSet(WXS_Prefix+"U_PrimaryRangeHigh",WXS_U_PrimaryRangeHigh,True);
+        StaticVarSet(WXS_Prefix+"U_RangeAgeBars",WXS_U_RangeAgeBars,True);
+
+        // MTF payload and provenance.
+        StaticVarSet(WXS_Prefix+"MTF_SnapshotContractValid",WXS_MTF_SnapshotContractValid,True);
+        StaticVarSet(WXS_Prefix+"MTF_DailyValid",WXS_MTF_DailyValid,True);
+        StaticVarSet(WXS_Prefix+"MTF_WeeklyValid",WXS_MTF_WeeklyValid,True);
+        StaticVarSet(WXS_Prefix+"MTF_MonthlyValid",WXS_MTF_MonthlyValid,True);
+        StaticVarSet(WXS_Prefix+"MTF_D_DirectionalContextCode",WXS_MTF_D_DirectionalContextCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_W_DirectionalContextCode",WXS_MTF_W_DirectionalContextCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_M_DirectionalContextCode",WXS_MTF_M_DirectionalContextCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_D_PhaseStateCode",WXS_MTF_D_PhaseStateCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_W_PhaseStateCode",WXS_MTF_W_PhaseStateCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_M_PhaseStateCode",WXS_MTF_M_PhaseStateCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_D_FamilyHypothesisCode",WXS_MTF_D_FamilyHypothesisCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_W_FamilyHypothesisCode",WXS_MTF_W_FamilyHypothesisCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_M_FamilyHypothesisCode",WXS_MTF_M_FamilyHypothesisCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_D_EvidenceBalanceCode",WXS_MTF_D_EvidenceBalanceCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_W_EvidenceBalanceCode",WXS_MTF_W_EvidenceBalanceCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_M_EvidenceBalanceCode",WXS_MTF_M_EvidenceBalanceCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_DirectionalAlignmentCode",WXS_MTF_DirectionalAlignmentCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_EvidenceAlignmentCode",WXS_MTF_EvidenceAlignmentCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_PhaseRelationshipCode",WXS_MTF_PhaseRelationshipCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_ConflictReasonCode",WXS_MTF_ConflictReasonCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_WeeklySnapshotStatusCode",WXS_MTF_WeeklySnapshotStatusCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_MonthlySnapshotStatusCode",WXS_MTF_MonthlySnapshotStatusCode,True);
+        StaticVarSet(WXS_Prefix+"MTF_D_SourceBarDateTime",WXS_MTF_D_SourceBarDateTime,True);
+        StaticVarSet(WXS_Prefix+"MTF_W_SourcePeriodOrdinal",WXS_MTF_W_SourcePeriodOrdinal,True);
+        StaticVarSet(WXS_Prefix+"MTF_M_SourcePeriodOrdinal",WXS_MTF_M_SourcePeriodOrdinal,True);
+        StaticVarSet(WXS_Prefix+"MTF_W_SourceBarDateTime",WXS_MTF_W_SourceBarDateTime,True);
+        StaticVarSet(WXS_Prefix+"MTF_M_SourceBarDateTime",WXS_MTF_M_SourceBarDateTime,True);
+        StaticVarSet(WXS_Prefix+"MTF_W_GenerationID",WXS_MTF_W_GenerationID,True);
+        StaticVarSet(WXS_Prefix+"MTF_M_GenerationID",WXS_MTF_M_GenerationID,True);
+        StaticVarSet(WXS_Prefix+"MTF_W_SchemaMajor",WXS_MTF_W_SchemaMajor,True);
+        StaticVarSet(WXS_Prefix+"MTF_W_SchemaMinor",WXS_MTF_W_SchemaMinor,True);
+        StaticVarSet(WXS_Prefix+"MTF_M_SchemaMajor",WXS_MTF_M_SchemaMajor,True);
+        StaticVarSet(WXS_Prefix+"MTF_M_SchemaMinor",WXS_MTF_M_SchemaMinor,True);
+
+        // Schema/provenance after payload, then commit marker and Ready last.
+        StaticVarSet(WXS_Prefix+"SchemaMajor",WXS_SchemaMajor,True);
+        StaticVarSet(WXS_Prefix+"SchemaMinor",WXS_SchemaMinor,True);
+        StaticVarSetText(WXS_Prefix+"ProducerContractVersion",WXS_ContractVersion,True);
+        StaticVarSetText(WXS_Prefix+"ProducerCompositeVersion",WXS_CompositeVersion,True);
+        StaticVarSetText(WXS_Prefix+"ProducerMTFVersion",WXS_MTFVersion,True);
+        StaticVarSetText(WXS_Prefix+"SourceSymbol",WXS_SourceSymbol,True);
+        StaticVarSet(WXS_Prefix+"SourceInterval",WXS_SourceInterval,True);
+        StaticVarSet(WXS_Prefix+"SourceBusinessDateKey",WXS_SourceBusinessDateKey,True);
+        StaticVarSet(WXS_Prefix+"SourceBarDateTime",WXS_SourceBarDateTime,True);
+        StaticVarSet(WXS_Prefix+"PublishedAtDateTime",WXS_PublishedAtDateTime,True);
+        StaticVarSet(WXS_Prefix+"CompletionBasisCode",WXS_CompletionBasisCode,True);
+        StaticVarSet(WXS_Prefix+"CompletionDeclarationCode",WXS_DailyCompletionDeclaration,True);
+        StaticVarSet(WXS_Prefix+"CompositePayloadValid",WXS_CompositePayloadValid,True);
+        StaticVarSet(WXS_Prefix+"MTFPayloadValid",WXS_MTFPayloadValid,True);
+        StaticVarSet(WXS_Prefix+"CompositeSchemaMajor",WCI_PublicSchemaMajor,True);
+        StaticVarSet(WXS_Prefix+"CompositeSchemaMinor",WCI_PublicSchemaMinor,True);
+        StaticVarSet(WXS_Prefix+"MTFSchemaMajor",WMTF_PublicSchemaMajor,True);
+        StaticVarSet(WXS_Prefix+"MTFSchemaMinor",WMTF_PublicSchemaMinor,True);
+
+        StaticVarSet(WXS_Prefix+"CommittedGenerationID",WXS_NewGeneration,True);
+        StaticVarSet(WXS_Prefix+"Ready",1,True);
+
+        WXS_VerifyGeneration = StaticVarGet(WXS_Prefix+"CommittedGenerationID");
+        WXS_VerifyReady = StaticVarGet(WXS_Prefix+"Ready");
+        WXS_PublisherStatusCode = IIf(WXS_VerifyReady==1 AND WXS_VerifyGeneration==WXS_NewGeneration,1,8);
+
+        // Writer semaphore is intentionally non-persistent.
+        StaticVarSet(WXS_WriterLockName,0);
+    }
+}
+
+WXS_PublisherStatus = 0*BarIndex() + WXS_PublisherStatusCode;
+WXS_PublisherWriterLockAcquired = 0*BarIndex() + WXS_WriterLockAcquired;
+WXS_PublisherSourceBusinessDateKey = 0*BarIndex() + WXS_SourceBusinessDateKey;
+WXS_PublisherCurrentCalendarBusinessDateKey = 0*BarIndex() + WXS_CurrentCalendarBusinessDateKey;
+WXS_PublisherCompletionBasisCode = 0*BarIndex() + WXS_CompletionBasisCode;
+WXS_PublisherCompletionDeclarationCode = 0*BarIndex() + WXS_DailyCompletionDeclaration;
+WXS_PublisherPreviousGeneration = 0*BarIndex() + WXS_PreviousGeneration;
+WXS_PublisherNewGeneration = 0*BarIndex() + WXS_NewGeneration;
+WXS_PublisherCompositePayloadValid = 0*BarIndex() + WXS_CompositePayloadValid;
+WXS_PublisherMTFPayloadValid = 0*BarIndex() + WXS_MTFPayloadValid;
+_SECTION_END();
