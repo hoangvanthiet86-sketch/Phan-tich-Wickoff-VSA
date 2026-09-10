@@ -7,6 +7,7 @@ Các artefact dưới đây được khóa **trước khi có AFL Event**.
 - `tests/supply-test-v1.0/reference_model.py` — mô hình tham chiếu độc lập. SHA-256 cục bộ trước upload: `447eb6a28fec869179951b330952b820818d292f610d645e3b197fc4242e146e`.
 - `tests/supply-test-v1.0/fixtures.json` — 20 fixture ban đầu. SHA-256 cục bộ trước upload: `7df333444f69a7d347b575e77c4435089aac17f0468b58cf9879ba9d1f74e9c6`.
 - `tests/supply-test-v1.0/expected.json` — expected khóa trước AFL. SHA-256 cục bộ trước upload: `89e455285f00ec8472d6c6dd5753d0f64f4a9fed8cf6d43a8d2860d553508ccd`.
+- `tests/supply-test-v1.0/model-validation.md` — ghi nhận kiểm tra mô hình/fixture trước AFL.
 
 Nguồn upstream khóa tại thời điểm thiết kế:
 
