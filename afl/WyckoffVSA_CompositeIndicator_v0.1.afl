@@ -1,0 +1,268 @@
+/*
+    Wyckoff VSA Composite Indicator v0.1
+
+    Approved specification: PR #26
+    Approval merge commit: dc5089a2502f28ecf9777874561e393de6b62b68
+
+    Projection / aggregation layer only. It consumes the Phase/Context public
+    consumer facade and upstream public event outputs. It does not recreate
+    event, sequence, phase or family logic.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    No trading signal, no weighted score, no confidence/probability output.
+*/
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_v0.1.afl>
+
+_SECTION_BEGIN("80. Composite enums and runtime presentation contract");
+WCI_SourceBarIndex = BarIndex();
+WCI_SourceDateTime = DateTime();
+WCI_Zero = 0 * WCI_SourceBarIndex;
+WCI_Null = Null + WCI_Zero;
+
+WCI_ContextMultiplicityText = "NO ACTIVE RANGE CONTEXT\nSINGLE ACTIVE RANGE CONTEXT\nMULTIPLE ACTIVE RANGE CONTEXTS";
+WCI_DirectionalContextText = "INSUFFICIENT\nUNRESOLVED\nBULLISH HYPOTHESIS\nBEARISH HYPOTHESIS\nMIXED / CONFLICTING";
+WCI_StructuralDevelopmentText = "INSUFFICIENT\nSTOPPING / RANGE FORMATION\nRANGE DEVELOPMENT\nFINAL TEST UNDER EVALUATION\nFINAL TEST + FOLLOW-THROUGH\nDIRECTIONAL DOMINANCE\nRANGE EXIT / TREND EXPANSION\nTERMINAL / SUPERSEDED";
+WCI_EvidenceBalanceText = "INSUFFICIENT EVIDENCE\nBULLISH EVIDENCE ONLY\nBEARISH EVIDENCE ONLY\nMIXED EVIDENCE";
+WCI_HypothesisAlignmentText = "NOT APPLICABLE / INSUFFICIENT\nALIGNED\nNOT YET ALIGNED\nCONFLICTING";
+WCI_ProvisionalText = "COMPLETED-BAR OUTPUT\nPROVISIONAL LAST BAR";
+
+// AmiBroker does not reliably know whether the latest database bar is still
+// forming for every market/session. Keep this runtime input explicit instead
+// of pretending to auto-detect bar completion.
+WCI_RuntimeLastBarIsProvisional = ParamToggle("Composite: last bar provisional","No|Yes",0);
+WCI_ProvisionalFlag = IIf(Status("lastbarinrange") AND WCI_RuntimeLastBarIsProvisional==1,1,0);
+_SECTION_END();
+
+_SECTION_BEGIN("81. Composite context projection");
+WCI_ContextMultiplicityCode = IIf(
+    WPCF_CurrentRangeContextCount<=0,0,
+    IIf(WPCF_CurrentRangeContextCount==1,1,2));
+WCI_ContextAmbiguous = IIf(WCI_ContextMultiplicityCode==2,1,0);
+
+WCI_CurrentRangeContextID = IIf(WCI_ContextMultiplicityCode==1,WPCF_CurrentRangeContextID,Null);
+WCI_PhaseStateCode = IIf(WCI_ContextMultiplicityCode==1,WPCF_CurrentPhaseStateCode,0);
+WCI_StructuralDevelopmentCode = WCI_PhaseStateCode;
+WCI_FamilyHypothesisCode = IIf(
+    WCI_ContextMultiplicityCode==1,WPCF_CurrentFamilyHypothesisCode,
+    IIf(WCI_ContextMultiplicityCode==2,7,0));
+
+// D06: deterministic family -> directional projection only.
+WCI_DirectionalContextCode = IIf(
+    WCI_ContextMultiplicityCode==0,0,
+    IIf(WCI_ContextMultiplicityCode==2,4,
+    IIf(WCI_FamilyHypothesisCode==1 OR WCI_FamilyHypothesisCode==2,1,
+    IIf(WCI_FamilyHypothesisCode==3 OR WCI_FamilyHypothesisCode==6,2,
+    IIf(WCI_FamilyHypothesisCode==4 OR WCI_FamilyHypothesisCode==5,3,
+    IIf(WCI_FamilyHypothesisCode==7,4,0))))));
+
+WCI_PrimaryRangeLow = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_PrimaryRangeLow,WPC_U_PrimaryRangeLow),Null);
+WCI_PrimaryRangeHigh = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_PrimaryRangeHigh,WPC_U_PrimaryRangeHigh),Null);
+WCI_PrimaryRangeWidth = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_PrimaryRangeWidth,WPC_U_PrimaryRangeWidth),Null);
+WCI_RangeAgeBars = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_RangeAgeBars,WPC_U_RangeAgeBars),Null);
+WCI_RangePositionValid = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_RangePositionValid,WPC_U_RangePositionValid),0);
+WCI_RangePosition = IIf(
+    WCI_ContextMultiplicityCode==1 AND WCI_RangePositionValid==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_RangePosition,WPC_U_RangePosition),Null);
+WCI_RangeStatusCode = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPCP_L_RangeStatusCode,WPCP_U_RangeStatusCode),0);
+
+WCI_PriorTrendContextCode = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_PriorTrendContextCode,WPC_U_PriorTrendContextCode),0);
+WCI_HypothesisRevisionCode = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_HypothesisRevisionCode,WPC_U_HypothesisRevisionCode),0);
+WCI_HypothesisKnownAtBarIndex = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_HypothesisKnownAtBarIndex,WPC_U_HypothesisKnownAtBarIndex),Null);
+WCI_HypothesisKnownAtDateTime = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPCP_L_HypothesisKnownAtDateTime,WPCP_U_HypothesisKnownAtDateTime),Null);
+WCI_MixedEvidenceReasonCode = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPCF_L_MixedEvidenceReasonCode,WPCF_U_MixedEvidenceReasonCode),
+    IIf(WCI_ContextMultiplicityCode==2,15,0));
+_SECTION_END();
+
+_SECTION_BEGIN("82. Composite evidence and alignment projection");
+WCI_CurrentBullishEvidence = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_BullishEvidenceState,WPC_U_BullishEvidenceState),0);
+WCI_CurrentBearishEvidence = IIf(
+    WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_BearishEvidenceState,WPC_U_BearishEvidenceState),0);
+
+WCI_EvidenceBalanceCode = IIf(
+    WCI_ContextMultiplicityCode==0,0,
+    IIf(WCI_ContextMultiplicityCode==2,3,
+    IIf(WCI_CurrentBullishEvidence AND WCI_CurrentBearishEvidence,3,
+    IIf(WCI_CurrentBullishEvidence,1,
+    IIf(WCI_CurrentBearishEvidence,2,0)))));
+
+WCI_HypothesisAlignmentCode = IIf(
+    WCI_DirectionalContextCode!=2 AND WCI_DirectionalContextCode!=3,0,
+    IIf(WCI_EvidenceBalanceCode==0,2,
+    IIf(WCI_EvidenceBalanceCode==3,3,
+    IIf(WCI_DirectionalContextCode==2 AND WCI_EvidenceBalanceCode==1,1,
+    IIf(WCI_DirectionalContextCode==3 AND WCI_EvidenceBalanceCode==2,1,3)))));
+_SECTION_END();
+
+_SECTION_BEGIN("83. Composite independent current-event channels");
+WCI_CurrentSupplyTestEvent = IIf(WPCIF_SupplyTestConfirmed==1,1,0);
+WCI_CurrentSpringShakeoutEvent = IIf(WPCIF_SpringConfirmed==1,1,0);
+WCI_CurrentUpthrustEvent = IIf(WPCIF_UpthrustConfirmed==1,1,0);
+WCI_CurrentSOSEvent = IIf(WPCIF_SOSEvent==1,1,0);
+WCI_CurrentLPSEvent = IIf(WPCIF_LPSConfirmed==1,1,0);
+WCI_CurrentSOWEvent = IIf(WPCIF_L_SOWEvent==1 OR WPCIF_U_SOWEvent==1,1,0);
+WCI_CurrentLPSYEvent = IIf(WPCIF_L_LPSYEvent==1 OR WPCIF_U_LPSYEvent==1,1,0);
+WCI_CurrentNoSupplyEvent = IIf(WPCIF_NoSupplyConfirmed==1,1,0);
+WCI_CurrentNoDemandEvent = IIf(WPCIF_NoDemandConfirmed==1,1,0);
+WCI_CurrentBullishAbsorptionResponse = IIf(WPCIF_BullishAbsorptionResponse==1,1,0);
+WCI_CurrentBearishAbsorptionResponse = IIf(WPCIF_BearishAbsorptionResponse==1,1,0);
+
+WCI_CurrentEventMask =
+      WCI_CurrentSupplyTestEvent
+    + 2*WCI_CurrentSpringShakeoutEvent
+    + 4*WCI_CurrentUpthrustEvent
+    + 8*WCI_CurrentSOSEvent
+    + 16*WCI_CurrentLPSEvent
+    + 32*WCI_CurrentSOWEvent
+    + 64*WCI_CurrentLPSYEvent
+    + 128*WCI_CurrentNoSupplyEvent
+    + 256*WCI_CurrentNoDemandEvent
+    + 512*WCI_CurrentBullishAbsorptionResponse
+    + 1024*WCI_CurrentBearishAbsorptionResponse;
+_SECTION_END();
+
+_SECTION_BEGIN("84. Composite lower/upper diagnostics and counts");
+// Preserve both channels. Singleton fields above never select a winner when
+// both contexts coexist.
+WCI_L_ContextPresent = WPC_L_ContextPresent;
+WCI_L_RangeContextID = WPC_L_RangeContextID;
+WCI_L_RangeStatusCode = WPCP_L_RangeStatusCode;
+WCI_L_PrimaryRangeLow = WPC_L_PrimaryRangeLow;
+WCI_L_PrimaryRangeHigh = WPC_L_PrimaryRangeHigh;
+WCI_L_RangeAgeBars = WPC_L_RangeAgeBars;
+WCI_L_PhaseStateCode = WPCP_L_PublicPhaseStateCode;
+WCI_L_FamilyHypothesisCode = WPCF_L_FamilyHypothesisCode;
+WCI_L_MixedEvidenceReasonCode = WPCF_L_MixedEvidenceReasonCode;
+
+WCI_U_ContextPresent = WPC_U_ContextPresent;
+WCI_U_RangeContextID = WPC_U_RangeContextID;
+WCI_U_RangeStatusCode = WPCP_U_RangeStatusCode;
+WCI_U_PrimaryRangeLow = WPC_U_PrimaryRangeLow;
+WCI_U_PrimaryRangeHigh = WPC_U_PrimaryRangeHigh;
+WCI_U_RangeAgeBars = WPC_U_RangeAgeBars;
+WCI_U_PhaseStateCode = WPCP_U_PublicPhaseStateCode;
+WCI_U_FamilyHypothesisCode = WPCF_U_FamilyHypothesisCode;
+WCI_U_MixedEvidenceReasonCode = WPCF_U_MixedEvidenceReasonCode;
+
+WCI_SOSLinkedCount = IIf(WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_SOSLinkedCount,WPC_U_SOSLinkedCount),Null);
+WCI_LPSLinkedCount = IIf(WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_LPSLinkedCount,WPC_U_LPSLinkedCount),Null);
+WCI_SOWLinkedCount = IIf(WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_SOWLinkedCount,WPC_U_SOWLinkedCount),Null);
+WCI_LPSYLinkedCount = IIf(WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_LPSYLinkedCount,WPC_U_LPSYLinkedCount),Null);
+WCI_NoSupplyAfterStrengthCount = IIf(WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_NoSupplyAfterStrengthCount,WPC_U_NoSupplyAfterStrengthCount),Null);
+WCI_NoDemandAfterWeaknessCount = IIf(WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_NoDemandAfterWeaknessCount,WPC_U_NoDemandAfterWeaknessCount),Null);
+WCI_BullishAbsorptionResponseCount = IIf(WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_BullishAbsorptionResponseCount,WPC_U_BullishAbsorptionResponseCount),Null);
+WCI_BearishAbsorptionResponseCount = IIf(WCI_ContextMultiplicityCode==1,
+    IIf(WPC_L_ContextPresent==1,WPC_L_BearishAbsorptionResponseCount,WPC_U_BearishAbsorptionResponseCount),Null);
+_SECTION_END();
+
+_SECTION_BEGIN("85. Composite exploration-first public interface");
+AddColumn(WCI_SourceBarIndex,"WCI_SourceBarIndex",1.0);
+AddColumn(WCI_SourceDateTime,"WCI_SourceDateTime",formatDateTime);
+AddColumn(WCI_ProvisionalFlag,"WCI_ProvisionalFlag",1.0);
+AddMultiTextColumn(WCI_ProvisionalFlag,WCI_ProvisionalText,"WCI_BarStatus");
+
+AddColumn(WCI_ContextMultiplicityCode,"WCI_ContextMultiplicityCode",1.0);
+AddMultiTextColumn(WCI_ContextMultiplicityCode,WCI_ContextMultiplicityText,"WCI_ContextMultiplicity");
+AddColumn(WCI_ContextAmbiguous,"WCI_ContextAmbiguous",1.0);
+AddColumn(WCI_CurrentRangeContextID,"WCI_CurrentRangeContextID",1.0);
+AddColumn(WCI_RangeStatusCode,"WCI_RangeStatusCode",1.0);
+AddColumn(WCI_PrimaryRangeLow,"WCI_PrimaryRangeLow",1.12);
+AddColumn(WCI_PrimaryRangeHigh,"WCI_PrimaryRangeHigh",1.12);
+AddColumn(WCI_PrimaryRangeWidth,"WCI_PrimaryRangeWidth",1.12);
+AddColumn(WCI_RangeAgeBars,"WCI_RangeAgeBars",1.0);
+AddColumn(WCI_RangePosition,"WCI_RangePosition",1.12);
+
+AddColumn(WCI_PriorTrendContextCode,"WCI_PriorTrendContextCode",1.0);
+AddMultiTextColumn(WCI_PriorTrendContextCode,WPC_PriorTrendText,"WCI_PriorTrendContext");
+AddColumn(WCI_PhaseStateCode,"WCI_PhaseStateCode",1.0);
+AddMultiTextColumn(WCI_PhaseStateCode,WPC_PhaseText,"WCI_PhaseState");
+AddColumn(WCI_StructuralDevelopmentCode,"WCI_StructuralDevelopmentCode",1.0);
+AddMultiTextColumn(WCI_StructuralDevelopmentCode,WCI_StructuralDevelopmentText,"WCI_StructuralDevelopment");
+AddColumn(WCI_FamilyHypothesisCode,"WCI_FamilyHypothesisCode",1.0);
+AddMultiTextColumn(WCI_FamilyHypothesisCode,WPC_FamilyText,"WCI_FamilyHypothesis");
+AddColumn(WCI_DirectionalContextCode,"WCI_DirectionalContextCode",1.0);
+AddMultiTextColumn(WCI_DirectionalContextCode,WCI_DirectionalContextText,"WCI_DirectionalContext");
+AddColumn(WCI_HypothesisRevisionCode,"WCI_HypothesisRevisionCode",1.0);
+AddColumn(WCI_HypothesisKnownAtBarIndex,"WCI_HypothesisKnownAtBarIndex",1.0);
+AddColumn(WCI_HypothesisKnownAtDateTime,"WCI_HypothesisKnownAtDateTime",formatDateTime);
+
+AddColumn(WCI_EvidenceBalanceCode,"WCI_EvidenceBalanceCode",1.0);
+AddMultiTextColumn(WCI_EvidenceBalanceCode,WCI_EvidenceBalanceText,"WCI_EvidenceBalance");
+AddColumn(WCI_HypothesisAlignmentCode,"WCI_HypothesisAlignmentCode",1.0);
+AddMultiTextColumn(WCI_HypothesisAlignmentCode,WCI_HypothesisAlignmentText,"WCI_HypothesisAlignment");
+AddColumn(WCI_MixedEvidenceReasonCode,"WCI_MixedEvidenceReasonCode",1.0);
+AddColumn(WCI_SOSLinkedCount,"WCI_SOSLinkedCount",1.0);
+AddColumn(WCI_LPSLinkedCount,"WCI_LPSLinkedCount",1.0);
+AddColumn(WCI_SOWLinkedCount,"WCI_SOWLinkedCount",1.0);
+AddColumn(WCI_LPSYLinkedCount,"WCI_LPSYLinkedCount",1.0);
+AddColumn(WCI_NoSupplyAfterStrengthCount,"WCI_NoSupplyAfterStrengthCount",1.0);
+AddColumn(WCI_NoDemandAfterWeaknessCount,"WCI_NoDemandAfterWeaknessCount",1.0);
+AddColumn(WCI_BullishAbsorptionResponseCount,"WCI_BullishAbsorptionResponseCount",1.0);
+AddColumn(WCI_BearishAbsorptionResponseCount,"WCI_BearishAbsorptionResponseCount",1.0);
+
+AddColumn(WCI_CurrentEventMask,"WCI_CurrentEventMask",1.0);
+AddColumn(WCI_CurrentSupplyTestEvent,"WCI_CurrentSupplyTestEvent",1.0);
+AddColumn(WCI_CurrentSpringShakeoutEvent,"WCI_CurrentSpringShakeoutEvent",1.0);
+AddColumn(WCI_CurrentUpthrustEvent,"WCI_CurrentUpthrustEvent",1.0);
+AddColumn(WCI_CurrentSOSEvent,"WCI_CurrentSOSEvent",1.0);
+AddColumn(WCI_CurrentLPSEvent,"WCI_CurrentLPSEvent",1.0);
+AddColumn(WCI_CurrentSOWEvent,"WCI_CurrentSOWEvent",1.0);
+AddColumn(WCI_CurrentLPSYEvent,"WCI_CurrentLPSYEvent",1.0);
+AddColumn(WCI_CurrentNoSupplyEvent,"WCI_CurrentNoSupplyEvent",1.0);
+AddColumn(WCI_CurrentNoDemandEvent,"WCI_CurrentNoDemandEvent",1.0);
+AddColumn(WCI_CurrentBullishAbsorptionResponse,"WCI_CurrentBullishAbsorptionResponse",1.0);
+AddColumn(WCI_CurrentBearishAbsorptionResponse,"WCI_CurrentBearishAbsorptionResponse",1.0);
+
+AddColumn(WCI_L_ContextPresent,"WCI_L_ContextPresent",1.0);
+AddColumn(WCI_L_RangeContextID,"WCI_L_RangeContextID",1.0);
+AddColumn(WCI_L_RangeStatusCode,"WCI_L_RangeStatusCode",1.0);
+AddColumn(WCI_L_PrimaryRangeLow,"WCI_L_PrimaryRangeLow",1.12);
+AddColumn(WCI_L_PrimaryRangeHigh,"WCI_L_PrimaryRangeHigh",1.12);
+AddColumn(WCI_L_RangeAgeBars,"WCI_L_RangeAgeBars",1.0);
+AddColumn(WCI_L_PhaseStateCode,"WCI_L_PhaseStateCode",1.0);
+AddColumn(WCI_L_FamilyHypothesisCode,"WCI_L_FamilyHypothesisCode",1.0);
+AddColumn(WCI_L_MixedEvidenceReasonCode,"WCI_L_MixedEvidenceReasonCode",1.0);
+
+AddColumn(WCI_U_ContextPresent,"WCI_U_ContextPresent",1.0);
+AddColumn(WCI_U_RangeContextID,"WCI_U_RangeContextID",1.0);
+AddColumn(WCI_U_RangeStatusCode,"WCI_U_RangeStatusCode",1.0);
+AddColumn(WCI_U_PrimaryRangeLow,"WCI_U_PrimaryRangeLow",1.12);
+AddColumn(WCI_U_PrimaryRangeHigh,"WCI_U_PrimaryRangeHigh",1.12);
+AddColumn(WCI_U_RangeAgeBars,"WCI_U_RangeAgeBars",1.0);
+AddColumn(WCI_U_PhaseStateCode,"WCI_U_PhaseStateCode",1.0);
+AddColumn(WCI_U_FamilyHypothesisCode,"WCI_U_FamilyHypothesisCode",1.0);
+AddColumn(WCI_U_MixedEvidenceReasonCode,"WCI_U_MixedEvidenceReasonCode",1.0);
+
+// Preserve upstream Filter. Composite v0.1 is not a scanner ranking engine.
+_SECTION_END();
