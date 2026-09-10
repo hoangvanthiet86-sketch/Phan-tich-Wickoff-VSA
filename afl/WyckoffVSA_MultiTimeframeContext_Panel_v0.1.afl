@@ -1,0 +1,43 @@
+/*
+    Wyckoff VSA Multi-Timeframe Context v0.1 — context panel
+
+    D32 presentation-only panel. It shows current D/W/M context and snapshot
+    health without plotting higher-timeframe event markers on the Daily chart.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+#include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>
+
+_SECTION_BEGIN("98. Multi-Timeframe context panel");
+WMTFP_DirText = WriteIf(WMTF_D_DirectionalContextCodeScalar==2,"BULLISH",
+    WriteIf(WMTF_D_DirectionalContextCodeScalar==3,"BEARISH",
+    WriteIf(WMTF_D_DirectionalContextCodeScalar==1,"UNRESOLVED",
+    WriteIf(WMTF_D_DirectionalContextCodeScalar==4,"MIXED","INSUFFICIENT"))));
+WMTFP_WDirText = WriteIf(WMTF_W_DirectionalContextCodeScalar==2,"BULLISH",
+    WriteIf(WMTF_W_DirectionalContextCodeScalar==3,"BEARISH",
+    WriteIf(WMTF_W_DirectionalContextCodeScalar==1,"UNRESOLVED",
+    WriteIf(WMTF_W_DirectionalContextCodeScalar==4,"MIXED","INSUFFICIENT"))));
+WMTFP_MDirText = WriteIf(WMTF_M_DirectionalContextCodeScalar==2,"BULLISH",
+    WriteIf(WMTF_M_DirectionalContextCodeScalar==3,"BEARISH",
+    WriteIf(WMTF_M_DirectionalContextCodeScalar==1,"UNRESOLVED",
+    WriteIf(WMTF_M_DirectionalContextCodeScalar==4,"MIXED","INSUFFICIENT"))));
+
+WMTFP_AlignmentText = WriteIf(WMTF_DirectionalAlignmentCodeScalar==2,"BULLISH ALIGNMENT",
+    WriteIf(WMTF_DirectionalAlignmentCodeScalar==3,"BEARISH ALIGNMENT",
+    WriteIf(WMTF_DirectionalAlignmentCodeScalar==4,"BASE COUNTER TO HIGHER CONTEXT",
+    WriteIf(WMTF_DirectionalAlignmentCodeScalar==5,"HIGHER TIMEFRAMES CONFLICT",
+    WriteIf(WMTF_DirectionalAlignmentCodeScalar==6,"MIXED / COMPLEX MTF CONTEXT",
+    WriteIf(WMTF_DirectionalAlignmentCodeScalar==1,"UNRESOLVED / NON-DIRECTIONAL","INSUFFICIENT MTF DATA"))))));
+
+WMTFP_WHealth = WriteIf(WTSC_W_StatusCode==1,"VALID","INVALID / UNAVAILABLE");
+WMTFP_MHealth = WriteIf(WTSC_M_StatusCode==1,"VALID","INVALID / UNAVAILABLE");
+
+Title = Name() + " — WYCKOFF VSA MTF CONTEXT v0.1"
+    + "\nDaily: " + WMTFP_DirText
+    + " | Weekly: " + WMTFP_WDirText + " [" + WMTFP_WHealth + "]"
+    + " | Monthly: " + WMTFP_MDirText + " [" + WMTFP_MHealth + "]"
+    + "\nMTF: " + WMTFP_AlignmentText
+    + " | PhaseRel=" + NumToStr(WMTF_PhaseRelationshipCodeScalar,1.0)
+    + " | EvidenceRel=" + NumToStr(WMTF_EvidenceAlignmentCodeScalar,1.0)
+    + " | ConflictMask=" + NumToStr(WMTF_ConflictReasonMaskScalar,1.0);
+_SECTION_END();
