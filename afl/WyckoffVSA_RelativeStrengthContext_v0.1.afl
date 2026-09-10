@@ -227,6 +227,22 @@ else
     WRS_GVM_StructureValid = WRS_Zero;
     WRS_GVM_StructureCode = WRS_Zero;
 }
+
+// Materialize dynamic pair fields before direct downstream use. This keeps
+// WRS_RunPair generic while avoiding any dependence on parser inference about
+// dynamically-created variable names.
+WRS_SVM_RatioValid = VarGet("WRS_SVM_RatioValid");
+WRS_SVM_Ratio = VarGet("WRS_SVM_Ratio");
+WRS_SVM_StructureValid = VarGet("WRS_SVM_StructureValid");
+WRS_SVM_StructureCode = VarGet("WRS_SVM_StructureCode");
+WRS_SVG_RatioValid = VarGet("WRS_SVG_RatioValid");
+WRS_SVG_Ratio = VarGet("WRS_SVG_Ratio");
+WRS_SVG_StructureValid = VarGet("WRS_SVG_StructureValid");
+WRS_SVG_StructureCode = VarGet("WRS_SVG_StructureCode");
+WRS_GVM_RatioValid = VarGet("WRS_GVM_RatioValid");
+WRS_GVM_Ratio = VarGet("WRS_GVM_Ratio");
+WRS_GVM_StructureValid = VarGet("WRS_GVM_StructureValid");
+WRS_GVM_StructureCode = VarGet("WRS_GVM_StructureCode");
 _SECTION_END();
 
 _SECTION_BEGIN("112. Price structure and pairwise relationships");
@@ -245,7 +261,6 @@ WRS_PriceStructureCode = IIf(NOT WRS_PriceStructureValid,0,
     IIf(WRS_PriceHigh1>WRS_PriceHigh2 AND WRS_PriceLow1>WRS_PriceLow2,1,
     IIf(WRS_PriceHigh1<WRS_PriceHigh2 AND WRS_PriceLow1<WRS_PriceLow2,2,3)));
 
-// Price/RS relationship codes from R15.
 WRS_SVM_PriceRSRelationshipCode = IIf(
     NOT WRS_PriceStructureValid OR WRS_SVM_StructureCode==0,0,
     IIf(WRS_PriceStructureCode==1 AND WRS_SVM_StructureCode==1,1,
@@ -283,8 +298,6 @@ WRS_PhaseRSAlignmentCode = IIf(
     IIf(WRS_UpstreamDirectionalContextCode==3 AND WRS_SVM_StructureCode==1,4,
     IIf(WRS_UpstreamDirectionalContextCode==0 OR IsNull(WRS_UpstreamDirectionalContextCode),0,5))))));
 
-// 0 insufficient; 1 bullish aligned; 2 bullish evidence / falling RS conflict;
-// 3 bearish aligned; 4 bearish evidence / rising RS conflict; 5 mixed.
 WRS_VSARSAlignmentCode = IIf(
     WRS_SVM_StructureCode==0,0,
     IIf(WRS_UpstreamEvidenceBalanceCode==1 AND WRS_SVM_StructureCode==1,1,
@@ -293,8 +306,6 @@ WRS_VSARSAlignmentCode = IIf(
     IIf(WRS_UpstreamEvidenceBalanceCode==2 AND WRS_SVM_StructureCode==1,4,
     IIf(WRS_UpstreamEvidenceBalanceCode==0 OR IsNull(WRS_UpstreamEvidenceBalanceCode),0,5))))));
 
-// MTF directional alignment: upstream 2 bullish, 3 bearish; other valid
-// states remain unresolved/mixed and never get overridden by RS.
 WRS_RSMTFRelationshipCode = IIf(
     WRS_SVM_StructureCode==0,0,
     IIf(WRS_UpstreamMTFAlignmentCode==2 AND WRS_SVM_StructureCode==1,1,
@@ -308,20 +319,18 @@ _SECTION_BEGIN("114. Relative Strength public interface and validity");
 WRS_ContextComputable = IIf(
     WRS_OfficialDailyIntegration AND WRS_PivotConfigValid AND WRS_SVM_RatioValid,1,0);
 
-// R28: production-valid context requires compatible adjustment basis.
 WRS_ContextValid = IIf(
     WRS_ContextComputable AND WRS_AdjustmentBasisStatusScalar==1,1,0);
 
 WRS_ContextStatusCode = IIf(
-    NOT WRS_OfficialDailyIntegration,1,            // WRONG INTERVAL
-    IIf(NOT WRS_MarketConfigured,2,               // MARKET CONFIG MISSING
-    IIf(WRS_MarketBenchmarkStatusCode!=3,3,        // MARKET DATA INVALID/MISSING
-    IIf(NOT WRS_PivotConfigValid,4,                // PIVOT CONFIG INVALID
-    IIf(WRS_AdjustmentBasisStatusScalar==2,5,      // BASIS INCOMPATIBLE
-    IIf(WRS_AdjustmentBasisStatusScalar!=1,6,      // BASIS NOT VERIFIED
-    IIf(WRS_ProvisionalFlag,7,0)))))));             // READY=0; provisional=7
+    NOT WRS_OfficialDailyIntegration,1,
+    IIf(NOT WRS_MarketConfigured,2,
+    IIf(WRS_MarketBenchmarkStatusCode!=3,3,
+    IIf(NOT WRS_PivotConfigValid,4,
+    IIf(WRS_AdjustmentBasisStatusScalar==2,5,
+    IIf(WRS_AdjustmentBasisStatusScalar!=1,6,
+    IIf(WRS_ProvisionalFlag,7,0)))))));
 
-// Stable aliases requested by R33.
 WRS_StockVsMarketRatioValid = WRS_SVM_RatioValid;
 WRS_StockVsMarketRatio = WRS_SVM_Ratio;
 WRS_StockVsMarketRSStructureCode = WRS_SVM_StructureCode;
@@ -332,6 +341,5 @@ WRS_GroupVsMarketRatioValid = WRS_GVM_RatioValid;
 WRS_GroupVsMarketRatio = WRS_GVM_Ratio;
 WRS_GroupVsMarketRSStructureCode = WRS_GVM_StructureCode;
 WRS_PriceRSRelationshipCode = WRS_SVM_PriceRSRelationshipCode;
-
 WRS_CurrentDescriptorProvisional = WRS_ProvisionalFlag;
 _SECTION_END();
