@@ -1,0 +1,821 @@
+/*
+    Wyckoff VSA Range-Context Event Engine v0.1
+    SOW-LIKE / LPSY-LIKE
+
+    Approved specification: PR #23, merge commit 7670532a230eb051cf5d362be092e2d81283fb92
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT. No trading signal.
+
+    Architecture:
+    ... -> Structural Sequence Snapshot -> Range-Context Event (SOW/LPSY) -> Phase/Context
+
+    D38 guard: this module is separate from Phase/Context. It does not publish
+    Distribution, Redistribution, Phase D or Phase E conclusions.
+*/
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_v0.1.afl>
+
+_SECTION_BEGIN("60. SOW/LPSY constants and range contracts");
+WE_SW_SOW_MinRSpread = 1.20;
+WE_SW_SOW_MinRVOL = 1.25;
+WE_SW_WeakCloseBoundary = 0.40;
+WE_SW_LPSY_NarrowRSpread = 0.80;
+WE_SW_LPSY_VeryNarrowRSpread = 0.60;
+WE_SW_HighEffortRVOL = 1.80;
+
+function WE_SW_Finite( x )
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WE_SW_SourceBI = BarIndex();
+WE_SW_SourceDT = DateTime();
+WE_SW_Zero = 0 * WE_SW_SourceBI;
+WE_SW_Null = Null + WE_SW_Zero;
+
+WE_SW_CurrentPriceValid = IIf(
+    PriceInputValid==1
+    AND CurrentCloseValid==1
+    AND WE_SW_Finite(Low)
+    AND WE_SW_Finite(Close)
+    AND Low>0
+    AND Close>0,1,0);
+
+WE_SW_PreviousClose = Ref(Close,-1);
+WE_SW_PreviousCloseDataValid = IIf(
+    PreviousCloseValid==1
+    AND WE_SW_Finite(WE_SW_PreviousClose)
+    AND WE_SW_PreviousClose>0,1,0);
+
+WE_SW_EffortValid = IIf(
+    RSpreadValid==1 AND RVOLValid==1
+    AND WE_SW_Finite(RSpread) AND WE_SW_Finite(RVOL),1,0);
+
+// D02/D03: independent frozen range channels from the Structural Sequence facade.
+WE_SW_L_RangeValid = IIf(
+    WSS_LowerActiveSnapshotValid==1
+    AND WE_SW_Finite(WSS_LowerActiveSequenceOrdinal)
+    AND WE_SW_Finite(WSS_LowerActiveSCOriginBI)
+    AND WE_SW_Finite(WSS_LowerActiveARExtremeBI)
+    AND WE_SW_Finite(WSS_LowerActiveRangeLower)
+    AND WE_SW_Finite(WSS_LowerActiveRangeUpper)
+    AND WE_SW_Finite(WSS_LowerActiveRangeWidth)
+    AND WSS_LowerActiveRangeLower>0
+    AND WSS_LowerActiveRangeUpper>WSS_LowerActiveRangeLower
+    AND WSS_LowerActiveRangeWidth>0,1,0);
+
+WE_SW_U_RangeValid = IIf(
+    WSS_UpperActiveSnapshotValid==1
+    AND WE_SW_Finite(WSS_UpperActiveSequenceOrdinal)
+    AND WE_SW_Finite(WSS_UpperActiveBCOriginBI)
+    AND WE_SW_Finite(WSS_UpperActiveReactionExtremeBI)
+    AND WE_SW_Finite(WSS_UpperActiveRangeLower)
+    AND WE_SW_Finite(WSS_UpperActiveRangeUpper)
+    AND WE_SW_Finite(WSS_UpperActiveRangeWidth)
+    AND WSS_UpperActiveRangeLower>0
+    AND WSS_UpperActiveRangeUpper>WSS_UpperActiveRangeLower
+    AND WSS_UpperActiveRangeWidth>0,1,0);
+
+WE_SW_L_RangeAnchorSideCode = IIf(WE_SW_L_RangeValid,1,Null);
+WE_SW_U_RangeAnchorSideCode = IIf(WE_SW_U_RangeValid,2,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("61. SOW price challenge and same-bar classification");
+// D04: price challenge validity is independent of effort validity.
+WE_SW_L_SOWPriceChallengeValid = IIf(
+    WE_SW_L_RangeValid AND WE_SW_CurrentPriceValid AND WE_SW_PreviousCloseDataValid,1,0);
+WE_SW_U_SOWPriceChallengeValid = IIf(
+    WE_SW_U_RangeValid AND WE_SW_CurrentPriceValid AND WE_SW_PreviousCloseDataValid,1,0);
+
+WE_SW_L_SOWPriceChallengeObservation = IIf(
+    WE_SW_L_SOWPriceChallengeValid
+    AND WE_SW_PreviousClose>=WSS_LowerActiveRangeLower
+    AND Low<=WSS_LowerActiveRangeLower
+    AND Close<WE_SW_PreviousClose,1,0);
+
+WE_SW_U_SOWPriceChallengeObservation = IIf(
+    WE_SW_U_SOWPriceChallengeValid
+    AND WE_SW_PreviousClose>=WSS_UpperActiveRangeLower
+    AND Low<=WSS_UpperActiveRangeLower
+    AND Close<WE_SW_PreviousClose,1,0);
+
+// D05/D28: if no valid price challenge, effort is irrelevant; if challenge exists
+// and effort is missing, SOW classification is insufficient.
+WE_SW_L_SOWCode = IIf(
+    NOT WE_SW_L_SOWPriceChallengeValid,0,
+    IIf(NOT WE_SW_L_SOWPriceChallengeObservation,1,
+    IIf(NOT WE_SW_EffortValid,0,
+    IIf(RSpread>=WE_SW_SOW_MinRSpread AND RVOL>=WE_SW_SOW_MinRVOL,2,1))));
+
+WE_SW_U_SOWCode = IIf(
+    NOT WE_SW_U_SOWPriceChallengeValid,0,
+    IIf(NOT WE_SW_U_SOWPriceChallengeObservation,1,
+    IIf(NOT WE_SW_EffortValid,0,
+    IIf(RSpread>=WE_SW_SOW_MinRSpread AND RVOL>=WE_SW_SOW_MinRVOL,2,1))));
+
+WE_SW_L_SOWValid = IIf(WE_SW_L_SOWCode>0,1,0);
+WE_SW_U_SOWValid = IIf(WE_SW_U_SOWCode>0,1,0);
+
+// D06 support relation and breakdown relation.
+WE_SW_L_SOWSupportRelationCode = IIf(WE_SW_L_SOWCode==2,
+    IIf(Close>WSS_LowerActiveRangeLower,1,
+    IIf(Close==WSS_LowerActiveRangeLower,2,3)),Null);
+WE_SW_U_SOWSupportRelationCode = IIf(WE_SW_U_SOWCode==2,
+    IIf(Close>WSS_UpperActiveRangeLower,1,
+    IIf(Close==WSS_UpperActiveRangeLower,2,3)),Null);
+
+WE_SW_L_AcceptedBreakdownFlag = IIf(WE_SW_L_SOWCode==2,
+    IIf(Close<WSS_LowerActiveRangeLower,1,0),Null);
+WE_SW_U_AcceptedBreakdownFlag = IIf(WE_SW_U_SOWCode==2,
+    IIf(Close<WSS_UpperActiveRangeLower,1,0),Null);
+
+WE_SW_L_SupportChallengeOnlyFlag = IIf(WE_SW_L_SOWCode==2,
+    IIf(Low<=WSS_LowerActiveRangeLower AND Close>=WSS_LowerActiveRangeLower,1,0),Null);
+WE_SW_U_SupportChallengeOnlyFlag = IIf(WE_SW_U_SOWCode==2,
+    IIf(Low<=WSS_UpperActiveRangeLower AND Close>=WSS_UpperActiveRangeLower,1,0),Null);
+
+// D07/D08 descriptors, never hard gates.
+WE_SW_SOWClosePositionDescriptorValid = IIf(
+    ClosePositionValid==1 AND WE_SW_Finite(ClosePosition),1,0);
+WE_SW_SOWWeakCloseFlag = IIf(WE_SW_SOWClosePositionDescriptorValid,
+    IIf(ClosePosition<WE_SW_WeakCloseBoundary,1,0),Null);
+WE_SW_SOWMidOrHigherCloseFlag = IIf(WE_SW_SOWClosePositionDescriptorValid,
+    IIf(ClosePosition>=WE_SW_WeakCloseBoundary,1,0),Null);
+
+WE_SW_SOWDirectionalProgressDescriptorValid = IIf(
+    DirectionalProgressValid==1 AND WE_SW_Finite(DirectionalProgress),1,0);
+WE_SW_SOWAbsDirectionalProgressDescriptorValid = WE_SW_SOWDirectionalProgressDescriptorValid;
+WE_SW_SOWEffortResultDescriptorValid = IIf(
+    EffortDirectionalResultValid==1 AND WE_SW_Finite(EffortDirectionalResultStateCode),1,0);
+_SECTION_END();
+
+_SECTION_BEGIN("62. Frozen SOW event snapshots");
+// Event-row snapshots. The range fields are copied from the frozen active facade.
+WE_SW_L_SOWBarIndex = IIf(WE_SW_L_SOWCode==2,WE_SW_SourceBI,Null);
+WE_SW_L_SOWDateTime = IIf(WE_SW_L_SOWCode==2,WE_SW_SourceDT,Null);
+WE_SW_L_SOWOpen = IIf(WE_SW_L_SOWCode==2,Open,Null);
+WE_SW_L_SOWHigh = IIf(WE_SW_L_SOWCode==2,High,Null);
+WE_SW_L_SOWLow = IIf(WE_SW_L_SOWCode==2,Low,Null);
+WE_SW_L_SOWClose = IIf(WE_SW_L_SOWCode==2,Close,Null);
+WE_SW_L_SOWPreviousClose = IIf(WE_SW_L_SOWCode==2,WE_SW_PreviousClose,Null);
+WE_SW_L_SOWRangeAnchorSideCode = IIf(WE_SW_L_SOWCode==2,1,Null);
+WE_SW_L_SOWSequenceOrdinal = IIf(WE_SW_L_SOWCode==2,WSS_LowerActiveSequenceOrdinal,Null);
+WE_SW_L_SOWRangeClimaxExtremeBI = IIf(WE_SW_L_SOWCode==2,WSS_LowerActiveSCOriginBI,Null);
+WE_SW_L_SOWRangeAutomaticSwingExtremeBI = IIf(WE_SW_L_SOWCode==2,WSS_LowerActiveARExtremeBI,Null);
+WE_SW_L_SOWRangeLow = IIf(WE_SW_L_SOWCode==2,WSS_LowerActiveRangeLower,Null);
+WE_SW_L_SOWRangeHigh = IIf(WE_SW_L_SOWCode==2,WSS_LowerActiveRangeUpper,Null);
+WE_SW_L_SOWRangeWidth = IIf(WE_SW_L_SOWCode==2,WSS_LowerActiveRangeWidth,Null);
+
+WE_SW_U_SOWBarIndex = IIf(WE_SW_U_SOWCode==2,WE_SW_SourceBI,Null);
+WE_SW_U_SOWDateTime = IIf(WE_SW_U_SOWCode==2,WE_SW_SourceDT,Null);
+WE_SW_U_SOWOpen = IIf(WE_SW_U_SOWCode==2,Open,Null);
+WE_SW_U_SOWHigh = IIf(WE_SW_U_SOWCode==2,High,Null);
+WE_SW_U_SOWLow = IIf(WE_SW_U_SOWCode==2,Low,Null);
+WE_SW_U_SOWClose = IIf(WE_SW_U_SOWCode==2,Close,Null);
+WE_SW_U_SOWPreviousClose = IIf(WE_SW_U_SOWCode==2,WE_SW_PreviousClose,Null);
+WE_SW_U_SOWRangeAnchorSideCode = IIf(WE_SW_U_SOWCode==2,2,Null);
+WE_SW_U_SOWSequenceOrdinal = IIf(WE_SW_U_SOWCode==2,WSS_UpperActiveSequenceOrdinal,Null);
+WE_SW_U_SOWRangeClimaxExtremeBI = IIf(WE_SW_U_SOWCode==2,WSS_UpperActiveBCOriginBI,Null);
+WE_SW_U_SOWRangeAutomaticSwingExtremeBI = IIf(WE_SW_U_SOWCode==2,WSS_UpperActiveReactionExtremeBI,Null);
+WE_SW_U_SOWRangeLow = IIf(WE_SW_U_SOWCode==2,WSS_UpperActiveRangeLower,Null);
+WE_SW_U_SOWRangeHigh = IIf(WE_SW_U_SOWCode==2,WSS_UpperActiveRangeUpper,Null);
+WE_SW_U_SOWRangeWidth = IIf(WE_SW_U_SOWCode==2,WSS_UpperActiveRangeWidth,Null);
+
+// Shared market measurements copied separately into each event stream.
+WE_SW_L_SOWRSpread = IIf(WE_SW_L_SOWCode==2 AND RSpreadValid==1,RSpread,Null);
+WE_SW_L_SOWRSpreadValid = IIf(WE_SW_L_SOWCode==2,RSpreadValid,Null);
+WE_SW_L_SOWRVOL = IIf(WE_SW_L_SOWCode==2 AND RVOLValid==1,RVOL,Null);
+WE_SW_L_SOWRVOLValid = IIf(WE_SW_L_SOWCode==2,RVOLValid,Null);
+WE_SW_L_SOWClosePosition = IIf(WE_SW_L_SOWCode==2 AND WE_SW_SOWClosePositionDescriptorValid,ClosePosition,Null);
+WE_SW_L_SOWClosePositionValid = IIf(WE_SW_L_SOWCode==2,WE_SW_SOWClosePositionDescriptorValid,Null);
+WE_SW_L_SOWDirectionalProgress = IIf(WE_SW_L_SOWCode==2 AND WE_SW_SOWDirectionalProgressDescriptorValid,DirectionalProgress,Null);
+WE_SW_L_SOWDirectionalProgressValid = IIf(WE_SW_L_SOWCode==2,WE_SW_SOWDirectionalProgressDescriptorValid,Null);
+WE_SW_L_SOWAbsDirectionalProgress = IIf(WE_SW_L_SOWCode==2 AND WE_SW_SOWAbsDirectionalProgressDescriptorValid,AbsDirectionalProgress,Null);
+WE_SW_L_SOWEffortResultStateCode = IIf(WE_SW_L_SOWCode==2 AND WE_SW_SOWEffortResultDescriptorValid,EffortDirectionalResultStateCode,Null);
+WE_SW_L_SOWStoppingVolumeCode = IIf(WE_SW_L_SOWCode==2 AND WE_ER_StoppingVolumeValid==1,WE_ER_StoppingVolumeCode,Null);
+WE_SW_L_SOWStoppingVolumeValid = IIf(WE_SW_L_SOWCode==2,WE_ER_StoppingVolumeValid,Null);
+WE_SW_L_SOWAbsorptionCode = IIf(WE_SW_L_SOWCode==2 AND WE_ER_AbsorptionValid==1,WE_ER_AbsorptionCode,Null);
+WE_SW_L_SOWAbsorptionValid = IIf(WE_SW_L_SOWCode==2,WE_ER_AbsorptionValid,Null);
+
+WE_SW_U_SOWRSpread = IIf(WE_SW_U_SOWCode==2 AND RSpreadValid==1,RSpread,Null);
+WE_SW_U_SOWRSpreadValid = IIf(WE_SW_U_SOWCode==2,RSpreadValid,Null);
+WE_SW_U_SOWRVOL = IIf(WE_SW_U_SOWCode==2 AND RVOLValid==1,RVOL,Null);
+WE_SW_U_SOWRVOLValid = IIf(WE_SW_U_SOWCode==2,RVOLValid,Null);
+WE_SW_U_SOWClosePosition = IIf(WE_SW_U_SOWCode==2 AND WE_SW_SOWClosePositionDescriptorValid,ClosePosition,Null);
+WE_SW_U_SOWClosePositionValid = IIf(WE_SW_U_SOWCode==2,WE_SW_SOWClosePositionDescriptorValid,Null);
+WE_SW_U_SOWDirectionalProgress = IIf(WE_SW_U_SOWCode==2 AND WE_SW_SOWDirectionalProgressDescriptorValid,DirectionalProgress,Null);
+WE_SW_U_SOWDirectionalProgressValid = IIf(WE_SW_U_SOWCode==2,WE_SW_SOWDirectionalProgressDescriptorValid,Null);
+WE_SW_U_SOWAbsDirectionalProgress = IIf(WE_SW_U_SOWCode==2 AND WE_SW_SOWAbsDirectionalProgressDescriptorValid,AbsDirectionalProgress,Null);
+WE_SW_U_SOWEffortResultStateCode = IIf(WE_SW_U_SOWCode==2 AND WE_SW_SOWEffortResultDescriptorValid,EffortDirectionalResultStateCode,Null);
+WE_SW_U_SOWStoppingVolumeCode = IIf(WE_SW_U_SOWCode==2 AND WE_ER_StoppingVolumeValid==1,WE_ER_StoppingVolumeCode,Null);
+WE_SW_U_SOWStoppingVolumeValid = IIf(WE_SW_U_SOWCode==2,WE_ER_StoppingVolumeValid,Null);
+WE_SW_U_SOWAbsorptionCode = IIf(WE_SW_U_SOWCode==2 AND WE_ER_AbsorptionValid==1,WE_ER_AbsorptionCode,Null);
+WE_SW_U_SOWAbsorptionValid = IIf(WE_SW_U_SOWCode==2,WE_ER_AbsorptionValid,Null);
+
+// S/M/L snapshot at SOW bar. These are context only.
+WE_SW_L_SOWContextSPositionStateCode = IIf(WE_SW_L_SOWCode==2,SL_S_PositionStateCode,Null);
+WE_SW_L_SOWContextSLocationValid = IIf(WE_SW_L_SOWCode==2,SL_S_LocationValid,Null);
+WE_SW_L_SOWContextSLocation = IIf(WE_SW_L_SOWCode==2 AND SL_S_LocationValid==1,SL_S_Location,Null);
+WE_SW_L_SOWContextMPositionStateCode = IIf(WE_SW_L_SOWCode==2,SL_M_PositionStateCode,Null);
+WE_SW_L_SOWContextMLocationValid = IIf(WE_SW_L_SOWCode==2,SL_M_LocationValid,Null);
+WE_SW_L_SOWContextMLocation = IIf(WE_SW_L_SOWCode==2 AND SL_M_LocationValid==1,SL_M_Location,Null);
+WE_SW_L_SOWContextLPositionStateCode = IIf(WE_SW_L_SOWCode==2,SL_L_PositionStateCode,Null);
+WE_SW_L_SOWContextLLocationValid = IIf(WE_SW_L_SOWCode==2,SL_L_LocationValid,Null);
+WE_SW_L_SOWContextLLocation = IIf(WE_SW_L_SOWCode==2 AND SL_L_LocationValid==1,SL_L_Location,Null);
+
+WE_SW_U_SOWContextSPositionStateCode = IIf(WE_SW_U_SOWCode==2,SL_S_PositionStateCode,Null);
+WE_SW_U_SOWContextSLocationValid = IIf(WE_SW_U_SOWCode==2,SL_S_LocationValid,Null);
+WE_SW_U_SOWContextSLocation = IIf(WE_SW_U_SOWCode==2 AND SL_S_LocationValid==1,SL_S_Location,Null);
+WE_SW_U_SOWContextMPositionStateCode = IIf(WE_SW_U_SOWCode==2,SL_M_PositionStateCode,Null);
+WE_SW_U_SOWContextMLocationValid = IIf(WE_SW_U_SOWCode==2,SL_M_LocationValid,Null);
+WE_SW_U_SOWContextMLocation = IIf(WE_SW_U_SOWCode==2 AND SL_M_LocationValid==1,SL_M_Location,Null);
+WE_SW_U_SOWContextLPositionStateCode = IIf(WE_SW_U_SOWCode==2,SL_L_PositionStateCode,Null);
+WE_SW_U_SOWContextLLocationValid = IIf(WE_SW_U_SOWCode==2,SL_L_LocationValid,Null);
+WE_SW_U_SOWContextLLocation = IIf(WE_SW_U_SOWCode==2 AND SL_L_LocationValid==1,SL_L_Location,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("63. SOW immediate response at k+1");
+WE_SW_L_PriorSOWPresent = IIf(Nz(Ref(WE_SW_L_SOWCode,-1),-1)==2,1,0);
+WE_SW_U_PriorSOWPresent = IIf(Nz(Ref(WE_SW_U_SOWCode,-1),-1)==2,1,0);
+
+WE_SW_L_SOWResponseValid = IIf(WE_SW_L_PriorSOWPresent AND WE_SW_CurrentPriceValid,1,0);
+WE_SW_U_SOWResponseValid = IIf(WE_SW_U_PriorSOWPresent AND WE_SW_CurrentPriceValid,1,0);
+
+WE_SW_L_SOWResponseAnchorBI = IIf(WE_SW_L_PriorSOWPresent,Ref(WE_SW_L_SOWBarIndex,-1),Null);
+WE_SW_U_SOWResponseAnchorBI = IIf(WE_SW_U_PriorSOWPresent,Ref(WE_SW_U_SOWBarIndex,-1),Null);
+WE_SW_L_SOWResponseKnownAtBI = IIf(WE_SW_L_PriorSOWPresent,WE_SW_SourceBI,Null);
+WE_SW_U_SOWResponseKnownAtBI = IIf(WE_SW_U_PriorSOWPresent,WE_SW_SourceBI,Null);
+
+WE_SW_L_FurtherWeaknessFlag = IIf(WE_SW_L_SOWResponseValid,
+    IIf(Close<Ref(WE_SW_L_SOWClose,-1),1,0),Null);
+WE_SW_U_FurtherWeaknessFlag = IIf(WE_SW_U_SOWResponseValid,
+    IIf(Close<Ref(WE_SW_U_SOWClose,-1),1,0),Null);
+
+WE_SW_L_SupportStillLostFlag = IIf(WE_SW_L_SOWResponseValid AND Ref(WE_SW_L_AcceptedBreakdownFlag,-1)==1,
+    IIf(Close<Ref(WE_SW_L_SOWRangeLow,-1),1,0),Null);
+WE_SW_U_SupportStillLostFlag = IIf(WE_SW_U_SOWResponseValid AND Ref(WE_SW_U_AcceptedBreakdownFlag,-1)==1,
+    IIf(Close<Ref(WE_SW_U_SOWRangeLow,-1),1,0),Null);
+
+WE_SW_L_RecoveredSupportFlag = IIf(WE_SW_L_SOWResponseValid,
+    IIf(Close>=Ref(WE_SW_L_SOWRangeLow,-1),1,0),Null);
+WE_SW_U_RecoveredSupportFlag = IIf(WE_SW_U_SOWResponseValid,
+    IIf(Close>=Ref(WE_SW_U_SOWRangeLow,-1),1,0),Null);
+_SECTION_END();
+
+_SECTION_BEGIN("64. Causal active-SOW and LPSY state machines");
+// Event outputs populated at Pivot High confirmation bars.
+WE_SW_L_SOWOrdinalWithinRange = WE_SW_Null;
+WE_SW_U_SOWOrdinalWithinRange = WE_SW_Null;
+WE_SW_L_LPSYCode = 1 + WE_SW_Zero;
+WE_SW_U_LPSYCode = 1 + WE_SW_Zero;
+WE_SW_L_UpperRangeChallengeAfterSOW = WE_SW_Zero;
+WE_SW_U_UpperRangeChallengeAfterSOW = WE_SW_Zero;
+WE_SW_L_LPSYOrdinalWithinSOW = WE_SW_Null;
+WE_SW_U_LPSYOrdinalWithinSOW = WE_SW_Null;
+
+WE_SW_L_LPSYExtremeBarIndex = WE_SW_Null;
+WE_SW_L_LPSYExtremeDateTime = WE_SW_Null;
+WE_SW_L_LPSYConfirmBarIndex = WE_SW_Null;
+WE_SW_L_LPSYConfirmDateTime = WE_SW_Null;
+WE_SW_L_LPSYKnownAtBarIndex = WE_SW_Null;
+WE_SW_L_LPSYKnownAtDateTime = WE_SW_Null;
+WE_SW_L_LPSYPivotHigh = WE_SW_Null;
+WE_SW_L_LPSYRangePosition = WE_SW_Null;
+WE_SW_L_LPSYDistanceToRangeLow = WE_SW_Null;
+WE_SW_L_LPSYDistanceToRangeHigh = WE_SW_Null;
+WE_SW_L_LPSYAnchorSOWBarIndex = WE_SW_Null;
+WE_SW_L_LPSYAnchorSOWDateTime = WE_SW_Null;
+WE_SW_L_LPSYRangeAnchorSideCode = WE_SW_Null;
+WE_SW_L_LPSYSequenceOrdinal = WE_SW_Null;
+WE_SW_L_LPSYRangeClimaxExtremeBI = WE_SW_Null;
+WE_SW_L_LPSYRangeAutomaticSwingExtremeBI = WE_SW_Null;
+WE_SW_L_LPSYFrozenRangeLow = WE_SW_Null;
+WE_SW_L_LPSYFrozenRangeHigh = WE_SW_Null;
+WE_SW_L_LPSYFrozenRangeWidth = WE_SW_Null;
+
+WE_SW_U_LPSYExtremeBarIndex = WE_SW_Null;
+WE_SW_U_LPSYExtremeDateTime = WE_SW_Null;
+WE_SW_U_LPSYConfirmBarIndex = WE_SW_Null;
+WE_SW_U_LPSYConfirmDateTime = WE_SW_Null;
+WE_SW_U_LPSYKnownAtBarIndex = WE_SW_Null;
+WE_SW_U_LPSYKnownAtDateTime = WE_SW_Null;
+WE_SW_U_LPSYPivotHigh = WE_SW_Null;
+WE_SW_U_LPSYRangePosition = WE_SW_Null;
+WE_SW_U_LPSYDistanceToRangeLow = WE_SW_Null;
+WE_SW_U_LPSYDistanceToRangeHigh = WE_SW_Null;
+WE_SW_U_LPSYAnchorSOWBarIndex = WE_SW_Null;
+WE_SW_U_LPSYAnchorSOWDateTime = WE_SW_Null;
+WE_SW_U_LPSYRangeAnchorSideCode = WE_SW_Null;
+WE_SW_U_LPSYSequenceOrdinal = WE_SW_Null;
+WE_SW_U_LPSYRangeClimaxExtremeBI = WE_SW_Null;
+WE_SW_U_LPSYRangeAutomaticSwingExtremeBI = WE_SW_Null;
+WE_SW_U_LPSYFrozenRangeLow = WE_SW_Null;
+WE_SW_U_LPSYFrozenRangeHigh = WE_SW_Null;
+WE_SW_U_LPSYFrozenRangeWidth = WE_SW_Null;
+
+// Quality snapshots.
+WE_SW_L_LPSYNarrowSpreadFlag = WE_SW_Null;
+WE_SW_L_LPSYVeryNarrowSpreadFlag = WE_SW_Null;
+WE_SW_L_LPSYRVOLContractedVsSOW = WE_SW_Null;
+WE_SW_L_LPSYRSpreadContractedVsSOW = WE_SW_Null;
+WE_SW_L_LPSYClosePosition = WE_SW_Null;
+WE_SW_L_LPSYClosePositionValid = WE_SW_Null;
+WE_SW_L_LPSYDirectionalProgress = WE_SW_Null;
+WE_SW_L_LPSYDirectionalProgressValid = WE_SW_Null;
+WE_SW_L_LPSYEffortResultStateCode = WE_SW_Null;
+WE_SW_L_LPSYNoDemandCandidateCode = WE_SW_Null;
+WE_SW_L_LPSYNoDemandConfirmedAtExtreme = WE_SW_Null;
+WE_SW_L_LPSYNoDemandConfirmedInRallyCount = WE_SW_Null;
+WE_SW_L_LPSYLastNoDemandCandidateBI = WE_SW_Null;
+WE_SW_L_LPSYLastNoDemandConfirmBI = WE_SW_Null;
+WE_SW_L_LPSYUpthrustOverlap = WE_SW_Null;
+WE_SW_L_LPSYHighEffortPoorResultFlag = WE_SW_Null;
+WE_SW_L_LPSYEvidenceClass = WE_SW_Null;
+
+WE_SW_U_LPSYNarrowSpreadFlag = WE_SW_Null;
+WE_SW_U_LPSYVeryNarrowSpreadFlag = WE_SW_Null;
+WE_SW_U_LPSYRVOLContractedVsSOW = WE_SW_Null;
+WE_SW_U_LPSYRSpreadContractedVsSOW = WE_SW_Null;
+WE_SW_U_LPSYClosePosition = WE_SW_Null;
+WE_SW_U_LPSYClosePositionValid = WE_SW_Null;
+WE_SW_U_LPSYDirectionalProgress = WE_SW_Null;
+WE_SW_U_LPSYDirectionalProgressValid = WE_SW_Null;
+WE_SW_U_LPSYEffortResultStateCode = WE_SW_Null;
+WE_SW_U_LPSYNoDemandCandidateCode = WE_SW_Null;
+WE_SW_U_LPSYNoDemandConfirmedAtExtreme = WE_SW_Null;
+WE_SW_U_LPSYNoDemandConfirmedInRallyCount = WE_SW_Null;
+WE_SW_U_LPSYLastNoDemandCandidateBI = WE_SW_Null;
+WE_SW_U_LPSYLastNoDemandConfirmBI = WE_SW_Null;
+WE_SW_U_LPSYUpthrustOverlap = WE_SW_Null;
+WE_SW_U_LPSYHighEffortPoorResultFlag = WE_SW_Null;
+WE_SW_U_LPSYEvidenceClass = WE_SW_Null;
+
+// Active SOW facade for downstream Phase/Context.
+WE_SW_L_ActiveSOWValid = WE_SW_Zero;
+WE_SW_U_ActiveSOWValid = WE_SW_Zero;
+WE_SW_L_ActiveSOWBarIndex = WE_SW_Null;
+WE_SW_U_ActiveSOWBarIndex = WE_SW_Null;
+WE_SW_L_ActiveSOWRangeLow = WE_SW_Null;
+WE_SW_U_ActiveSOWRangeLow = WE_SW_Null;
+WE_SW_L_ActiveSOWRangeHigh = WE_SW_Null;
+WE_SW_U_ActiveSOWRangeHigh = WE_SW_Null;
+WE_SW_L_BarsSinceActiveSOW = WE_SW_Null;
+WE_SW_U_BarsSinceActiveSOW = WE_SW_Null;
+
+// Lower-channel scalar state.
+WE_SW_LRangeKnown = 0;
+WE_SW_LRangeSeq = 0;
+WE_SW_LRangeClimaxBI = 0;
+WE_SW_LRangeAutoBI = 0;
+WE_SW_LRangeLowScalar = 0;
+WE_SW_LRangeHighScalar = 0;
+WE_SW_LRangeWidthScalar = 0;
+WE_SW_LSOWCount = 0;
+WE_SW_LSOWActive = 0;
+WE_SW_LSOWBI = 0;
+WE_SW_LSOWDT = 0;
+WE_SW_LSOWCloseScalar = 0;
+WE_SW_LSOWRangeLow = 0;
+WE_SW_LSOWRangeHigh = 0;
+WE_SW_LSOWRangeWidth = 0;
+WE_SW_LSOWSeq = 0;
+WE_SW_LSOWClimaxBI = 0;
+WE_SW_LSOWAutoBI = 0;
+WE_SW_LSOWOrdinal = 0;
+WE_SW_LSOWRVOL = 0;
+WE_SW_LSOWRVOLValidScalar = 0;
+WE_SW_LSOWRSpread = 0;
+WE_SW_LSOWRSpreadValidScalar = 0;
+WE_SW_LLPSYCount = 0;
+
+// Upper-channel scalar state.
+WE_SW_URangeKnown = 0;
+WE_SW_URangeSeq = 0;
+WE_SW_URangeClimaxBI = 0;
+WE_SW_URangeAutoBI = 0;
+WE_SW_URangeLowScalar = 0;
+WE_SW_URangeHighScalar = 0;
+WE_SW_URangeWidthScalar = 0;
+WE_SW_USOWCount = 0;
+WE_SW_USOWActive = 0;
+WE_SW_USOWBI = 0;
+WE_SW_USOWDT = 0;
+WE_SW_USOWCloseScalar = 0;
+WE_SW_USOWRangeLow = 0;
+WE_SW_USOWRangeHigh = 0;
+WE_SW_USOWRangeWidth = 0;
+WE_SW_USOWSeq = 0;
+WE_SW_USOWClimaxBI = 0;
+WE_SW_USOWAutoBI = 0;
+WE_SW_USOWOrdinal = 0;
+WE_SW_USOWRVOL = 0;
+WE_SW_USOWRVOLValidScalar = 0;
+WE_SW_USOWRSpread = 0;
+WE_SW_USOWRSpreadValidScalar = 0;
+WE_SW_ULPSYCount = 0;
+
+for (WE_SW_i=0; WE_SW_i<BarCount; WE_SW_i++)
+{
+    // A. Range supersession is processed before a newly-known LPSY.
+    if (WE_SW_L_RangeValid[WE_SW_i])
+    {
+        WE_SW_LRangeChanged = (NOT WE_SW_LRangeKnown)
+            OR WSS_LowerActiveSequenceOrdinal[WE_SW_i] != WE_SW_LRangeSeq
+            OR WSS_LowerActiveSCOriginBI[WE_SW_i] != WE_SW_LRangeClimaxBI
+            OR WSS_LowerActiveARExtremeBI[WE_SW_i] != WE_SW_LRangeAutoBI;
+        if (WE_SW_LRangeChanged)
+        {
+            WE_SW_LRangeKnown = 1;
+            WE_SW_LRangeSeq = WSS_LowerActiveSequenceOrdinal[WE_SW_i];
+            WE_SW_LRangeClimaxBI = WSS_LowerActiveSCOriginBI[WE_SW_i];
+            WE_SW_LRangeAutoBI = WSS_LowerActiveARExtremeBI[WE_SW_i];
+            WE_SW_LRangeLowScalar = WSS_LowerActiveRangeLower[WE_SW_i];
+            WE_SW_LRangeHighScalar = WSS_LowerActiveRangeUpper[WE_SW_i];
+            WE_SW_LRangeWidthScalar = WSS_LowerActiveRangeWidth[WE_SW_i];
+            WE_SW_LSOWCount = 0;
+            WE_SW_LSOWActive = 0;
+            WE_SW_LLPSYCount = 0;
+        }
+    }
+    else
+    {
+        WE_SW_LRangeKnown = 0;
+        WE_SW_LSOWActive = 0;
+    }
+
+    if (WE_SW_U_RangeValid[WE_SW_i])
+    {
+        WE_SW_URangeChanged = (NOT WE_SW_URangeKnown)
+            OR WSS_UpperActiveSequenceOrdinal[WE_SW_i] != WE_SW_URangeSeq
+            OR WSS_UpperActiveBCOriginBI[WE_SW_i] != WE_SW_URangeClimaxBI
+            OR WSS_UpperActiveReactionExtremeBI[WE_SW_i] != WE_SW_URangeAutoBI;
+        if (WE_SW_URangeChanged)
+        {
+            WE_SW_URangeKnown = 1;
+            WE_SW_URangeSeq = WSS_UpperActiveSequenceOrdinal[WE_SW_i];
+            WE_SW_URangeClimaxBI = WSS_UpperActiveBCOriginBI[WE_SW_i];
+            WE_SW_URangeAutoBI = WSS_UpperActiveReactionExtremeBI[WE_SW_i];
+            WE_SW_URangeLowScalar = WSS_UpperActiveRangeLower[WE_SW_i];
+            WE_SW_URangeHighScalar = WSS_UpperActiveRangeUpper[WE_SW_i];
+            WE_SW_URangeWidthScalar = WSS_UpperActiveRangeWidth[WE_SW_i];
+            WE_SW_USOWCount = 0;
+            WE_SW_USOWActive = 0;
+            WE_SW_ULPSYCount = 0;
+        }
+    }
+    else
+    {
+        WE_SW_URangeKnown = 0;
+        WE_SW_USOWActive = 0;
+    }
+
+    // D14: full recovery above the frozen range invalidates the active SOW.
+    if (WE_SW_LSOWActive AND WE_SW_CurrentPriceValid[WE_SW_i] AND Close[WE_SW_i] > WE_SW_LSOWRangeHigh)
+        WE_SW_LSOWActive = 0;
+    if (WE_SW_USOWActive AND WE_SW_CurrentPriceValid[WE_SW_i] AND Close[WE_SW_i] > WE_SW_USOWRangeHigh)
+        WE_SW_USOWActive = 0;
+
+    // B. A confirmed Pivot High can be an LPSY against the SOW anchor that was
+    // active before any new SOW on this same confirmation bar.
+    if (SL_PivotHighEventCode[WE_SW_i] == 2)
+    {
+        WE_SW_HighLag = SL_PivotHighConfirmationLag[WE_SW_i];
+        WE_SW_HighOff = WE_SW_i - WE_SW_HighLag;
+        WE_SW_HighPivotValid = WE_SW_HighOff>=0
+            AND WE_SW_Finite(SL_PivotHighExtremeBarIndex[WE_SW_i])
+            AND NOT IsNull(SL_PivotHighExtremeDateTime[WE_SW_i])
+            AND WE_SW_Finite(SL_PivotHighEventPrice[WE_SW_i])
+            AND SL_PivotHighEventPrice[WE_SW_i]>0
+            AND WE_SW_Finite(SL_PivotHighConfirmBarIndex[WE_SW_i])
+            AND NOT IsNull(SL_PivotHighConfirmDateTime[WE_SW_i]);
+
+        WE_SW_PivotBI = SL_PivotHighExtremeBarIndex[WE_SW_i];
+        WE_SW_PivotDT = SL_PivotHighExtremeDateTime[WE_SW_i];
+        WE_SW_PivotPrice = SL_PivotHighEventPrice[WE_SW_i];
+
+        // ----- Lower-derived range channel -----
+        if (WE_SW_LSOWActive)
+        {
+            if (NOT WE_SW_HighPivotValid)
+            {
+                WE_SW_L_LPSYCode[WE_SW_i] = 0;
+            }
+            else if (WE_SW_PivotBI>WE_SW_LSOWBI AND WE_SW_PivotPrice>WE_SW_LSOWCloseScalar)
+            {
+                if (WE_SW_PivotPrice>=WE_SW_LSOWRangeHigh)
+                {
+                    WE_SW_L_UpperRangeChallengeAfterSOW[WE_SW_i] = 1;
+                }
+                else
+                {
+                    WE_SW_LLPSYCount++;
+                    WE_SW_L_LPSYCode[WE_SW_i] = 2;
+                    WE_SW_L_LPSYOrdinalWithinSOW[WE_SW_i] = WE_SW_LLPSYCount;
+                    WE_SW_L_LPSYExtremeBarIndex[WE_SW_i] = WE_SW_PivotBI;
+                    WE_SW_L_LPSYExtremeDateTime[WE_SW_i] = WE_SW_PivotDT;
+                    WE_SW_L_LPSYConfirmBarIndex[WE_SW_i] = SL_PivotHighConfirmBarIndex[WE_SW_i];
+                    WE_SW_L_LPSYConfirmDateTime[WE_SW_i] = SL_PivotHighConfirmDateTime[WE_SW_i];
+                    WE_SW_L_LPSYKnownAtBarIndex[WE_SW_i] = WE_SW_SourceBI[WE_SW_i];
+                    WE_SW_L_LPSYKnownAtDateTime[WE_SW_i] = WE_SW_SourceDT[WE_SW_i];
+                    WE_SW_L_LPSYPivotHigh[WE_SW_i] = WE_SW_PivotPrice;
+                    WE_SW_L_LPSYRangePosition[WE_SW_i] = (WE_SW_PivotPrice-WE_SW_LSOWRangeLow)/WE_SW_LSOWRangeWidth;
+                    WE_SW_L_LPSYDistanceToRangeLow[WE_SW_i] = WE_SW_PivotPrice-WE_SW_LSOWRangeLow;
+                    WE_SW_L_LPSYDistanceToRangeHigh[WE_SW_i] = WE_SW_LSOWRangeHigh-WE_SW_PivotPrice;
+                    WE_SW_L_LPSYAnchorSOWBarIndex[WE_SW_i] = WE_SW_LSOWBI;
+                    WE_SW_L_LPSYAnchorSOWDateTime[WE_SW_i] = WE_SW_LSOWDT;
+                    WE_SW_L_LPSYRangeAnchorSideCode[WE_SW_i] = 1;
+                    WE_SW_L_LPSYSequenceOrdinal[WE_SW_i] = WE_SW_LSOWSeq;
+                    WE_SW_L_LPSYRangeClimaxExtremeBI[WE_SW_i] = WE_SW_LSOWClimaxBI;
+                    WE_SW_L_LPSYRangeAutomaticSwingExtremeBI[WE_SW_i] = WE_SW_LSOWAutoBI;
+                    WE_SW_L_LPSYFrozenRangeLow[WE_SW_i] = WE_SW_LSOWRangeLow;
+                    WE_SW_L_LPSYFrozenRangeHigh[WE_SW_i] = WE_SW_LSOWRangeHigh;
+                    WE_SW_L_LPSYFrozenRangeWidth[WE_SW_i] = WE_SW_LSOWRangeWidth;
+
+                    WE_SW_qRVOLValid = RVOLValid[WE_SW_HighOff] AND WE_SW_Finite(RVOL[WE_SW_HighOff]);
+                    WE_SW_qRSpreadValid = RSpreadValid[WE_SW_HighOff] AND WE_SW_Finite(RSpread[WE_SW_HighOff]);
+                    WE_SW_qCPValid = ClosePositionValid[WE_SW_HighOff] AND WE_SW_Finite(ClosePosition[WE_SW_HighOff]);
+                    WE_SW_qDPValid = DirectionalProgressValid[WE_SW_HighOff] AND WE_SW_Finite(DirectionalProgress[WE_SW_HighOff]);
+                    WE_SW_qERValid = EffortDirectionalResultValid[WE_SW_HighOff] AND WE_SW_Finite(EffortDirectionalResultStateCode[WE_SW_HighOff]);
+                    WE_SW_qNDCodeValid = WE_SW_Finite(NoDemandCandidateCode[WE_SW_HighOff])
+                        AND NoDemandCandidateCode[WE_SW_HighOff]>=0 AND NoDemandCandidateCode[WE_SW_HighOff]<=2;
+
+                    WE_SW_Narrow = WE_SW_qRSpreadValid AND RSpread[WE_SW_HighOff] < WE_SW_LPSY_NarrowRSpread;
+                    WE_SW_VeryNarrow = WE_SW_qRSpreadValid AND RSpread[WE_SW_HighOff] < WE_SW_LPSY_VeryNarrowRSpread;
+                    WE_SW_RVOLContract = WE_SW_qRVOLValid AND WE_SW_LSOWRVOLValidScalar
+                        AND RVOL[WE_SW_HighOff] < WE_SW_LSOWRVOL;
+                    WE_SW_RSpreadContract = WE_SW_qRSpreadValid AND WE_SW_LSOWRSpreadValidScalar
+                        AND RSpread[WE_SW_HighOff] < WE_SW_LSOWRSpread;
+                    WE_SW_NDConfirmedExtreme = 0;
+                    if (WE_SW_HighOff+1<=WE_SW_i)
+                    {
+                        if (CE_NoDemand_Confirmed[WE_SW_HighOff+1]==1
+                            AND CE_NoDemand_CandidateBarIndex[WE_SW_HighOff+1]==WE_SW_PivotBI)
+                            WE_SW_NDConfirmedExtreme = 1;
+                    }
+
+                    WE_SW_NDInRallyCount = 0;
+                    WE_SW_LastNDCandidateBI = -1;
+                    WE_SW_LastNDConfirmBI = -1;
+                    for (WE_SW_j=0; WE_SW_j<=WE_SW_i; WE_SW_j++)
+                    {
+                        if (CE_NoDemand_Confirmed[WE_SW_j]==1
+                            AND WE_SW_Finite(CE_NoDemand_CandidateBarIndex[WE_SW_j])
+                            AND CE_NoDemand_CandidateBarIndex[WE_SW_j]>WE_SW_LSOWBI
+                            AND CE_NoDemand_CandidateBarIndex[WE_SW_j]<=WE_SW_PivotBI)
+                        {
+                            WE_SW_NDInRallyCount++;
+                            WE_SW_LastNDCandidateBI = CE_NoDemand_CandidateBarIndex[WE_SW_j];
+                            WE_SW_LastNDConfirmBI = WE_SW_SourceBI[WE_SW_j];
+                        }
+                    }
+
+                    WE_SW_UTOverlap = WE_UT_OriginCode[WE_SW_HighOff]==2;
+                    WE_SW_HighEffortPoor = WE_SW_qRVOLValid AND RVOL[WE_SW_HighOff]>=WE_SW_HighEffortRVOL
+                        AND WE_SW_qERValid AND EffortDirectionalResultStateCode[WE_SW_HighOff]==3;
+                    WE_SW_Route2 = WE_SW_NDConfirmedExtreme OR (WE_SW_Narrow AND WE_SW_RVOLContract);
+                    WE_SW_Route3 = WE_SW_HighEffortPoor;
+                    WE_SW_MiscWeak = (WE_SW_qNDCodeValid AND NoDemandCandidateCode[WE_SW_HighOff]==2)
+                        OR WE_SW_Narrow OR WE_SW_VeryNarrow OR WE_SW_RVOLContract
+                        OR WE_SW_RSpreadContract OR WE_SW_UTOverlap OR WE_SW_NDInRallyCount>0;
+                    WE_SW_QualityAnyValid = WE_SW_qRVOLValid OR WE_SW_qRSpreadValid OR WE_SW_qCPValid
+                        OR WE_SW_qDPValid OR WE_SW_qERValid OR WE_SW_qNDCodeValid;
+                    WE_SW_QualityClass = IIf(NOT WE_SW_QualityAnyValid,0,
+                        IIf(WE_SW_Route2 AND WE_SW_Route3,4,
+                        IIf(WE_SW_Route2,2,
+                        IIf(WE_SW_Route3,3,
+                        IIf(WE_SW_MiscWeak,4,1)))));
+
+                    WE_SW_L_LPSYNarrowSpreadFlag[WE_SW_i] = IIf(WE_SW_qRSpreadValid,WE_SW_Narrow,Null);
+                    WE_SW_L_LPSYVeryNarrowSpreadFlag[WE_SW_i] = IIf(WE_SW_qRSpreadValid,WE_SW_VeryNarrow,Null);
+                    WE_SW_L_LPSYRVOLContractedVsSOW[WE_SW_i] = IIf(WE_SW_qRVOLValid AND WE_SW_LSOWRVOLValidScalar,WE_SW_RVOLContract,Null);
+                    WE_SW_L_LPSYRSpreadContractedVsSOW[WE_SW_i] = IIf(WE_SW_qRSpreadValid AND WE_SW_LSOWRSpreadValidScalar,WE_SW_RSpreadContract,Null);
+                    WE_SW_L_LPSYClosePosition[WE_SW_i] = IIf(WE_SW_qCPValid,ClosePosition[WE_SW_HighOff],Null);
+                    WE_SW_L_LPSYClosePositionValid[WE_SW_i] = WE_SW_qCPValid;
+                    WE_SW_L_LPSYDirectionalProgress[WE_SW_i] = IIf(WE_SW_qDPValid,DirectionalProgress[WE_SW_HighOff],Null);
+                    WE_SW_L_LPSYDirectionalProgressValid[WE_SW_i] = WE_SW_qDPValid;
+                    WE_SW_L_LPSYEffortResultStateCode[WE_SW_i] = IIf(WE_SW_qERValid,EffortDirectionalResultStateCode[WE_SW_HighOff],Null);
+                    WE_SW_L_LPSYNoDemandCandidateCode[WE_SW_i] = IIf(WE_SW_qNDCodeValid,NoDemandCandidateCode[WE_SW_HighOff],Null);
+                    WE_SW_L_LPSYNoDemandConfirmedAtExtreme[WE_SW_i] = WE_SW_NDConfirmedExtreme;
+                    WE_SW_L_LPSYNoDemandConfirmedInRallyCount[WE_SW_i] = WE_SW_NDInRallyCount;
+                    WE_SW_L_LPSYLastNoDemandCandidateBI[WE_SW_i] = IIf(WE_SW_LastNDCandidateBI>=0,WE_SW_LastNDCandidateBI,Null);
+                    WE_SW_L_LPSYLastNoDemandConfirmBI[WE_SW_i] = IIf(WE_SW_LastNDConfirmBI>=0,WE_SW_LastNDConfirmBI,Null);
+                    WE_SW_L_LPSYUpthrustOverlap[WE_SW_i] = WE_SW_UTOverlap;
+                    WE_SW_L_LPSYHighEffortPoorResultFlag[WE_SW_i] = IIf(WE_SW_qERValid AND WE_SW_qRVOLValid,WE_SW_HighEffortPoor,Null);
+                    WE_SW_L_LPSYEvidenceClass[WE_SW_i] = WE_SW_QualityClass;
+                }
+            }
+        }
+
+        // ----- Upper-derived range channel -----
+        if (WE_SW_USOWActive)
+        {
+            if (NOT WE_SW_HighPivotValid)
+            {
+                WE_SW_U_LPSYCode[WE_SW_i] = 0;
+            }
+            else if (WE_SW_PivotBI>WE_SW_USOWBI AND WE_SW_PivotPrice>WE_SW_USOWCloseScalar)
+            {
+                if (WE_SW_PivotPrice>=WE_SW_USOWRangeHigh)
+                {
+                    WE_SW_U_UpperRangeChallengeAfterSOW[WE_SW_i] = 1;
+                }
+                else
+                {
+                    WE_SW_ULPSYCount++;
+                    WE_SW_U_LPSYCode[WE_SW_i] = 2;
+                    WE_SW_U_LPSYOrdinalWithinSOW[WE_SW_i] = WE_SW_ULPSYCount;
+                    WE_SW_U_LPSYExtremeBarIndex[WE_SW_i] = WE_SW_PivotBI;
+                    WE_SW_U_LPSYExtremeDateTime[WE_SW_i] = WE_SW_PivotDT;
+                    WE_SW_U_LPSYConfirmBarIndex[WE_SW_i] = SL_PivotHighConfirmBarIndex[WE_SW_i];
+                    WE_SW_U_LPSYConfirmDateTime[WE_SW_i] = SL_PivotHighConfirmDateTime[WE_SW_i];
+                    WE_SW_U_LPSYKnownAtBarIndex[WE_SW_i] = WE_SW_SourceBI[WE_SW_i];
+                    WE_SW_U_LPSYKnownAtDateTime[WE_SW_i] = WE_SW_SourceDT[WE_SW_i];
+                    WE_SW_U_LPSYPivotHigh[WE_SW_i] = WE_SW_PivotPrice;
+                    WE_SW_U_LPSYRangePosition[WE_SW_i] = (WE_SW_PivotPrice-WE_SW_USOWRangeLow)/WE_SW_USOWRangeWidth;
+                    WE_SW_U_LPSYDistanceToRangeLow[WE_SW_i] = WE_SW_PivotPrice-WE_SW_USOWRangeLow;
+                    WE_SW_U_LPSYDistanceToRangeHigh[WE_SW_i] = WE_SW_USOWRangeHigh-WE_SW_PivotPrice;
+                    WE_SW_U_LPSYAnchorSOWBarIndex[WE_SW_i] = WE_SW_USOWBI;
+                    WE_SW_U_LPSYAnchorSOWDateTime[WE_SW_i] = WE_SW_USOWDT;
+                    WE_SW_U_LPSYRangeAnchorSideCode[WE_SW_i] = 2;
+                    WE_SW_U_LPSYSequenceOrdinal[WE_SW_i] = WE_SW_USOWSeq;
+                    WE_SW_U_LPSYRangeClimaxExtremeBI[WE_SW_i] = WE_SW_USOWClimaxBI;
+                    WE_SW_U_LPSYRangeAutomaticSwingExtremeBI[WE_SW_i] = WE_SW_USOWAutoBI;
+                    WE_SW_U_LPSYFrozenRangeLow[WE_SW_i] = WE_SW_USOWRangeLow;
+                    WE_SW_U_LPSYFrozenRangeHigh[WE_SW_i] = WE_SW_USOWRangeHigh;
+                    WE_SW_U_LPSYFrozenRangeWidth[WE_SW_i] = WE_SW_USOWRangeWidth;
+
+                    WE_SW_qRVOLValid = RVOLValid[WE_SW_HighOff] AND WE_SW_Finite(RVOL[WE_SW_HighOff]);
+                    WE_SW_qRSpreadValid = RSpreadValid[WE_SW_HighOff] AND WE_SW_Finite(RSpread[WE_SW_HighOff]);
+                    WE_SW_qCPValid = ClosePositionValid[WE_SW_HighOff] AND WE_SW_Finite(ClosePosition[WE_SW_HighOff]);
+                    WE_SW_qDPValid = DirectionalProgressValid[WE_SW_HighOff] AND WE_SW_Finite(DirectionalProgress[WE_SW_HighOff]);
+                    WE_SW_qERValid = EffortDirectionalResultValid[WE_SW_HighOff] AND WE_SW_Finite(EffortDirectionalResultStateCode[WE_SW_HighOff]);
+                    WE_SW_qNDCodeValid = WE_SW_Finite(NoDemandCandidateCode[WE_SW_HighOff])
+                        AND NoDemandCandidateCode[WE_SW_HighOff]>=0 AND NoDemandCandidateCode[WE_SW_HighOff]<=2;
+
+                    WE_SW_Narrow = WE_SW_qRSpreadValid AND RSpread[WE_SW_HighOff] < WE_SW_LPSY_NarrowRSpread;
+                    WE_SW_VeryNarrow = WE_SW_qRSpreadValid AND RSpread[WE_SW_HighOff] < WE_SW_LPSY_VeryNarrowRSpread;
+                    WE_SW_RVOLContract = WE_SW_qRVOLValid AND WE_SW_USOWRVOLValidScalar
+                        AND RVOL[WE_SW_HighOff] < WE_SW_USOWRVOL;
+                    WE_SW_RSpreadContract = WE_SW_qRSpreadValid AND WE_SW_USOWRSpreadValidScalar
+                        AND RSpread[WE_SW_HighOff] < WE_SW_USOWRSpread;
+                    WE_SW_NDConfirmedExtreme = 0;
+                    if (WE_SW_HighOff+1<=WE_SW_i)
+                    {
+                        if (CE_NoDemand_Confirmed[WE_SW_HighOff+1]==1
+                            AND CE_NoDemand_CandidateBarIndex[WE_SW_HighOff+1]==WE_SW_PivotBI)
+                            WE_SW_NDConfirmedExtreme = 1;
+                    }
+
+                    WE_SW_NDInRallyCount = 0;
+                    WE_SW_LastNDCandidateBI = -1;
+                    WE_SW_LastNDConfirmBI = -1;
+                    for (WE_SW_j=0; WE_SW_j<=WE_SW_i; WE_SW_j++)
+                    {
+                        if (CE_NoDemand_Confirmed[WE_SW_j]==1
+                            AND WE_SW_Finite(CE_NoDemand_CandidateBarIndex[WE_SW_j])
+                            AND CE_NoDemand_CandidateBarIndex[WE_SW_j]>WE_SW_USOWBI
+                            AND CE_NoDemand_CandidateBarIndex[WE_SW_j]<=WE_SW_PivotBI)
+                        {
+                            WE_SW_NDInRallyCount++;
+                            WE_SW_LastNDCandidateBI = CE_NoDemand_CandidateBarIndex[WE_SW_j];
+                            WE_SW_LastNDConfirmBI = WE_SW_SourceBI[WE_SW_j];
+                        }
+                    }
+
+                    WE_SW_UTOverlap = WE_UT_OriginCode[WE_SW_HighOff]==2;
+                    WE_SW_HighEffortPoor = WE_SW_qRVOLValid AND RVOL[WE_SW_HighOff]>=WE_SW_HighEffortRVOL
+                        AND WE_SW_qERValid AND EffortDirectionalResultStateCode[WE_SW_HighOff]==3;
+                    WE_SW_Route2 = WE_SW_NDConfirmedExtreme OR (WE_SW_Narrow AND WE_SW_RVOLContract);
+                    WE_SW_Route3 = WE_SW_HighEffortPoor;
+                    WE_SW_MiscWeak = (WE_SW_qNDCodeValid AND NoDemandCandidateCode[WE_SW_HighOff]==2)
+                        OR WE_SW_Narrow OR WE_SW_VeryNarrow OR WE_SW_RVOLContract
+                        OR WE_SW_RSpreadContract OR WE_SW_UTOverlap OR WE_SW_NDInRallyCount>0;
+                    WE_SW_QualityAnyValid = WE_SW_qRVOLValid OR WE_SW_qRSpreadValid OR WE_SW_qCPValid
+                        OR WE_SW_qDPValid OR WE_SW_qERValid OR WE_SW_qNDCodeValid;
+                    WE_SW_QualityClass = IIf(NOT WE_SW_QualityAnyValid,0,
+                        IIf(WE_SW_Route2 AND WE_SW_Route3,4,
+                        IIf(WE_SW_Route2,2,
+                        IIf(WE_SW_Route3,3,
+                        IIf(WE_SW_MiscWeak,4,1)))));
+
+                    WE_SW_U_LPSYNarrowSpreadFlag[WE_SW_i] = IIf(WE_SW_qRSpreadValid,WE_SW_Narrow,Null);
+                    WE_SW_U_LPSYVeryNarrowSpreadFlag[WE_SW_i] = IIf(WE_SW_qRSpreadValid,WE_SW_VeryNarrow,Null);
+                    WE_SW_U_LPSYRVOLContractedVsSOW[WE_SW_i] = IIf(WE_SW_qRVOLValid AND WE_SW_USOWRVOLValidScalar,WE_SW_RVOLContract,Null);
+                    WE_SW_U_LPSYRSpreadContractedVsSOW[WE_SW_i] = IIf(WE_SW_qRSpreadValid AND WE_SW_USOWRSpreadValidScalar,WE_SW_RSpreadContract,Null);
+                    WE_SW_U_LPSYClosePosition[WE_SW_i] = IIf(WE_SW_qCPValid,ClosePosition[WE_SW_HighOff],Null);
+                    WE_SW_U_LPSYClosePositionValid[WE_SW_i] = WE_SW_qCPValid;
+                    WE_SW_U_LPSYDirectionalProgress[WE_SW_i] = IIf(WE_SW_qDPValid,DirectionalProgress[WE_SW_HighOff],Null);
+                    WE_SW_U_LPSYDirectionalProgressValid[WE_SW_i] = WE_SW_qDPValid;
+                    WE_SW_U_LPSYEffortResultStateCode[WE_SW_i] = IIf(WE_SW_qERValid,EffortDirectionalResultStateCode[WE_SW_HighOff],Null);
+                    WE_SW_U_LPSYNoDemandCandidateCode[WE_SW_i] = IIf(WE_SW_qNDCodeValid,NoDemandCandidateCode[WE_SW_HighOff],Null);
+                    WE_SW_U_LPSYNoDemandConfirmedAtExtreme[WE_SW_i] = WE_SW_NDConfirmedExtreme;
+                    WE_SW_U_LPSYNoDemandConfirmedInRallyCount[WE_SW_i] = WE_SW_NDInRallyCount;
+                    WE_SW_U_LPSYLastNoDemandCandidateBI[WE_SW_i] = IIf(WE_SW_LastNDCandidateBI>=0,WE_SW_LastNDCandidateBI,Null);
+                    WE_SW_U_LPSYLastNoDemandConfirmBI[WE_SW_i] = IIf(WE_SW_LastNDConfirmBI>=0,WE_SW_LastNDConfirmBI,Null);
+                    WE_SW_U_LPSYUpthrustOverlap[WE_SW_i] = WE_SW_UTOverlap;
+                    WE_SW_U_LPSYHighEffortPoorResultFlag[WE_SW_i] = IIf(WE_SW_qERValid AND WE_SW_qRVOLValid,WE_SW_HighEffortPoor,Null);
+                    WE_SW_U_LPSYEvidenceClass[WE_SW_i] = WE_SW_QualityClass;
+                }
+            }
+        }
+    }
+
+    // C. Current-bar SOWs supersede the prior active SOW only after a prior
+    // rally pivot has had the chance to be known as LPSY on this bar.
+    if (WE_SW_L_SOWCode[WE_SW_i]==2 AND WE_SW_L_RangeValid[WE_SW_i])
+    {
+        WE_SW_LSOWCount++;
+        WE_SW_L_SOWOrdinalWithinRange[WE_SW_i] = WE_SW_LSOWCount;
+        WE_SW_LSOWActive = 1;
+        WE_SW_LSOWBI = WE_SW_SourceBI[WE_SW_i];
+        WE_SW_LSOWDT = WE_SW_SourceDT[WE_SW_i];
+        WE_SW_LSOWCloseScalar = Close[WE_SW_i];
+        WE_SW_LSOWRangeLow = WSS_LowerActiveRangeLower[WE_SW_i];
+        WE_SW_LSOWRangeHigh = WSS_LowerActiveRangeUpper[WE_SW_i];
+        WE_SW_LSOWRangeWidth = WSS_LowerActiveRangeWidth[WE_SW_i];
+        WE_SW_LSOWSeq = WSS_LowerActiveSequenceOrdinal[WE_SW_i];
+        WE_SW_LSOWClimaxBI = WSS_LowerActiveSCOriginBI[WE_SW_i];
+        WE_SW_LSOWAutoBI = WSS_LowerActiveARExtremeBI[WE_SW_i];
+        WE_SW_LSOWOrdinal = WE_SW_LSOWCount;
+        WE_SW_LSOWRVOLValidScalar = RVOLValid[WE_SW_i] AND WE_SW_Finite(RVOL[WE_SW_i]);
+        WE_SW_LSOWRVOL = IIf(WE_SW_LSOWRVOLValidScalar,RVOL[WE_SW_i],0);
+        WE_SW_LSOWRSpreadValidScalar = RSpreadValid[WE_SW_i] AND WE_SW_Finite(RSpread[WE_SW_i]);
+        WE_SW_LSOWRSpread = IIf(WE_SW_LSOWRSpreadValidScalar,RSpread[WE_SW_i],0);
+        WE_SW_LLPSYCount = 0;
+        if (Close[WE_SW_i] > WE_SW_LSOWRangeHigh) WE_SW_LSOWActive = 0;
+    }
+
+    if (WE_SW_U_SOWCode[WE_SW_i]==2 AND WE_SW_U_RangeValid[WE_SW_i])
+    {
+        WE_SW_USOWCount++;
+        WE_SW_U_SOWOrdinalWithinRange[WE_SW_i] = WE_SW_USOWCount;
+        WE_SW_USOWActive = 1;
+        WE_SW_USOWBI = WE_SW_SourceBI[WE_SW_i];
+        WE_SW_USOWDT = WE_SW_SourceDT[WE_SW_i];
+        WE_SW_USOWCloseScalar = Close[WE_SW_i];
+        WE_SW_USOWRangeLow = WSS_UpperActiveRangeLower[WE_SW_i];
+        WE_SW_USOWRangeHigh = WSS_UpperActiveRangeUpper[WE_SW_i];
+        WE_SW_USOWRangeWidth = WSS_UpperActiveRangeWidth[WE_SW_i];
+        WE_SW_USOWSeq = WSS_UpperActiveSequenceOrdinal[WE_SW_i];
+        WE_SW_USOWClimaxBI = WSS_UpperActiveBCOriginBI[WE_SW_i];
+        WE_SW_USOWAutoBI = WSS_UpperActiveReactionExtremeBI[WE_SW_i];
+        WE_SW_USOWOrdinal = WE_SW_USOWCount;
+        WE_SW_USOWRVOLValidScalar = RVOLValid[WE_SW_i] AND WE_SW_Finite(RVOL[WE_SW_i]);
+        WE_SW_USOWRVOL = IIf(WE_SW_USOWRVOLValidScalar,RVOL[WE_SW_i],0);
+        WE_SW_USOWRSpreadValidScalar = RSpreadValid[WE_SW_i] AND WE_SW_Finite(RSpread[WE_SW_i]);
+        WE_SW_USOWRSpread = IIf(WE_SW_USOWRSpreadValidScalar,RSpread[WE_SW_i],0);
+        WE_SW_ULPSYCount = 0;
+        if (Close[WE_SW_i] > WE_SW_USOWRangeHigh) WE_SW_USOWActive = 0;
+    }
+
+    if (WE_SW_LSOWActive)
+    {
+        WE_SW_L_ActiveSOWValid[WE_SW_i] = 1;
+        WE_SW_L_ActiveSOWBarIndex[WE_SW_i] = WE_SW_LSOWBI;
+        WE_SW_L_ActiveSOWRangeLow[WE_SW_i] = WE_SW_LSOWRangeLow;
+        WE_SW_L_ActiveSOWRangeHigh[WE_SW_i] = WE_SW_LSOWRangeHigh;
+        WE_SW_L_BarsSinceActiveSOW[WE_SW_i] = WE_SW_SourceBI[WE_SW_i]-WE_SW_LSOWBI;
+    }
+    if (WE_SW_USOWActive)
+    {
+        WE_SW_U_ActiveSOWValid[WE_SW_i] = 1;
+        WE_SW_U_ActiveSOWBarIndex[WE_SW_i] = WE_SW_USOWBI;
+        WE_SW_U_ActiveSOWRangeLow[WE_SW_i] = WE_SW_USOWRangeLow;
+        WE_SW_U_ActiveSOWRangeHigh[WE_SW_i] = WE_SW_USOWRangeHigh;
+        WE_SW_U_BarsSinceActiveSOW[WE_SW_i] = WE_SW_SourceBI[WE_SW_i]-WE_SW_USOWBI;
+    }
+}
+_SECTION_END();
+
+_SECTION_BEGIN("65. SOW/LPSY exploration");
+// Diagnostic subset. All WE_SW_* arrays remain public to downstream Phase/Context includes.
+AddColumn(WE_SW_L_RangeValid,"WE_SW_L_RangeValid",1.0);
+AddColumn(WE_SW_L_SOWPriceChallengeObservation,"WE_SW_L_SOWPriceChallengeObservation",1.0);
+AddColumn(WE_SW_L_SOWCode,"WE_SW_L_SOWCode",1.0);
+AddColumn(WE_SW_L_SOWOrdinalWithinRange,"WE_SW_L_SOWOrdinalWithinRange",1.0);
+AddColumn(WE_SW_L_SOWSupportRelationCode,"WE_SW_L_SOWSupportRelationCode",1.0);
+AddColumn(WE_SW_L_AcceptedBreakdownFlag,"WE_SW_L_AcceptedBreakdownFlag",1.0);
+AddColumn(WE_SW_L_FurtherWeaknessFlag,"WE_SW_L_FurtherWeaknessFlag",1.0);
+AddColumn(WE_SW_L_RecoveredSupportFlag,"WE_SW_L_RecoveredSupportFlag",1.0);
+AddColumn(WE_SW_L_ActiveSOWValid,"WE_SW_L_ActiveSOWValid",1.0);
+AddColumn(WE_SW_L_LPSYCode,"WE_SW_L_LPSYCode",1.0);
+AddColumn(WE_SW_L_LPSYOrdinalWithinSOW,"WE_SW_L_LPSYOrdinalWithinSOW",1.0);
+AddColumn(WE_SW_L_LPSYPivotHigh,"WE_SW_L_LPSYPivotHigh",1.4);
+AddColumn(WE_SW_L_LPSYRangePosition,"WE_SW_L_LPSYRangePosition",1.4);
+AddColumn(WE_SW_L_LPSYEvidenceClass,"WE_SW_L_LPSYEvidenceClass",1.0);
+AddColumn(WE_SW_L_UpperRangeChallengeAfterSOW,"WE_SW_L_UpperRangeChallengeAfterSOW",1.0);
+
+AddColumn(WE_SW_U_RangeValid,"WE_SW_U_RangeValid",1.0);
+AddColumn(WE_SW_U_SOWPriceChallengeObservation,"WE_SW_U_SOWPriceChallengeObservation",1.0);
+AddColumn(WE_SW_U_SOWCode,"WE_SW_U_SOWCode",1.0);
+AddColumn(WE_SW_U_SOWOrdinalWithinRange,"WE_SW_U_SOWOrdinalWithinRange",1.0);
+AddColumn(WE_SW_U_SOWSupportRelationCode,"WE_SW_U_SOWSupportRelationCode",1.0);
+AddColumn(WE_SW_U_AcceptedBreakdownFlag,"WE_SW_U_AcceptedBreakdownFlag",1.0);
+AddColumn(WE_SW_U_FurtherWeaknessFlag,"WE_SW_U_FurtherWeaknessFlag",1.0);
+AddColumn(WE_SW_U_RecoveredSupportFlag,"WE_SW_U_RecoveredSupportFlag",1.0);
+AddColumn(WE_SW_U_ActiveSOWValid,"WE_SW_U_ActiveSOWValid",1.0);
+AddColumn(WE_SW_U_LPSYCode,"WE_SW_U_LPSYCode",1.0);
+AddColumn(WE_SW_U_LPSYOrdinalWithinSOW,"WE_SW_U_LPSYOrdinalWithinSOW",1.0);
+AddColumn(WE_SW_U_LPSYPivotHigh,"WE_SW_U_LPSYPivotHigh",1.4);
+AddColumn(WE_SW_U_LPSYRangePosition,"WE_SW_U_LPSYRangePosition",1.4);
+AddColumn(WE_SW_U_LPSYEvidenceClass,"WE_SW_U_LPSYEvidenceClass",1.0);
+AddColumn(WE_SW_U_UpperRangeChallengeAfterSOW,"WE_SW_U_UpperRangeChallengeAfterSOW",1.0);
+_SECTION_END();
