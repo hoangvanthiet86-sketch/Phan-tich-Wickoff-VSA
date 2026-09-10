@@ -1,20 +1,23 @@
 /*
-    Wyckoff VSA Upthrust / UTAD Event v0.1
-    Development module. UNTESTED DEVELOPMENT.
-    Penetration of previously confirmed pivot-high resistance, same-bar failure,
-    then next-bar downside confirmation. No trading signal.
+    Wyckoff VSA Upthrust Event v0.1
+    Development implementation aligned to D01-D20 approved in PR #16.
+    Approval merge commit: d0354bc1314a25806c3cd4f9c70d70b9cd9b52b1
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT. No trading signal.
 
-    Development specification:
+    Canonical implementation document on this branch:
     docs/wyckoff-event-upthrust-utad-v0.1-spec.md
+
+    IMPORTANT:
+    - Event layer v0.1 publishes UPTHRUST-LIKE only.
+    - UTAD is reserved for a future Phase/Context Engine.
+    - Upper breakout observations are preserved without forcing an UTAD label.
 */
 #include_once <WyckoffVSA_Confirmation_v1.0.afl>
 
-_SECTION_BEGIN("34. Upthrust UTAD constants and input contract");
-WE_UT_MaxPenetrationATR = 1.00;
-WE_UT_DeepPenetrationATR = 0.50;
-WE_UT_MaxClosePosition = 0.50;
-WE_UT_UTADRSpreadMin = 1.20;
-WE_UT_UTADRVOLMin = 1.25;
+_SECTION_BEGIN("34. Upthrust constants and input contract");
+WE_UT_StrongClosePositionMax = 0.50;
+WE_UT_HighEffortRVOL = 1.25;
+WE_UT_WideSpreadRSpread = 1.20;
 
 function WE_UT_Finite( x )
 {
@@ -28,214 +31,353 @@ WE_UT_OriginPriceValid = IIf(
     PriceInputValid==1
     AND WE_UT_Finite(High)
     AND WE_UT_Finite(Close)
+    AND High>0
     AND Close>0
     AND High>=Close,1,0);
+
+WE_UT_PriorCloseRaw = Ref(Close,-1);
+WE_UT_PriorPriceInputValidRaw = Ref(PriceInputValid,-1);
+WE_UT_PriorCloseValid = IIf(
+    Nz(WE_UT_PriorPriceInputValidRaw,0)==1
+    AND WE_UT_Finite(WE_UT_PriorCloseRaw)
+    AND WE_UT_PriorCloseRaw>0,1,0);
 
 WE_UT_PriorResistancePriceRaw = SL_PivotHighLatestPriorPrice;
 WE_UT_PriorResistanceValid = IIf(
     SL_PivotHighLatestPriorValid==1
     AND WE_UT_Finite(WE_UT_PriorResistancePriceRaw)
     AND WE_UT_PriorResistancePriceRaw>0
+    AND WE_UT_Finite(SL_PivotHighLatestPriorExtremeBarIndex)
+    AND NOT IsNull(SL_PivotHighLatestPriorExtremeDateTime)
     AND WE_UT_Finite(SL_PivotHighLatestPriorConfirmBarIndex)
-    AND SL_PivotHighLatestPriorConfirmBarIndex<WE_UT_SourceBarIndex
-    AND NOT IsNull(SL_PivotHighLatestPriorConfirmDateTime),1,0);
+    AND NOT IsNull(SL_PivotHighLatestPriorConfirmDateTime)
+    AND SL_PivotHighLatestPriorConfirmBarIndex<WE_UT_SourceBarIndex,1,0);
 
-WE_UT_PriorATRValid = IIf(
+WE_UT_PriorATRDescriptorValid = IIf(
     PriorATRValid==1
     AND WE_UT_Finite(PriorATR)
     AND PriorATR>0,1,0);
 
-WE_UT_EffortShapeValid = IIf(
-    RVOLValid==1
-    AND RSpreadValid==1
-    AND ClosePositionValid==1
-    AND WE_UT_Finite(RVOL)
-    AND WE_UT_Finite(RSpread)
+WE_UT_ClosePositionDescriptorValid = IIf(
+    ClosePositionValid==1
     AND WE_UT_Finite(ClosePosition),1,0);
 
+WE_UT_RVOLDescriptorValid = IIf(
+    RVOLValid==1
+    AND WE_UT_Finite(RVOL),1,0);
+
+WE_UT_RSpreadDescriptorValid = IIf(
+    RSpreadValid==1
+    AND WE_UT_Finite(RSpread),1,0);
+
+WE_UT_EffortDataValid = IIf(
+    WE_UT_RVOLDescriptorValid
+    AND WE_UT_RSpreadDescriptorValid,1,0);
+
 WE_UT_SafeResistance = IIf(WE_UT_PriorResistanceValid,WE_UT_PriorResistancePriceRaw,0);
-WE_UT_SafeATR = IIf(WE_UT_PriorATRValid,PriorATR,1);
 WE_UT_PenetrationRaw = High-WE_UT_SafeResistance;
-WE_UT_PenetrationATRRaw = WE_UT_PenetrationRaw/WE_UT_SafeATR;
-WE_UT_PenetrationMetricValid = IIf(
+WE_UT_PenetrationValid = IIf(
     WE_UT_OriginPriceValid
     AND WE_UT_PriorResistanceValid
-    AND WE_UT_PriorATRValid
+    AND High>WE_UT_PriorResistancePriceRaw
     AND WE_UT_Finite(WE_UT_PenetrationRaw)
+    AND WE_UT_PenetrationRaw>0,1,0);
+
+WE_UT_SafeATR = IIf(WE_UT_PriorATRDescriptorValid,PriorATR,1);
+WE_UT_PenetrationATRRaw = WE_UT_PenetrationRaw/WE_UT_SafeATR;
+WE_UT_PenetrationATRValid = IIf(
+    WE_UT_PenetrationValid
+    AND WE_UT_PriorATRDescriptorValid
     AND WE_UT_Finite(WE_UT_PenetrationATRRaw),1,0);
 
-WE_UT_OriginStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nUPTHRUST/UTAD CANDIDATE";
-WE_UT_OriginKindText = "\nUPTHRUST-LIKE\nUTAD-LIKE";
-WE_UT_ResolutionStatusText = "INSUFFICIENT DATA\nNO PRIOR UPTHRUST/UTAD\nUPTHRUST/UTAD REJECTED\nUPTHRUST/UTAD CONFIRMED";
+WE_UT_OriginStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nUPTHRUST-LIKE CANDIDATE";
+WE_UT_OriginKindText = "\nUPTHRUST-LIKE";
+WE_UT_ResolutionStatusText = "INSUFFICIENT DATA\nNO PRIOR UPTHRUST-LIKE\nUPTHRUST-LIKE REJECTED\nUPTHRUST-LIKE CONFIRMED";
 _SECTION_END();
 
-_SECTION_BEGIN("35. Upthrust UTAD origin at current bar");
-WE_UT_OriginDependenciesValid = IIf(
-    WE_UT_OriginPriceValid
-    AND WE_UT_PriorResistanceValid
-    AND WE_UT_PriorATRValid
-    AND WE_UT_EffortShapeValid
-    AND WE_UT_PenetrationMetricValid,1,0);
+_SECTION_BEGIN("35. Upthrust origin and upper breakout observation");
+WE_UT_FreshFromBelowOrAtResistance = IIf(
+    WE_UT_PriorResistanceValid
+    AND WE_UT_PriorCloseValid
+    AND WE_UT_PriorCloseRaw<=WE_UT_PriorResistancePriceRaw,1,0);
 
 WE_UT_PenetratesResistance = IIf(
-    WE_UT_OriginDependenciesValid
+    WE_UT_OriginPriceValid
+    AND WE_UT_PriorResistanceValid
     AND High>WE_UT_PriorResistancePriceRaw,1,0);
 
-WE_UT_PenetrationWithinLimit = IIf(
-    WE_UT_PenetratesResistance
-    AND WE_UT_PenetrationATRRaw<=WE_UT_MaxPenetrationATR,1,0);
-
-WE_UT_FailsBackBelowResistance = IIf(
-    WE_UT_OriginDependenciesValid
+WE_UT_ClosesBackAtOrBelowResistance = IIf(
+    WE_UT_OriginPriceValid
+    AND WE_UT_PriorResistanceValid
     AND Close<=WE_UT_PriorResistancePriceRaw,1,0);
 
-WE_UT_ClosePositionWeakEnough = IIf(
-    WE_UT_EffortShapeValid
-    AND ClosePosition<=WE_UT_MaxClosePosition,1,0);
+WE_UT_UpperBreakoutObservation = IIf(
+    WE_UT_OriginPriceValid
+    AND WE_UT_PriorResistanceValid
+    AND WE_UT_PriorCloseValid
+    AND WE_UT_PriorCloseRaw<=WE_UT_PriorResistancePriceRaw
+    AND High>WE_UT_PriorResistancePriceRaw
+    AND Close>WE_UT_PriorResistancePriceRaw,1,0);
 
 WE_UT_OriginCode = IIf(
     NOT WE_UT_OriginPriceValid,0,
     IIf(NOT WE_UT_PriorResistanceValid,0,
-    IIf(NOT WE_UT_PriorATRValid OR NOT WE_UT_PenetrationMetricValid,0,
-    IIf(NOT WE_UT_EffortShapeValid,0,
+    IIf(NOT WE_UT_PriorCloseValid,0,
+    IIf(WE_UT_PriorCloseRaw>WE_UT_PriorResistancePriceRaw,1,
     IIf(High<=WE_UT_PriorResistancePriceRaw,1,
-    IIf(WE_UT_PenetrationATRRaw>WE_UT_MaxPenetrationATR,1,
-    IIf(Close>WE_UT_PriorResistancePriceRaw,1,
-    IIf(ClosePosition>WE_UT_MaxClosePosition,1,2))))))));
+    IIf(Close>WE_UT_PriorResistancePriceRaw,1,2))))));
 
 WE_UT_OriginValid = IIf(WE_UT_OriginCode>0,1,0);
 WE_UT_OriginReasonCode = IIf(
-    NOT WE_UT_OriginPriceValid,8,
+    NOT WE_UT_OriginPriceValid,6,
     IIf(NOT WE_UT_PriorResistanceValid,2,
-    IIf(NOT WE_UT_PriorATRValid OR NOT WE_UT_PenetrationMetricValid,3,
-    IIf(NOT WE_UT_EffortShapeValid,7,
+    IIf(NOT WE_UT_PriorCloseValid,3,
+    IIf(WE_UT_PriorCloseRaw>WE_UT_PriorResistancePriceRaw,4,
     IIf(High<=WE_UT_PriorResistancePriceRaw,1,
-    IIf(WE_UT_PenetrationATRRaw>WE_UT_MaxPenetrationATR,4,
-    IIf(Close>WE_UT_PriorResistancePriceRaw,5,
-    IIf(ClosePosition>WE_UT_MaxClosePosition,6,0))))))));
+    IIf(Close>WE_UT_PriorResistancePriceRaw,5,0))))));
 
-WE_UT_UTADByDepth = IIf(
-    WE_UT_OriginCode==2
-    AND WE_UT_PenetrationATRRaw>WE_UT_DeepPenetrationATR,1,0);
+WE_UT_OriginKindCode = IIf(WE_UT_OriginCode==2,1,Null);
+WE_UT_OriginKindValid = IIf(WE_UT_OriginCode==2,1,0);
 
-WE_UT_UTADByEffort = IIf(
-    WE_UT_OriginCode==2
-    AND RSpread>=WE_UT_UTADRSpreadMin
-    AND RVOL>=WE_UT_UTADRVOLMin,1,0);
-
-WE_UT_OriginKindCode = IIf(
+WE_UT_StrongCloseRejection = IIf(
     WE_UT_OriginCode==2,
-    IIf(WE_UT_UTADByDepth OR WE_UT_UTADByEffort,2,1),Null);
+    IIf(WE_UT_ClosePositionDescriptorValid AND ClosePosition<=WE_UT_StrongClosePositionMax,1,0),Null);
+
+WE_UT_HighEffortFlag = IIf(
+    WE_UT_OriginCode==2,
+    IIf(WE_UT_EffortDataValid
+        AND RVOL>=WE_UT_HighEffortRVOL
+        AND RSpread>=WE_UT_WideSpreadRSpread,1,0),Null);
+
+WE_UT_MixedEffortFlag = IIf(
+    WE_UT_OriginCode==2,
+    IIf(WE_UT_EffortDataValid
+        AND ((RVOL>=WE_UT_HighEffortRVOL AND RSpread<WE_UT_WideSpreadRSpread)
+          OR (RVOL<WE_UT_HighEffortRVOL AND RSpread>=WE_UT_WideSpreadRSpread)),1,0),Null);
 
 WE_UT_OriginBarIndex = IIf(WE_UT_OriginCode==2,WE_UT_SourceBarIndex,Null);
 WE_UT_OriginDateTime = IIf(WE_UT_OriginCode==2,WE_UT_SourceDateTime,Null);
 WE_UT_OriginHigh = IIf(WE_UT_OriginCode==2,High,Null);
 WE_UT_OriginClose = IIf(WE_UT_OriginCode==2,Close,Null);
-WE_UT_OriginClosePosition = IIf(WE_UT_OriginCode==2,ClosePosition,Null);
+WE_UT_OriginPriorClose = IIf(WE_UT_OriginCode==2,WE_UT_PriorCloseRaw,Null);
 WE_UT_ResistancePrice = IIf(WE_UT_OriginCode==2,WE_UT_PriorResistancePriceRaw,Null);
-WE_UT_OriginPriorATR = IIf(WE_UT_OriginCode==2,PriorATR,Null);
-WE_UT_Penetration = IIf(WE_UT_OriginCode==2,WE_UT_PenetrationRaw,Null);
-WE_UT_PenetrationATR = IIf(WE_UT_OriginCode==2,WE_UT_PenetrationATRRaw,Null);
-WE_UT_OriginRVOL = IIf(WE_UT_OriginCode==2,RVOL,Null);
-WE_UT_OriginRSpread = IIf(WE_UT_OriginCode==2,RSpread,Null);
+
 WE_UT_ResistancePivotExtremeBarIndex = IIf(WE_UT_OriginCode==2,SL_PivotHighLatestPriorExtremeBarIndex,Null);
 WE_UT_ResistancePivotExtremeDateTime = IIf(WE_UT_OriginCode==2,SL_PivotHighLatestPriorExtremeDateTime,Null);
 WE_UT_ResistancePivotConfirmBarIndex = IIf(WE_UT_OriginCode==2,SL_PivotHighLatestPriorConfirmBarIndex,Null);
 WE_UT_ResistancePivotConfirmDateTime = IIf(WE_UT_OriginCode==2,SL_PivotHighLatestPriorConfirmDateTime,Null);
+WE_UT_ResistancePivotAge = IIf(WE_UT_OriginCode==2,SL_PivotHighLatestPriorAge,Null);
+WE_UT_ResistancePivotBarsSinceConfirmation = IIf(WE_UT_OriginCode==2,SL_PivotHighLatestPriorBarsSinceConfirmation,Null);
+
+WE_UT_OriginPriorATR = IIf(WE_UT_OriginCode==2 AND WE_UT_PriorATRDescriptorValid,PriorATR,Null);
+WE_UT_OriginPriorATRValid = IIf(WE_UT_OriginCode==2,WE_UT_PriorATRDescriptorValid,Null);
+WE_UT_Penetration = IIf(WE_UT_OriginCode==2 AND WE_UT_PenetrationValid,WE_UT_PenetrationRaw,Null);
+WE_UT_PenetrationValueValid = IIf(WE_UT_OriginCode==2,WE_UT_PenetrationValid,Null);
+WE_UT_PenetrationATR = IIf(WE_UT_OriginCode==2 AND WE_UT_PenetrationATRValid,WE_UT_PenetrationATRRaw,Null);
+WE_UT_OriginPenetrationATRValid = IIf(WE_UT_OriginCode==2,WE_UT_PenetrationATRValid,Null);
+
+WE_UT_OriginClosePosition = IIf(WE_UT_OriginCode==2 AND WE_UT_ClosePositionDescriptorValid,ClosePosition,Null);
+WE_UT_OriginClosePositionValid = IIf(WE_UT_OriginCode==2,WE_UT_ClosePositionDescriptorValid,Null);
+WE_UT_OriginRVOL = IIf(WE_UT_OriginCode==2 AND WE_UT_RVOLDescriptorValid,RVOL,Null);
+WE_UT_OriginRVOLValid = IIf(WE_UT_OriginCode==2,WE_UT_RVOLDescriptorValid,Null);
+WE_UT_OriginRSpread = IIf(WE_UT_OriginCode==2 AND WE_UT_RSpreadDescriptorValid,RSpread,Null);
+WE_UT_OriginRSpreadValid = IIf(WE_UT_OriginCode==2,WE_UT_RSpreadDescriptorValid,Null);
+WE_UT_OriginEffortDataValid = IIf(WE_UT_OriginCode==2,WE_UT_EffortDataValid,Null);
+
+// S/M/L are context snapshots only. They never change OriginCode.
+WE_UT_ContextSReferenceStatusCode = IIf(WE_UT_OriginCode==2,SL_S_ReferenceStatusCode,Null);
+WE_UT_ContextSPositionStateCode = IIf(WE_UT_OriginCode==2,SL_S_PositionStateCode,Null);
+WE_UT_ContextSLocationValid = IIf(WE_UT_OriginCode==2,SL_S_LocationValid,Null);
+WE_UT_ContextSLocation = IIf(WE_UT_OriginCode==2 AND SL_S_LocationValid==1,SL_S_Location,Null);
+WE_UT_ContextMReferenceStatusCode = IIf(WE_UT_OriginCode==2,SL_M_ReferenceStatusCode,Null);
+WE_UT_ContextMPositionStateCode = IIf(WE_UT_OriginCode==2,SL_M_PositionStateCode,Null);
+WE_UT_ContextMLocationValid = IIf(WE_UT_OriginCode==2,SL_M_LocationValid,Null);
+WE_UT_ContextMLocation = IIf(WE_UT_OriginCode==2 AND SL_M_LocationValid==1,SL_M_Location,Null);
+WE_UT_ContextLReferenceStatusCode = IIf(WE_UT_OriginCode==2,SL_L_ReferenceStatusCode,Null);
+WE_UT_ContextLPositionStateCode = IIf(WE_UT_OriginCode==2,SL_L_PositionStateCode,Null);
+WE_UT_ContextLLocationValid = IIf(WE_UT_OriginCode==2,SL_L_LocationValid,Null);
+WE_UT_ContextLLocation = IIf(WE_UT_OriginCode==2 AND SL_L_LocationValid==1,SL_L_Location,Null);
+
+// Observation channel for breakouts that close above resistance.
+WE_UT_UpperBreakoutBarIndex = IIf(WE_UT_UpperBreakoutObservation,WE_UT_SourceBarIndex,Null);
+WE_UT_UpperBreakoutDateTime = IIf(WE_UT_UpperBreakoutObservation,WE_UT_SourceDateTime,Null);
+WE_UT_UpperBreakoutResistancePrice = IIf(WE_UT_UpperBreakoutObservation,WE_UT_PriorResistancePriceRaw,Null);
+WE_UT_UpperBreakoutHigh = IIf(WE_UT_UpperBreakoutObservation,High,Null);
+WE_UT_UpperBreakoutClose = IIf(WE_UT_UpperBreakoutObservation,Close,Null);
 _SECTION_END();
 
-_SECTION_BEGIN("36. Upthrust UTAD next-bar resolution");
+_SECTION_BEGIN("36. Upthrust next-bar resolution");
 WE_UT_PriorOriginCodeRaw = Ref(WE_UT_OriginCode,-1);
 WE_UT_PriorOriginPresent = IIf(Nz(WE_UT_PriorOriginCodeRaw,-1)==2,1,0);
 
 WE_UT_PriorOriginBarIndex = Ref(WE_UT_OriginBarIndex,-1);
 WE_UT_PriorOriginDateTime = Ref(WE_UT_OriginDateTime,-1);
-WE_UT_PriorOriginKindCode = Ref(WE_UT_OriginKindCode,-1);
 WE_UT_PriorOriginHigh = Ref(WE_UT_OriginHigh,-1);
 WE_UT_PriorOriginClose = Ref(WE_UT_OriginClose,-1);
+WE_UT_PriorOriginPriorClose = Ref(WE_UT_OriginPriorClose,-1);
 WE_UT_PriorResistancePrice = Ref(WE_UT_ResistancePrice,-1);
-WE_UT_PriorOriginPriorATR = Ref(WE_UT_OriginPriorATR,-1);
-WE_UT_PriorPenetration = Ref(WE_UT_Penetration,-1);
-WE_UT_PriorPenetrationATR = Ref(WE_UT_PenetrationATR,-1);
-WE_UT_PriorOriginRVOL = Ref(WE_UT_OriginRVOL,-1);
-WE_UT_PriorOriginRSpread = Ref(WE_UT_OriginRSpread,-1);
 WE_UT_PriorResistancePivotExtremeBarIndex = Ref(WE_UT_ResistancePivotExtremeBarIndex,-1);
 WE_UT_PriorResistancePivotExtremeDateTime = Ref(WE_UT_ResistancePivotExtremeDateTime,-1);
 WE_UT_PriorResistancePivotConfirmBarIndex = Ref(WE_UT_ResistancePivotConfirmBarIndex,-1);
 WE_UT_PriorResistancePivotConfirmDateTime = Ref(WE_UT_ResistancePivotConfirmDateTime,-1);
+WE_UT_PriorResistancePivotAge = Ref(WE_UT_ResistancePivotAge,-1);
+WE_UT_PriorResistancePivotBarsSinceConfirmation = Ref(WE_UT_ResistancePivotBarsSinceConfirmation,-1);
+WE_UT_PriorOriginPriorATR = Ref(WE_UT_OriginPriorATR,-1);
+WE_UT_PriorOriginPriorATRValid = Ref(WE_UT_OriginPriorATRValid,-1);
+WE_UT_PriorPenetration = Ref(WE_UT_Penetration,-1);
+WE_UT_PriorPenetrationATR = Ref(WE_UT_PenetrationATR,-1);
+WE_UT_PriorOriginPenetrationATRValid = Ref(WE_UT_OriginPenetrationATRValid,-1);
+WE_UT_PriorOriginClosePosition = Ref(WE_UT_OriginClosePosition,-1);
+WE_UT_PriorOriginClosePositionValid = Ref(WE_UT_OriginClosePositionValid,-1);
+WE_UT_PriorOriginRVOL = Ref(WE_UT_OriginRVOL,-1);
+WE_UT_PriorOriginRVOLValid = Ref(WE_UT_OriginRVOLValid,-1);
+WE_UT_PriorOriginRSpread = Ref(WE_UT_OriginRSpread,-1);
+WE_UT_PriorOriginRSpreadValid = Ref(WE_UT_OriginRSpreadValid,-1);
+WE_UT_PriorStrongCloseRejection = Ref(WE_UT_StrongCloseRejection,-1);
+WE_UT_PriorHighEffortFlag = Ref(WE_UT_HighEffortFlag,-1);
+WE_UT_PriorMixedEffortFlag = Ref(WE_UT_MixedEffortFlag,-1);
 
 WE_UT_EvaluationPriceValid = IIf(
     PriceInputValid==1
     AND WE_UT_Finite(High)
     AND WE_UT_Finite(Close)
+    AND High>0
     AND Close>0
     AND High>=Close,1,0);
 
-WE_UT_EvaluationResistanceHeld = IIf(
+WE_UT_EvaluationCloseStayedBelowResistance = IIf(
     WE_UT_PriorOriginPresent
     AND WE_UT_EvaluationPriceValid
     AND WE_UT_Finite(WE_UT_PriorResistancePrice)
-    AND High<=WE_UT_PriorResistancePrice,1,0);
+    AND Close<=WE_UT_PriorResistancePrice,1,0);
 
-WE_UT_EvaluationCloseDown = IIf(
+WE_UT_EvaluationCloseDeclined = IIf(
     WE_UT_PriorOriginPresent
     AND WE_UT_EvaluationPriceValid
     AND WE_UT_Finite(WE_UT_PriorOriginClose)
     AND Close<WE_UT_PriorOriginClose,1,0);
 
+WE_UT_EvaluationFullyBelowResistance = IIf(
+    WE_UT_PriorOriginPresent
+    AND WE_UT_EvaluationPriceValid
+    AND WE_UT_Finite(WE_UT_PriorResistancePrice)
+    AND High<=WE_UT_PriorResistancePrice,1,0);
+
 WE_UT_ResolutionCode = IIf(
     NOT WE_UT_PriorOriginPresent,1,
-    IIf(NOT WE_UT_EvaluationPriceValid OR NOT WE_UT_Finite(WE_UT_PriorOriginClose) OR NOT WE_UT_Finite(WE_UT_PriorResistancePrice),0,
-    IIf(WE_UT_EvaluationResistanceHeld AND WE_UT_EvaluationCloseDown,3,2)));
+    IIf(NOT WE_UT_EvaluationPriceValid
+        OR NOT WE_UT_Finite(WE_UT_PriorOriginClose)
+        OR NOT WE_UT_Finite(WE_UT_PriorResistancePrice),0,
+    IIf(WE_UT_EvaluationCloseStayedBelowResistance
+        AND WE_UT_EvaluationCloseDeclined,3,2)));
 
 WE_UT_ResolutionValid = IIf(WE_UT_ResolutionCode>0,1,0);
 WE_UT_Confirmed = IIf(WE_UT_ResolutionCode==3,1,0);
 
 WE_UT_ResolutionReasonCode = IIf(
     NOT WE_UT_PriorOriginPresent,0,
-    IIf(NOT WE_UT_EvaluationPriceValid OR NOT WE_UT_Finite(WE_UT_PriorOriginClose) OR NOT WE_UT_Finite(WE_UT_PriorResistancePrice),4,
-    IIf(NOT WE_UT_EvaluationCloseDown AND NOT WE_UT_EvaluationResistanceHeld,3,
-    IIf(NOT WE_UT_EvaluationCloseDown,1,
-    IIf(NOT WE_UT_EvaluationResistanceHeld,2,0)))));
+    IIf(NOT WE_UT_EvaluationPriceValid
+        OR NOT WE_UT_Finite(WE_UT_PriorOriginClose)
+        OR NOT WE_UT_Finite(WE_UT_PriorResistancePrice),4,
+    IIf(NOT WE_UT_EvaluationCloseDeclined
+        AND NOT WE_UT_EvaluationCloseStayedBelowResistance,3,
+    IIf(NOT WE_UT_EvaluationCloseDeclined,1,
+    IIf(NOT WE_UT_EvaluationCloseStayedBelowResistance,2,0)))));
 
 WE_UT_ResolutionOriginBarIndex = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginBarIndex,Null);
 WE_UT_ResolutionOriginDateTime = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginDateTime,Null);
-WE_UT_ResolutionOriginKindCode = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginKindCode,Null);
 WE_UT_ResolutionOriginHigh = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginHigh,Null);
 WE_UT_ResolutionOriginClose = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginClose,Null);
+WE_UT_ResolutionOriginPriorClose = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginPriorClose,Null);
 WE_UT_ResolutionResistancePrice = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorResistancePrice,Null);
+WE_UT_ResolutionResistancePivotExtremeBarIndex = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorResistancePivotExtremeBarIndex,Null);
+WE_UT_ResolutionResistancePivotExtremeDateTime = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorResistancePivotExtremeDateTime,Null);
+WE_UT_ResolutionResistancePivotConfirmBarIndex = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorResistancePivotConfirmBarIndex,Null);
+WE_UT_ResolutionResistancePivotConfirmDateTime = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorResistancePivotConfirmDateTime,Null);
+WE_UT_ResolutionResistancePivotAge = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorResistancePivotAge,Null);
+WE_UT_ResolutionResistancePivotBarsSinceConfirmation = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorResistancePivotBarsSinceConfirmation,Null);
+WE_UT_ResolutionOriginPriorATR = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginPriorATR,Null);
+WE_UT_ResolutionOriginPriorATRValid = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginPriorATRValid,Null);
+WE_UT_ResolutionPenetration = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorPenetration,Null);
 WE_UT_ResolutionPenetrationATR = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorPenetrationATR,Null);
+WE_UT_ResolutionPenetrationATRValid = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginPenetrationATRValid,Null);
+WE_UT_ResolutionOriginClosePosition = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginClosePosition,Null);
+WE_UT_ResolutionOriginClosePositionValid = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginClosePositionValid,Null);
+WE_UT_ResolutionOriginRVOL = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginRVOL,Null);
+WE_UT_ResolutionOriginRVOLValid = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginRVOLValid,Null);
+WE_UT_ResolutionOriginRSpread = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginRSpread,Null);
+WE_UT_ResolutionOriginRSpreadValid = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorOriginRSpreadValid,Null);
+WE_UT_ResolutionStrongCloseRejection = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorStrongCloseRejection,Null);
+WE_UT_ResolutionHighEffortFlag = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorHighEffortFlag,Null);
+WE_UT_ResolutionMixedEffortFlag = IIf(WE_UT_PriorOriginPresent,WE_UT_PriorMixedEffortFlag,Null);
+
 WE_UT_EvaluationBarIndex = IIf(WE_UT_PriorOriginPresent,WE_UT_SourceBarIndex,Null);
 WE_UT_EvaluationDateTime = IIf(WE_UT_PriorOriginPresent,WE_UT_SourceDateTime,Null);
 WE_UT_EvaluationHigh = IIf(WE_UT_PriorOriginPresent AND WE_UT_EvaluationPriceValid,High,Null);
 WE_UT_EvaluationClose = IIf(WE_UT_PriorOriginPresent AND WE_UT_EvaluationPriceValid,Close,Null);
 _SECTION_END();
 
-_SECTION_BEGIN("37. Upthrust UTAD exploration");
+_SECTION_BEGIN("37. Upthrust exploration");
 // Development output only. Do not alter upstream Filter or create trading assignments.
 AddColumn(WE_UT_SourceBarIndex,"WE_UT_SourceBarIndex",1.0);
 AddColumn(WE_UT_SourceDateTime,"WE_UT_SourceDateTime",formatDateTime);
+
+AddColumn(WE_UT_UpperBreakoutObservation,"WE_UT_UpperBreakoutObservation",1.0);
+AddColumn(WE_UT_UpperBreakoutBarIndex,"WE_UT_UpperBreakoutBarIndex",1.0);
+AddColumn(WE_UT_UpperBreakoutDateTime,"WE_UT_UpperBreakoutDateTime",formatDateTime);
+AddColumn(WE_UT_UpperBreakoutResistancePrice,"WE_UT_UpperBreakoutResistancePrice",1.12);
+AddColumn(WE_UT_UpperBreakoutHigh,"WE_UT_UpperBreakoutHigh",1.12);
+AddColumn(WE_UT_UpperBreakoutClose,"WE_UT_UpperBreakoutClose",1.12);
+
 AddColumn(WE_UT_OriginCode,"WE_UT_OriginCode",1.0);
 AddColumn(WE_UT_OriginValid,"WE_UT_OriginValid",1.0);
 AddColumn(WE_UT_OriginReasonCode,"WE_UT_OriginReasonCode",1.0);
 AddMultiTextColumn(WE_UT_OriginCode,WE_UT_OriginStatusText,"WE_UT_OriginStatus");
 AddColumn(WE_UT_OriginKindCode,"WE_UT_OriginKindCode",1.0);
+AddColumn(WE_UT_OriginKindValid,"WE_UT_OriginKindValid",1.0);
 AddMultiTextColumn(WE_UT_OriginKindCode,WE_UT_OriginKindText,"WE_UT_OriginKind");
 AddColumn(WE_UT_OriginBarIndex,"WE_UT_OriginBarIndex",1.0);
 AddColumn(WE_UT_OriginDateTime,"WE_UT_OriginDateTime",formatDateTime);
-AddColumn(WE_UT_ResistancePrice,"WE_UT_ResistancePrice",1.12);
-AddColumn(WE_UT_Penetration,"WE_UT_Penetration",1.12);
-AddColumn(WE_UT_PenetrationATR,"WE_UT_PenetrationATR",1.12);
-AddColumn(WE_UT_OriginPriorATR,"WE_UT_OriginPriorATR",1.12);
 AddColumn(WE_UT_OriginHigh,"WE_UT_OriginHigh",1.12);
 AddColumn(WE_UT_OriginClose,"WE_UT_OriginClose",1.12);
-AddColumn(WE_UT_OriginClosePosition,"WE_UT_OriginClosePosition",1.12);
-AddColumn(WE_UT_OriginRVOL,"WE_UT_OriginRVOL",1.12);
-AddColumn(WE_UT_OriginRSpread,"WE_UT_OriginRSpread",1.12);
+AddColumn(WE_UT_OriginPriorClose,"WE_UT_OriginPriorClose",1.12);
+AddColumn(WE_UT_ResistancePrice,"WE_UT_ResistancePrice",1.12);
 AddColumn(WE_UT_ResistancePivotExtremeBarIndex,"WE_UT_ResistancePivotExtremeBarIndex",1.0);
 AddColumn(WE_UT_ResistancePivotExtremeDateTime,"WE_UT_ResistancePivotExtremeDateTime",formatDateTime);
 AddColumn(WE_UT_ResistancePivotConfirmBarIndex,"WE_UT_ResistancePivotConfirmBarIndex",1.0);
 AddColumn(WE_UT_ResistancePivotConfirmDateTime,"WE_UT_ResistancePivotConfirmDateTime",formatDateTime);
+AddColumn(WE_UT_ResistancePivotAge,"WE_UT_ResistancePivotAge",1.0);
+AddColumn(WE_UT_ResistancePivotBarsSinceConfirmation,"WE_UT_ResistancePivotBarsSinceConfirmation",1.0);
+AddColumn(WE_UT_OriginPriorATR,"WE_UT_OriginPriorATR",1.12);
+AddColumn(WE_UT_OriginPriorATRValid,"WE_UT_OriginPriorATRValid",1.0);
+AddColumn(WE_UT_Penetration,"WE_UT_Penetration",1.12);
+AddColumn(WE_UT_PenetrationValueValid,"WE_UT_PenetrationValueValid",1.0);
+AddColumn(WE_UT_PenetrationATR,"WE_UT_PenetrationATR",1.12);
+AddColumn(WE_UT_OriginPenetrationATRValid,"WE_UT_OriginPenetrationATRValid",1.0);
+AddColumn(WE_UT_OriginClosePosition,"WE_UT_OriginClosePosition",1.12);
+AddColumn(WE_UT_OriginClosePositionValid,"WE_UT_OriginClosePositionValid",1.0);
+AddColumn(WE_UT_StrongCloseRejection,"WE_UT_StrongCloseRejection",1.0);
+AddColumn(WE_UT_OriginRVOL,"WE_UT_OriginRVOL",1.12);
+AddColumn(WE_UT_OriginRVOLValid,"WE_UT_OriginRVOLValid",1.0);
+AddColumn(WE_UT_OriginRSpread,"WE_UT_OriginRSpread",1.12);
+AddColumn(WE_UT_OriginRSpreadValid,"WE_UT_OriginRSpreadValid",1.0);
+AddColumn(WE_UT_OriginEffortDataValid,"WE_UT_OriginEffortDataValid",1.0);
+AddColumn(WE_UT_HighEffortFlag,"WE_UT_HighEffortFlag",1.0);
+AddColumn(WE_UT_MixedEffortFlag,"WE_UT_MixedEffortFlag",1.0);
+
+AddColumn(WE_UT_ContextSReferenceStatusCode,"WE_UT_ContextSReferenceStatusCode",1.0);
+AddColumn(WE_UT_ContextSPositionStateCode,"WE_UT_ContextSPositionStateCode",1.0);
+AddColumn(WE_UT_ContextSLocationValid,"WE_UT_ContextSLocationValid",1.0);
+AddColumn(WE_UT_ContextSLocation,"WE_UT_ContextSLocation",1.12);
+AddColumn(WE_UT_ContextMReferenceStatusCode,"WE_UT_ContextMReferenceStatusCode",1.0);
+AddColumn(WE_UT_ContextMPositionStateCode,"WE_UT_ContextMPositionStateCode",1.0);
+AddColumn(WE_UT_ContextMLocationValid,"WE_UT_ContextMLocationValid",1.0);
+AddColumn(WE_UT_ContextMLocation,"WE_UT_ContextMLocation",1.12);
+AddColumn(WE_UT_ContextLReferenceStatusCode,"WE_UT_ContextLReferenceStatusCode",1.0);
+AddColumn(WE_UT_ContextLPositionStateCode,"WE_UT_ContextLPositionStateCode",1.0);
+AddColumn(WE_UT_ContextLLocationValid,"WE_UT_ContextLLocationValid",1.0);
+AddColumn(WE_UT_ContextLLocation,"WE_UT_ContextLLocation",1.12);
+
 AddColumn(WE_UT_ResolutionCode,"WE_UT_ResolutionCode",1.0);
 AddColumn(WE_UT_ResolutionValid,"WE_UT_ResolutionValid",1.0);
 AddColumn(WE_UT_Confirmed,"WE_UT_Confirmed",1.0);
@@ -243,13 +385,35 @@ AddColumn(WE_UT_ResolutionReasonCode,"WE_UT_ResolutionReasonCode",1.0);
 AddMultiTextColumn(WE_UT_ResolutionCode,WE_UT_ResolutionStatusText,"WE_UT_ResolutionStatus");
 AddColumn(WE_UT_ResolutionOriginBarIndex,"WE_UT_ResolutionOriginBarIndex",1.0);
 AddColumn(WE_UT_ResolutionOriginDateTime,"WE_UT_ResolutionOriginDateTime",formatDateTime);
-AddColumn(WE_UT_ResolutionOriginKindCode,"WE_UT_ResolutionOriginKindCode",1.0);
 AddColumn(WE_UT_ResolutionOriginHigh,"WE_UT_ResolutionOriginHigh",1.12);
 AddColumn(WE_UT_ResolutionOriginClose,"WE_UT_ResolutionOriginClose",1.12);
+AddColumn(WE_UT_ResolutionOriginPriorClose,"WE_UT_ResolutionOriginPriorClose",1.12);
 AddColumn(WE_UT_ResolutionResistancePrice,"WE_UT_ResolutionResistancePrice",1.12);
+AddColumn(WE_UT_ResolutionResistancePivotExtremeBarIndex,"WE_UT_ResolutionResistancePivotExtremeBarIndex",1.0);
+AddColumn(WE_UT_ResolutionResistancePivotExtremeDateTime,"WE_UT_ResolutionResistancePivotExtremeDateTime",formatDateTime);
+AddColumn(WE_UT_ResolutionResistancePivotConfirmBarIndex,"WE_UT_ResolutionResistancePivotConfirmBarIndex",1.0);
+AddColumn(WE_UT_ResolutionResistancePivotConfirmDateTime,"WE_UT_ResolutionResistancePivotConfirmDateTime",formatDateTime);
+AddColumn(WE_UT_ResolutionResistancePivotAge,"WE_UT_ResolutionResistancePivotAge",1.0);
+AddColumn(WE_UT_ResolutionResistancePivotBarsSinceConfirmation,"WE_UT_ResolutionResistancePivotBarsSinceConfirmation",1.0);
+AddColumn(WE_UT_ResolutionOriginPriorATR,"WE_UT_ResolutionOriginPriorATR",1.12);
+AddColumn(WE_UT_ResolutionOriginPriorATRValid,"WE_UT_ResolutionOriginPriorATRValid",1.0);
+AddColumn(WE_UT_ResolutionPenetration,"WE_UT_ResolutionPenetration",1.12);
 AddColumn(WE_UT_ResolutionPenetrationATR,"WE_UT_ResolutionPenetrationATR",1.12);
+AddColumn(WE_UT_ResolutionPenetrationATRValid,"WE_UT_ResolutionPenetrationATRValid",1.0);
+AddColumn(WE_UT_ResolutionOriginClosePosition,"WE_UT_ResolutionOriginClosePosition",1.12);
+AddColumn(WE_UT_ResolutionOriginClosePositionValid,"WE_UT_ResolutionOriginClosePositionValid",1.0);
+AddColumn(WE_UT_ResolutionOriginRVOL,"WE_UT_ResolutionOriginRVOL",1.12);
+AddColumn(WE_UT_ResolutionOriginRVOLValid,"WE_UT_ResolutionOriginRVOLValid",1.0);
+AddColumn(WE_UT_ResolutionOriginRSpread,"WE_UT_ResolutionOriginRSpread",1.12);
+AddColumn(WE_UT_ResolutionOriginRSpreadValid,"WE_UT_ResolutionOriginRSpreadValid",1.0);
+AddColumn(WE_UT_ResolutionStrongCloseRejection,"WE_UT_ResolutionStrongCloseRejection",1.0);
+AddColumn(WE_UT_ResolutionHighEffortFlag,"WE_UT_ResolutionHighEffortFlag",1.0);
+AddColumn(WE_UT_ResolutionMixedEffortFlag,"WE_UT_ResolutionMixedEffortFlag",1.0);
 AddColumn(WE_UT_EvaluationBarIndex,"WE_UT_EvaluationBarIndex",1.0);
 AddColumn(WE_UT_EvaluationDateTime,"WE_UT_EvaluationDateTime",formatDateTime);
 AddColumn(WE_UT_EvaluationHigh,"WE_UT_EvaluationHigh",1.12);
 AddColumn(WE_UT_EvaluationClose,"WE_UT_EvaluationClose",1.12);
+AddColumn(WE_UT_EvaluationCloseStayedBelowResistance,"WE_UT_EvaluationCloseStayedBelowResistance",1.0);
+AddColumn(WE_UT_EvaluationCloseDeclined,"WE_UT_EvaluationCloseDeclined",1.0);
+AddColumn(WE_UT_EvaluationFullyBelowResistance,"WE_UT_EvaluationFullyBelowResistance",1.0);
 _SECTION_END();
