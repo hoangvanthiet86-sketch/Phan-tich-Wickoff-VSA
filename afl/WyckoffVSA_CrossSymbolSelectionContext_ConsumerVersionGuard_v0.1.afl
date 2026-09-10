@@ -1,0 +1,77 @@
+/*
+    Cross-Symbol Selection Context Consumer Version Guard v0.1
+
+    XS14 compatibility projection. It does not change transported market state;
+    it only tightens VALID status when producer versions/sub-schemas do not
+    match the explicitly supported v0.1 contract.
+*/
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>
+
+_SECTION_BEGIN("112.5 Cross-Symbol producer compatibility guard");
+WXS_ExpectedContractVersion = "0.1";
+WXS_ExpectedCompositeVersion = "0.1";
+WXS_ExpectedMTFVersion = "0.1";
+WXS_ExpectedCompositeSchemaMajor = 1;
+WXS_ExpectedCompositeSchemaMinor = 0;
+WXS_ExpectedMTFSchemaMajor = 1;
+WXS_ExpectedMTFSchemaMinor = 0;
+
+function WXS_ApplyVersionGuard(RolePrefix,ExpectedSymbol,RequestedFlag,PriorStatus)
+{
+    Prefix = "";
+    ContractVersion = "";
+    CompositeVersion = "";
+    MTFVersion = "";
+    CompositeSchemaMajor = Null;
+    CompositeSchemaMinor = Null;
+    MTFSchemaMajor = Null;
+    MTFSchemaMinor = Null;
+    VersionValid = 0;
+    StatusCode = PriorStatus;
+
+    if (RequestedFlag AND StrLen(ExpectedSymbol)>0)
+    {
+        Prefix = "WVSA_SELCTX_v01_" + ExpectedSymbol + "_";
+        ContractVersion = StaticVarGetText(Prefix+"ProducerContractVersion");
+        CompositeVersion = StaticVarGetText(Prefix+"ProducerCompositeVersion");
+        MTFVersion = StaticVarGetText(Prefix+"ProducerMTFVersion");
+        CompositeSchemaMajor = StaticVarGet(Prefix+"CompositeSchemaMajor");
+        CompositeSchemaMinor = StaticVarGet(Prefix+"CompositeSchemaMinor");
+        MTFSchemaMajor = StaticVarGet(Prefix+"MTFSchemaMajor");
+        MTFSchemaMinor = StaticVarGet(Prefix+"MTFSchemaMinor");
+
+        VersionValid =
+            ContractVersion==WXS_ExpectedContractVersion AND
+            CompositeVersion==WXS_ExpectedCompositeVersion AND
+            MTFVersion==WXS_ExpectedMTFVersion AND
+            CompositeSchemaMajor==WXS_ExpectedCompositeSchemaMajor AND
+            CompositeSchemaMinor==WXS_ExpectedCompositeSchemaMinor AND
+            MTFSchemaMajor==WXS_ExpectedMTFSchemaMajor AND
+            MTFSchemaMinor==WXS_ExpectedMTFSchemaMinor;
+
+        if (PriorStatus==1 AND NOT VersionValid)
+            StatusCode = 5; // SCHEMA VERSION MISMATCH
+    }
+
+    VarSetText(RolePrefix+"ProducerContractVersion",ContractVersion);
+    VarSetText(RolePrefix+"ProducerCompositeVersion",CompositeVersion);
+    VarSetText(RolePrefix+"ProducerMTFVersion",MTFVersion);
+    VarSet(RolePrefix+"CompositeSchemaMajor",CompositeSchemaMajor);
+    VarSet(RolePrefix+"CompositeSchemaMinor",CompositeSchemaMinor);
+    VarSet(RolePrefix+"MTFSchemaMajor",MTFSchemaMajor);
+    VarSet(RolePrefix+"MTFSchemaMinor",MTFSchemaMinor);
+    VarSet(RolePrefix+"ProducerVersionCompatible",VersionValid);
+    VarSet(RolePrefix+"StatusCode",StatusCode);
+    VarSet(RolePrefix+"Valid",StatusCode==1);
+    return StatusCode;
+}
+
+WXS_MarketStatusCodeScalar = WXS_ApplyVersionGuard("WXSM_",WXS_RequestedMarketSymbol,WXS_MarketRequested,WXS_MarketStatusCodeScalar);
+WXS_GroupStatusCodeScalar = WXS_ApplyVersionGuard("WXSG_",WXS_RequestedGroupSymbol,WXS_GroupRequested,WXS_GroupStatusCodeScalar);
+WXS_MarketValidScalar = WXS_MarketStatusCodeScalar==1;
+WXS_GroupValidScalar = WXS_GroupStatusCodeScalar==1;
+WXS_MarketStatusCode = 0*BarIndex() + WXS_MarketStatusCodeScalar;
+WXS_GroupStatusCode = 0*BarIndex() + WXS_GroupStatusCodeScalar;
+WXS_MarketValid = 0*BarIndex() + WXS_MarketValidScalar;
+WXS_GroupValid = 0*BarIndex() + WXS_GroupValidScalar;
+_SECTION_END();
