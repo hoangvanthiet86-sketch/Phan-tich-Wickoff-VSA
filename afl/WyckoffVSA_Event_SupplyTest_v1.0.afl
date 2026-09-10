@@ -1,0 +1,248 @@
+/*
+    Wyckoff VSA Supply Test Event v1.0
+    Ordinary Supply Test at a previously confirmed pivot-low support.
+    Measurement/event classification only. No trading signal.
+
+    Canonical specification: docs/wyckoff-event-supply-test-v1.0-spec.md
+    Locked pre-AFL reference model: tests/supply-test-v1.0/reference_model.py
+    Base merge commit: f45c9501ddc698fc3ac00552b360375b468ca865
+    Target: AmiBroker 6.20.01 (6.20+).
+*/
+#include_once <WyckoffVSA_Confirmation_v1.0.afl>
+
+_SECTION_BEGIN("26. Supply Test Event constants and input contract");
+WE_ST_MaxDistanceATR = 0.50;
+
+function WE_ST_Finite( x )
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WE_ST_SourceBarIndex = BarIndex();
+WE_ST_SourceDateTime = DateTime();
+
+WE_ST_CandidateCodeValid = IIf(
+    NoSupplyCandidateValid==1
+    AND WE_ST_Finite(NoSupplyCandidateCode)
+    AND (NoSupplyCandidateCode==1 OR NoSupplyCandidateCode==2),1,0);
+
+WE_ST_OriginPriceValid = IIf(
+    PriceInputValid==1
+    AND WE_ST_Finite(Low)
+    AND WE_ST_Finite(Close)
+    AND Close>0
+    AND Low<=Close,1,0);
+
+WE_ST_PriorSupportPrice = SL_PivotLowLatestPriorPrice;
+WE_ST_PriorSupportValid = IIf(
+    SL_PivotLowLatestPriorValid==1
+    AND WE_ST_Finite(WE_ST_PriorSupportPrice)
+    AND WE_ST_PriorSupportPrice>0
+    AND WE_ST_Finite(SL_PivotLowLatestPriorConfirmBarIndex)
+    AND SL_PivotLowLatestPriorConfirmBarIndex<WE_ST_SourceBarIndex
+    AND NOT IsNull(SL_PivotLowLatestPriorConfirmDateTime),1,0);
+
+WE_ST_OriginATRValid = IIf(
+    PriorATRValid==1
+    AND WE_ST_Finite(PriorATR)
+    AND PriorATR>0,1,0);
+
+WE_ST_SafeATR = IIf(WE_ST_OriginATRValid,PriorATR,1);
+WE_ST_SafeSupport = IIf(WE_ST_PriorSupportValid,WE_ST_PriorSupportPrice,0);
+WE_ST_SupportDistanceATRRaw = (Low-WE_ST_SafeSupport)/WE_ST_SafeATR;
+WE_ST_SupportDistanceATRValid = IIf(
+    WE_ST_OriginPriceValid
+    AND WE_ST_PriorSupportValid
+    AND WE_ST_OriginATRValid
+    AND WE_ST_Finite(WE_ST_SupportDistanceATRRaw),1,0);
+
+WE_ST_OriginStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nSUPPLY TEST CANDIDATE";
+WE_ST_ResolutionStatusText = "INSUFFICIENT DATA\nNO PRIOR SUPPLY TEST\nSUPPLY TEST REJECTED\nSUPPLY TEST CONFIRMED";
+_SECTION_END();
+
+_SECTION_BEGIN("27. Supply Test origin at current bar");
+WE_ST_OriginDependenciesValid = IIf(
+    WE_ST_CandidateCodeValid
+    AND WE_ST_OriginPriceValid
+    AND WE_ST_PriorSupportValid
+    AND WE_ST_OriginATRValid
+    AND WE_ST_SupportDistanceATRValid,1,0);
+
+WE_ST_OriginNearSupport = IIf(
+    WE_ST_OriginDependenciesValid
+    AND Low>=WE_ST_PriorSupportPrice
+    AND Low<=WE_ST_PriorSupportPrice + WE_ST_MaxDistanceATR*PriorATR,1,0);
+
+WE_ST_OriginCode = IIf(
+    NOT WE_ST_CandidateCodeValid OR NOT WE_ST_OriginPriceValid,0,
+    IIf(NOT WE_ST_PriorSupportValid,0,
+    IIf(NOT WE_ST_OriginATRValid OR NOT WE_ST_SupportDistanceATRValid,0,
+    IIf(NoSupplyCandidateCode!=2,1,
+    IIf(Low<WE_ST_PriorSupportPrice,1,
+    IIf(Low>WE_ST_PriorSupportPrice + WE_ST_MaxDistanceATR*PriorATR,1,2))))));
+
+WE_ST_OriginValid = IIf(WE_ST_OriginCode>0,1,0);
+WE_ST_OriginReasonCode = IIf(
+    NOT WE_ST_CandidateCodeValid OR NOT WE_ST_OriginPriceValid,6,
+    IIf(NOT WE_ST_PriorSupportValid,2,
+    IIf(NOT WE_ST_OriginATRValid OR NOT WE_ST_SupportDistanceATRValid,3,
+    IIf(NoSupplyCandidateCode!=2,1,
+    IIf(Low<WE_ST_PriorSupportPrice,5,
+    IIf(Low>WE_ST_PriorSupportPrice + WE_ST_MaxDistanceATR*PriorATR,4,0))))));
+
+WE_ST_OriginBarIndex = IIf(WE_ST_OriginCode==2,WE_ST_SourceBarIndex,Null);
+WE_ST_OriginDateTime = IIf(WE_ST_OriginCode==2,WE_ST_SourceDateTime,Null);
+WE_ST_SupportPrice = IIf(WE_ST_OriginCode==2,WE_ST_PriorSupportPrice,Null);
+WE_ST_SupportDistanceATR = IIf(WE_ST_OriginCode==2,WE_ST_SupportDistanceATRRaw,Null);
+WE_ST_OriginPriorATR = IIf(WE_ST_OriginCode==2,PriorATR,Null);
+WE_ST_SupportPivotExtremeBarIndex = IIf(WE_ST_OriginCode==2,SL_PivotLowLatestPriorExtremeBarIndex,Null);
+WE_ST_SupportPivotExtremeDateTime = IIf(WE_ST_OriginCode==2,SL_PivotLowLatestPriorExtremeDateTime,Null);
+WE_ST_SupportPivotConfirmBarIndex = IIf(WE_ST_OriginCode==2,SL_PivotLowLatestPriorConfirmBarIndex,Null);
+WE_ST_SupportPivotConfirmDateTime = IIf(WE_ST_OriginCode==2,SL_PivotLowLatestPriorConfirmDateTime,Null);
+
+// Candidate-time context for research. These fields never alter the origin decision.
+WE_ST_ContextSReferenceStatusCode = IIf(WE_ST_OriginCode==2,SL_S_ReferenceStatusCode,Null);
+WE_ST_ContextSPositionStateCode = IIf(WE_ST_OriginCode==2,SL_S_PositionStateCode,Null);
+WE_ST_ContextSLocationValid = IIf(WE_ST_OriginCode==2,SL_S_LocationValid,Null);
+WE_ST_ContextSLocation = IIf(WE_ST_OriginCode==2,SL_S_Location,Null);
+WE_ST_ContextMReferenceStatusCode = IIf(WE_ST_OriginCode==2,SL_M_ReferenceStatusCode,Null);
+WE_ST_ContextMPositionStateCode = IIf(WE_ST_OriginCode==2,SL_M_PositionStateCode,Null);
+WE_ST_ContextMLocationValid = IIf(WE_ST_OriginCode==2,SL_M_LocationValid,Null);
+WE_ST_ContextMLocation = IIf(WE_ST_OriginCode==2,SL_M_Location,Null);
+WE_ST_ContextLReferenceStatusCode = IIf(WE_ST_OriginCode==2,SL_L_ReferenceStatusCode,Null);
+WE_ST_ContextLPositionStateCode = IIf(WE_ST_OriginCode==2,SL_L_PositionStateCode,Null);
+WE_ST_ContextLLocationValid = IIf(WE_ST_OriginCode==2,SL_L_LocationValid,Null);
+WE_ST_ContextLLocation = IIf(WE_ST_OriginCode==2,SL_L_Location,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("28. Supply Test resolution at next bar");
+WE_ST_PriorOriginCodeRaw = Ref(WE_ST_OriginCode,-1);
+WE_ST_PriorOriginPresent = IIf(Nz(WE_ST_PriorOriginCodeRaw,-1)==2,1,0);
+
+WE_ST_PriorOriginBarIndex = Ref(WE_ST_OriginBarIndex,-1);
+WE_ST_PriorOriginDateTime = Ref(WE_ST_OriginDateTime,-1);
+WE_ST_PriorSupportPrice = Ref(WE_ST_SupportPrice,-1);
+WE_ST_PriorSupportDistanceATR = Ref(WE_ST_SupportDistanceATR,-1);
+WE_ST_PriorOriginPriorATR = Ref(WE_ST_OriginPriorATR,-1);
+WE_ST_PriorSupportPivotExtremeBarIndex = Ref(WE_ST_SupportPivotExtremeBarIndex,-1);
+WE_ST_PriorSupportPivotExtremeDateTime = Ref(WE_ST_SupportPivotExtremeDateTime,-1);
+WE_ST_PriorSupportPivotConfirmBarIndex = Ref(WE_ST_SupportPivotConfirmBarIndex,-1);
+WE_ST_PriorSupportPivotConfirmDateTime = Ref(WE_ST_SupportPivotConfirmDateTime,-1);
+
+WE_ST_EvaluationPriceValid = IIf(
+    PriceInputValid==1
+    AND WE_ST_Finite(Low)
+    AND WE_ST_Finite(Close)
+    AND Close>0
+    AND Low<=Close,1,0);
+
+WE_ST_CEStatusBasicValid = IIf(
+    WE_ST_Finite(CE_NoSupply_StatusCode)
+    AND (CE_NoSupply_StatusCode==2 OR CE_NoSupply_StatusCode==3)
+    AND WE_ST_Finite(CE_NoSupply_Confirmed)
+    AND (CE_NoSupply_Confirmed==0 OR CE_NoSupply_Confirmed==1)
+    AND CE_NoSupply_EvaluationValid==1,1,0);
+
+WE_ST_CECoordinateMatches = IIf(
+    WE_ST_PriorOriginPresent
+    AND WE_ST_Finite(CE_NoSupply_CandidateBarIndex)
+    AND CE_NoSupply_CandidateBarIndex==WE_ST_PriorOriginBarIndex,1,0);
+
+WE_ST_CEConfirmed = IIf(
+    WE_ST_CEStatusBasicValid
+    AND CE_NoSupply_StatusCode==3
+    AND CE_NoSupply_Confirmed==1,1,0);
+
+WE_ST_EvaluationSupportHeld = IIf(
+    WE_ST_PriorOriginPresent
+    AND WE_ST_EvaluationPriceValid
+    AND WE_ST_Finite(WE_ST_PriorSupportPrice)
+    AND Low>=WE_ST_PriorSupportPrice,1,0);
+
+WE_ST_ResolutionCode = IIf(
+    NOT WE_ST_PriorOriginPresent,1,
+    IIf(NOT WE_ST_EvaluationPriceValid OR NOT WE_ST_CEStatusBasicValid,0,
+    IIf(NOT WE_ST_CECoordinateMatches,0,
+    IIf(WE_ST_CEConfirmed AND WE_ST_EvaluationSupportHeld,3,2))));
+
+WE_ST_ResolutionValid = IIf(WE_ST_ResolutionCode>0,1,0);
+WE_ST_Confirmed = IIf(WE_ST_ResolutionCode==3,1,0);
+
+WE_ST_ResolutionReasonCode = IIf(
+    NOT WE_ST_PriorOriginPresent,0,
+    IIf(NOT WE_ST_EvaluationPriceValid OR NOT WE_ST_CEStatusBasicValid,5,
+    IIf(NOT WE_ST_CECoordinateMatches,4,
+    IIf(NOT WE_ST_CEConfirmed AND NOT WE_ST_EvaluationSupportHeld,3,
+    IIf(NOT WE_ST_CEConfirmed,1,
+    IIf(NOT WE_ST_EvaluationSupportHeld,2,0))))));
+
+WE_ST_ResolutionOriginBarIndex = IIf(WE_ST_PriorOriginPresent,WE_ST_PriorOriginBarIndex,Null);
+WE_ST_ResolutionOriginDateTime = IIf(WE_ST_PriorOriginPresent,WE_ST_PriorOriginDateTime,Null);
+WE_ST_ResolutionSupportPrice = IIf(WE_ST_PriorOriginPresent,WE_ST_PriorSupportPrice,Null);
+WE_ST_ResolutionSupportDistanceATR = IIf(WE_ST_PriorOriginPresent,WE_ST_PriorSupportDistanceATR,Null);
+WE_ST_ResolutionOriginPriorATR = IIf(WE_ST_PriorOriginPresent,WE_ST_PriorOriginPriorATR,Null);
+WE_ST_ResolutionSupportPivotExtremeBarIndex = IIf(WE_ST_PriorOriginPresent,WE_ST_PriorSupportPivotExtremeBarIndex,Null);
+WE_ST_ResolutionSupportPivotExtremeDateTime = IIf(WE_ST_PriorOriginPresent,WE_ST_PriorSupportPivotExtremeDateTime,Null);
+WE_ST_ResolutionSupportPivotConfirmBarIndex = IIf(WE_ST_PriorOriginPresent,WE_ST_PriorSupportPivotConfirmBarIndex,Null);
+WE_ST_ResolutionSupportPivotConfirmDateTime = IIf(WE_ST_PriorOriginPresent,WE_ST_PriorSupportPivotConfirmDateTime,Null);
+WE_ST_EvaluationBarIndex = IIf(WE_ST_PriorOriginPresent,WE_ST_SourceBarIndex,Null);
+WE_ST_EvaluationDateTime = IIf(WE_ST_PriorOriginPresent,WE_ST_SourceDateTime,Null);
+WE_ST_EvaluationLow = IIf(WE_ST_PriorOriginPresent AND WE_ST_EvaluationPriceValid,Low,Null);
+WE_ST_EvaluationClose = IIf(WE_ST_PriorOriginPresent AND WE_ST_EvaluationPriceValid,Close,Null);
+WE_ST_EvaluationCEStatusCode = IIf(WE_ST_PriorOriginPresent,CE_NoSupply_StatusCode,Null);
+WE_ST_EvaluationCEConfirmed = IIf(WE_ST_PriorOriginPresent,CE_NoSupply_Confirmed,Null);
+WE_ST_EvaluationCECandidateBarIndex = IIf(WE_ST_PriorOriginPresent,CE_NoSupply_CandidateBarIndex,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("29. Supply Test Event exploration");
+// Do not alter upstream Filter. No Buy/Sell/Short/Cover assignments exist in this module.
+AddColumn(WE_ST_SourceBarIndex,"WE_ST_SourceBarIndex",1.0);
+AddColumn(WE_ST_SourceDateTime,"WE_ST_SourceDateTime",formatDateTime);
+AddColumn(WE_ST_MaxDistanceATR,"WE_ST_MaxDistanceATR",1.4);
+AddColumn(WE_ST_OriginCode,"WE_ST_OriginCode",1.0);
+AddColumn(WE_ST_OriginValid,"WE_ST_OriginValid",1.0);
+AddColumn(WE_ST_OriginReasonCode,"WE_ST_OriginReasonCode",1.0);
+AddMultiTextColumn(WE_ST_OriginCode,WE_ST_OriginStatusText,"WE_ST_OriginStatus");
+AddColumn(WE_ST_OriginBarIndex,"WE_ST_OriginBarIndex",1.0);
+AddColumn(WE_ST_OriginDateTime,"WE_ST_OriginDateTime",formatDateTime);
+AddColumn(WE_ST_SupportPrice,"WE_ST_SupportPrice",1.12);
+AddColumn(WE_ST_SupportDistanceATR,"WE_ST_SupportDistanceATR",1.12);
+AddColumn(WE_ST_OriginPriorATR,"WE_ST_OriginPriorATR",1.12);
+AddColumn(WE_ST_SupportPivotExtremeBarIndex,"WE_ST_SupportPivotExtremeBarIndex",1.0);
+AddColumn(WE_ST_SupportPivotExtremeDateTime,"WE_ST_SupportPivotExtremeDateTime",formatDateTime);
+AddColumn(WE_ST_SupportPivotConfirmBarIndex,"WE_ST_SupportPivotConfirmBarIndex",1.0);
+AddColumn(WE_ST_SupportPivotConfirmDateTime,"WE_ST_SupportPivotConfirmDateTime",formatDateTime);
+AddColumn(WE_ST_ContextSReferenceStatusCode,"WE_ST_ContextSReferenceStatusCode",1.0);
+AddColumn(WE_ST_ContextSPositionStateCode,"WE_ST_ContextSPositionStateCode",1.0);
+AddColumn(WE_ST_ContextSLocationValid,"WE_ST_ContextSLocationValid",1.0);
+AddColumn(WE_ST_ContextSLocation,"WE_ST_ContextSLocation",1.12);
+AddColumn(WE_ST_ContextMReferenceStatusCode,"WE_ST_ContextMReferenceStatusCode",1.0);
+AddColumn(WE_ST_ContextMPositionStateCode,"WE_ST_ContextMPositionStateCode",1.0);
+AddColumn(WE_ST_ContextMLocationValid,"WE_ST_ContextMLocationValid",1.0);
+AddColumn(WE_ST_ContextMLocation,"WE_ST_ContextMLocation",1.12);
+AddColumn(WE_ST_ContextLReferenceStatusCode,"WE_ST_ContextLReferenceStatusCode",1.0);
+AddColumn(WE_ST_ContextLPositionStateCode,"WE_ST_ContextLPositionStateCode",1.0);
+AddColumn(WE_ST_ContextLLocationValid,"WE_ST_ContextLLocationValid",1.0);
+AddColumn(WE_ST_ContextLLocation,"WE_ST_ContextLLocation",1.12);
+AddColumn(WE_ST_ResolutionCode,"WE_ST_ResolutionCode",1.0);
+AddColumn(WE_ST_ResolutionValid,"WE_ST_ResolutionValid",1.0);
+AddColumn(WE_ST_Confirmed,"WE_ST_Confirmed",1.0);
+AddColumn(WE_ST_ResolutionReasonCode,"WE_ST_ResolutionReasonCode",1.0);
+AddMultiTextColumn(WE_ST_ResolutionCode,WE_ST_ResolutionStatusText,"WE_ST_ResolutionStatus");
+AddColumn(WE_ST_ResolutionOriginBarIndex,"WE_ST_ResolutionOriginBarIndex",1.0);
+AddColumn(WE_ST_ResolutionOriginDateTime,"WE_ST_ResolutionOriginDateTime",formatDateTime);
+AddColumn(WE_ST_ResolutionSupportPrice,"WE_ST_ResolutionSupportPrice",1.12);
+AddColumn(WE_ST_ResolutionSupportDistanceATR,"WE_ST_ResolutionSupportDistanceATR",1.12);
+AddColumn(WE_ST_ResolutionOriginPriorATR,"WE_ST_ResolutionOriginPriorATR",1.12);
+AddColumn(WE_ST_ResolutionSupportPivotExtremeBarIndex,"WE_ST_ResolutionSupportPivotExtremeBarIndex",1.0);
+AddColumn(WE_ST_ResolutionSupportPivotExtremeDateTime,"WE_ST_ResolutionSupportPivotExtremeDateTime",formatDateTime);
+AddColumn(WE_ST_ResolutionSupportPivotConfirmBarIndex,"WE_ST_ResolutionSupportPivotConfirmBarIndex",1.0);
+AddColumn(WE_ST_ResolutionSupportPivotConfirmDateTime,"WE_ST_ResolutionSupportPivotConfirmDateTime",formatDateTime);
+AddColumn(WE_ST_EvaluationBarIndex,"WE_ST_EvaluationBarIndex",1.0);
+AddColumn(WE_ST_EvaluationDateTime,"WE_ST_EvaluationDateTime",formatDateTime);
+AddColumn(WE_ST_EvaluationLow,"WE_ST_EvaluationLow",1.12);
+AddColumn(WE_ST_EvaluationClose,"WE_ST_EvaluationClose",1.12);
+AddColumn(WE_ST_EvaluationCEStatusCode,"WE_ST_EvaluationCEStatusCode",1.0);
+AddColumn(WE_ST_EvaluationCEConfirmed,"WE_ST_EvaluationCEConfirmed",1.0);
+AddColumn(WE_ST_EvaluationCECandidateBarIndex,"WE_ST_EvaluationCECandidateBarIndex",1.0);
+_SECTION_END();
