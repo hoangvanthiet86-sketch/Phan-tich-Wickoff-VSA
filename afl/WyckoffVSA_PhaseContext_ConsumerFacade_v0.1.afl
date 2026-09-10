@@ -1,0 +1,88 @@
+/*
+    Wyckoff VSA Phase / Context Engine v0.1 — canonical consumer facade
+
+    This is the intended downstream interface for Composite development.
+    It resolves the approved D04/D25 family semantics when prior-trend context
+    is insufficient, mixed, or conflicts with the stopping-sequence side.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT. No trading signal.
+*/
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_v0.1.afl>
+
+_SECTION_BEGIN("77. Canonical Phase Context consumer facade");
+WPCF_PriorTrendDataSufficientLower = IIf(WPC_L_PriorTrendContextCode>0,1,0);
+WPCF_PriorTrendDirectionalLower = IIf(WPC_L_PriorTrendContextCode==1 OR WPC_L_PriorTrendContextCode==2,1,0);
+WPCF_PriorTrendDataSufficientUpper = IIf(WPC_U_PriorTrendContextCode>0,1,0);
+WPCF_PriorTrendDirectionalUpper = IIf(WPC_U_PriorTrendContextCode==1 OR WPC_U_PriorTrendContextCode==2,1,0);
+
+// D04/D25/D33 resolution at Phase A/B/C-candidate:
+// - lower-derived + prior downtrend -> unresolved lower range;
+// - upper-derived + prior uptrend -> unresolved upper range;
+// - insufficient prior trend -> INSUFFICIENT;
+// - mixed or sequence-side/prior-trend conflict -> MIXED/CONFLICTING.
+WPCF_L_PreResolutionFamily = IIf(
+    WPC_L_PriorTrendContextCode==2,1,
+    IIf(WPC_L_PriorTrendContextCode==0,0,7));
+WPCF_U_PreResolutionFamily = IIf(
+    WPC_U_PriorTrendContextCode==1,2,
+    IIf(WPC_U_PriorTrendContextCode==0,0,7));
+
+WPCF_L_FamilyHypothesisCode = IIf(
+    WPC_L_ContextPresent!=1,0,
+    IIf(WPCP_L_PublicPhaseStateCode<=3,WPCF_L_PreResolutionFamily,
+    IIf(WPC_L_FamilyHypothesisCode>=3,WPC_L_FamilyHypothesisCode,WPCF_L_PreResolutionFamily)));
+
+WPCF_U_FamilyHypothesisCode = IIf(
+    WPC_U_ContextPresent!=1,0,
+    IIf(WPCP_U_PublicPhaseStateCode<=3,WPCF_U_PreResolutionFamily,
+    IIf(WPC_U_FamilyHypothesisCode>=3,WPC_U_FamilyHypothesisCode,WPCF_U_PreResolutionFamily)));
+
+// D42 mixed/conflicting evidence reason bitmask; no weighting or probability.
+// 1 structural/event evidence exists on both sides
+// 2 both VSA background routes have occurred
+// 4 both absorption-response directions have occurred
+// 8 opposing final-test families have both been linked
+WPCF_L_MixedEvidenceReasonCode =
+      IIf(WPC_L_BullishEvidenceState AND WPC_L_BearishEvidenceState,1,0)
+    + IIf(WPC_L_NoSupplyAfterStrengthCount>0 AND WPC_L_NoDemandAfterWeaknessCount>0,2,0)
+    + IIf(WPC_L_BullishAbsorptionResponseCount>0 AND WPC_L_BearishAbsorptionResponseCount>0,4,0)
+    + IIf((WPCP_L_SpringLinkedCount>0 OR WPCP_L_SupplyTestLinkedCount>0)
+          AND (WPCP_L_UpthrustLinkedCount>0 OR WPC_L_LPSYLinkedCount>0),8,0);
+
+WPCF_U_MixedEvidenceReasonCode =
+      IIf(WPC_U_BullishEvidenceState AND WPC_U_BearishEvidenceState,1,0)
+    + IIf(WPC_U_NoSupplyAfterStrengthCount>0 AND WPC_U_NoDemandAfterWeaknessCount>0,2,0)
+    + IIf(WPC_U_BullishAbsorptionResponseCount>0 AND WPC_U_BearishAbsorptionResponseCount>0,4,0)
+    + IIf((WPCP_U_SpringLinkedCount>0 OR WPCP_U_SupplyTestLinkedCount>0)
+          AND (WPCP_U_UpthrustLinkedCount>0 OR WPC_U_LPSYLinkedCount>0),8,0);
+
+// Singleton convenience facade is valid only when exactly one public context is
+// present. When two ranges coexist the caller must inspect both contexts.
+WPCF_CurrentRangeContextCount = WPC_L_ContextPresent + WPC_U_ContextPresent;
+WPCF_CurrentRangeContextID = IIf(WPCF_CurrentRangeContextCount==1,
+    IIf(WPC_L_ContextPresent,WPC_L_RangeContextID,WPC_U_RangeContextID),Null);
+WPCF_CurrentPhaseStateCode = IIf(WPCF_CurrentRangeContextCount==1,
+    IIf(WPC_L_ContextPresent,WPCP_L_PublicPhaseStateCode,WPCP_U_PublicPhaseStateCode),0);
+WPCF_CurrentFamilyHypothesisCode = IIf(WPCF_CurrentRangeContextCount==1,
+    IIf(WPC_L_ContextPresent,WPCF_L_FamilyHypothesisCode,WPCF_U_FamilyHypothesisCode),
+    IIf(WPCF_CurrentRangeContextCount>1,7,0));
+WPCF_CurrentContextAmbiguous = IIf(WPCF_CurrentRangeContextCount>1,1,0);
+
+AddColumn(WPCF_PriorTrendDataSufficientLower,"WPCF_L_PriorTrendDataSufficient",1.0);
+AddColumn(WPCF_PriorTrendDirectionalLower,"WPCF_L_PriorTrendDirectional",1.0);
+AddColumn(WPCF_L_FamilyHypothesisCode,"WPCF_L_FamilyHypothesisCode",1.0);
+AddMultiTextColumn(WPCF_L_FamilyHypothesisCode,WPC_FamilyText,"WPCF_L_FamilyHypothesis");
+AddColumn(WPCF_L_MixedEvidenceReasonCode,"WPCF_L_MixedEvidenceReasonCode",1.0);
+AddColumn(WPCF_PriorTrendDataSufficientUpper,"WPCF_U_PriorTrendDataSufficient",1.0);
+AddColumn(WPCF_PriorTrendDirectionalUpper,"WPCF_U_PriorTrendDirectional",1.0);
+AddColumn(WPCF_U_FamilyHypothesisCode,"WPCF_U_FamilyHypothesisCode",1.0);
+AddMultiTextColumn(WPCF_U_FamilyHypothesisCode,WPC_FamilyText,"WPCF_U_FamilyHypothesis");
+AddColumn(WPCF_U_MixedEvidenceReasonCode,"WPCF_U_MixedEvidenceReasonCode",1.0);
+AddColumn(WPCF_CurrentRangeContextCount,"WPCF_CurrentRangeContextCount",1.0);
+AddColumn(WPCF_CurrentRangeContextID,"WPCF_CurrentRangeContextID",1.0);
+AddColumn(WPCF_CurrentPhaseStateCode,"WPCF_CurrentPhaseStateCode",1.0);
+AddMultiTextColumn(WPCF_CurrentPhaseStateCode,WPC_PhaseText,"WPCF_CurrentPhaseState");
+AddColumn(WPCF_CurrentFamilyHypothesisCode,"WPCF_CurrentFamilyHypothesisCode",1.0);
+AddMultiTextColumn(WPCF_CurrentFamilyHypothesisCode,WPC_FamilyText,"WPCF_CurrentFamilyHypothesis");
+AddColumn(WPCF_CurrentContextAmbiguous,"WPCF_CurrentContextAmbiguous",1.0);
+_SECTION_END();

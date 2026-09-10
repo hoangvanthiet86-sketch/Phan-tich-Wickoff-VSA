@@ -1,0 +1,153 @@
+/*
+    Wyckoff VSA Phase / Context Engine v0.1 — upstream input facade
+
+    Approved Phase/Context specification: PR #22, merge commit
+    3fe48b06a635cf105472b27d296fabeee5589488.
+
+    D38 dependency: SOW/LPSY specification locked at PR #23 and source/interface
+    implementation is supplied by PR #24 stack.
+
+    SPEC-ALIGNED DEVELOPMENT INPUT FACADE. UNTESTED NATIVE.
+    No trading signal.
+*/
+
+// Explicit include order matters for development aggregation. SOW/LPSY uses
+// Upthrust overlap descriptors, therefore Upthrust is loaded before SOW/LPSY.
+#include_once <WyckoffVSA_Event_SupplyTest_v1.0.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_v0.1.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_v0.1.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_v0.1.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_v0.1.afl>
+
+_SECTION_BEGIN("70. Phase Context upstream facade");
+function WPCIF_Finite( x )
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WPCIF_SourceBI = BarIndex();
+WPCIF_SourceDT = DateTime();
+WPCIF_CurrentPriceValid = IIf(
+    PriceInputValid==1
+    AND CurrentCloseValid==1
+    AND WPCIF_Finite(High)
+    AND WPCIF_Finite(Low)
+    AND WPCIF_Finite(Close)
+    AND High>=Low
+    AND Low>0
+    AND Close>0,1,0);
+
+// Frozen range channels from Structural Sequence D29 facade.
+WPCIF_L_RangeSnapshotValid = IIf(
+    WSS_LowerActiveSnapshotValid==1
+    AND WPCIF_Finite(WSS_LowerActiveSequenceOrdinal)
+    AND WPCIF_Finite(WSS_LowerActiveSCOriginBI)
+    AND WPCIF_Finite(WSS_LowerActiveARExtremeBI)
+    AND WPCIF_Finite(WSS_LowerActiveRangeLower)
+    AND WPCIF_Finite(WSS_LowerActiveRangeUpper)
+    AND WPCIF_Finite(WSS_LowerActiveRangeWidth)
+    AND WSS_LowerActiveRangeLower>0
+    AND WSS_LowerActiveRangeUpper>WSS_LowerActiveRangeLower
+    AND WSS_LowerActiveRangeWidth>0,1,0);
+
+WPCIF_U_RangeSnapshotValid = IIf(
+    WSS_UpperActiveSnapshotValid==1
+    AND WPCIF_Finite(WSS_UpperActiveSequenceOrdinal)
+    AND WPCIF_Finite(WSS_UpperActiveBCOriginBI)
+    AND WPCIF_Finite(WSS_UpperActiveReactionExtremeBI)
+    AND WPCIF_Finite(WSS_UpperActiveRangeLower)
+    AND WPCIF_Finite(WSS_UpperActiveRangeUpper)
+    AND WPCIF_Finite(WSS_UpperActiveRangeWidth)
+    AND WSS_UpperActiveRangeLower>0
+    AND WSS_UpperActiveRangeUpper>WSS_UpperActiveRangeLower
+    AND WSS_UpperActiveRangeWidth>0,1,0);
+
+// D03: Phase A is eligible only after morphology-complete stopping sequence.
+WPCIF_L_PhaseAReady = IIf(
+    WPCIF_L_RangeSnapshotValid
+    AND WS_LowerStoppingSequenceMorphologyCode==2,1,0);
+WPCIF_U_PhaseAReady = IIf(
+    WPCIF_U_RangeSnapshotValid
+    AND WS_UpperStoppingSequenceMorphologyCode==2,1,0);
+
+// Event normalization. These are raw upstream events; the state machine still
+// has to link them to its own frozen RangeContext.
+WPCIF_SpringConfirmed = IIf(WE_SS_Confirmed==1,1,0);
+WPCIF_SpringOriginBI = WE_SS_ResolutionOriginBarIndex;
+WPCIF_SpringOriginDT = WE_SS_ResolutionOriginDateTime;
+WPCIF_SpringOriginLow = WE_SS_ResolutionOriginLow;
+WPCIF_SpringOriginClose = WE_SS_ResolutionOriginClose;
+WPCIF_SpringSupport = WE_SS_ResolutionSupportPrice;
+WPCIF_SpringKnownBI = WE_SS_EvaluationBarIndex;
+WPCIF_SpringKnownDT = WE_SS_EvaluationDateTime;
+
+WPCIF_SupplyTestConfirmed = IIf(WE_ST_Confirmed==1,1,0);
+WPCIF_SupplyTestOriginBI = WE_ST_ResolutionOriginBarIndex;
+WPCIF_SupplyTestOriginDT = WE_ST_ResolutionOriginDateTime;
+WPCIF_SupplyTestSupport = WE_ST_ResolutionSupportPrice;
+WPCIF_SupplyTestKnownBI = WE_ST_EvaluationBarIndex;
+WPCIF_SupplyTestKnownDT = WE_ST_EvaluationDateTime;
+
+WPCIF_UpthrustConfirmed = IIf(WE_UT_Confirmed==1,1,0);
+WPCIF_UpthrustOriginBI = WE_UT_ResolutionOriginBarIndex;
+WPCIF_UpthrustOriginDT = WE_UT_ResolutionOriginDateTime;
+WPCIF_UpthrustOriginHigh = WE_UT_ResolutionOriginHigh;
+WPCIF_UpthrustOriginClose = WE_UT_ResolutionOriginClose;
+WPCIF_UpthrustResistance = WE_UT_ResolutionResistancePrice;
+WPCIF_UpthrustKnownBI = WE_UT_EvaluationBarIndex;
+WPCIF_UpthrustKnownDT = WE_UT_EvaluationDateTime;
+
+WPCIF_SOSEvent = IIf(WE_SL_SOSCode==2,1,0);
+WPCIF_SOSBI = WE_SL_SOSBarIndex;
+WPCIF_SOSDT = WE_SL_SOSDateTime;
+WPCIF_SOSHigh = WE_SL_SOSHigh;
+WPCIF_SOSLow = WE_SL_SOSLow;
+WPCIF_SOSClose = WE_SL_SOSClose;
+WPCIF_SOSBreakoutLevel = WE_SL_SOSBreakoutLevel;
+
+WPCIF_LPSConfirmed = IIf(WE_SL_LPSConfirmed==1,1,0);
+WPCIF_LPSOriginBI = WE_SL_LPSResolutionOriginBarIndex;
+WPCIF_LPSOriginDT = WE_SL_LPSResolutionOriginDateTime;
+WPCIF_LPSOriginLow = WE_SL_LPSResolutionOriginLow;
+WPCIF_LPSOriginClose = WE_SL_LPSResolutionOriginClose;
+WPCIF_LPSBreakoutLevel = WE_SL_LPSResolutionBreakoutLevel;
+WPCIF_LPSAnchorSOSBI = WE_SL_LPSResolutionAnchorSOSBarIndex;
+WPCIF_LPSKnownBI = WE_SL_LPSEvaluationBarIndex;
+WPCIF_LPSKnownDT = WE_SL_LPSEvaluationDateTime;
+
+// Exact range-key SOW/LPSY channels from PR #24.
+WPCIF_L_SOWEvent = IIf(WE_SW_L_SOWCode==2,1,0);
+WPCIF_U_SOWEvent = IIf(WE_SW_U_SOWCode==2,1,0);
+WPCIF_L_LPSYEvent = IIf(WE_SW_L_LPSYCode==2,1,0);
+WPCIF_U_LPSYEvent = IIf(WE_SW_U_LPSYCode==2,1,0);
+
+// Candidate/Confirmation are consumed directly only as VSA background evidence
+// per D39; formulas are never copied into Phase/Context.
+WPCIF_NoSupplyConfirmed = IIf(CE_NoSupply_Confirmed==1,1,0);
+WPCIF_NoSupplyCandidateBI = CE_NoSupply_CandidateBarIndex;
+WPCIF_NoDemandConfirmed = IIf(CE_NoDemand_Confirmed==1,1,0);
+WPCIF_NoDemandCandidateBI = CE_NoDemand_CandidateBarIndex;
+
+// D29 causal absorption response. The absorption observation remains upstream;
+// this facade only relates the previous completed observation to current response.
+WPCIF_PriorAbsorption = Ref(WE_ER_AbsorptionCode,-1);
+WPCIF_PriorAbsorptionDownsidePressure = Ref(WE_ER_AbsorptionDownsidePressureObserved,-1);
+WPCIF_PriorAbsorptionUpsidePressure = Ref(WE_ER_AbsorptionUpsidePressureObserved,-1);
+WPCIF_PriorAbsorptionBI = Ref(WE_ER_AbsorptionEventBarIndex,-1);
+WPCIF_AbsorptionResponseValid = IIf(
+    Nz(WPCIF_PriorAbsorption,-1)==2
+    AND PreviousCloseValid==1
+    AND CurrentCloseValid==1
+    AND WPCIF_Finite(PreviousClose)
+    AND WPCIF_Finite(Close)
+    AND PreviousClose>0
+    AND Close>0,1,0);
+WPCIF_BullishAbsorptionResponse = IIf(
+    WPCIF_AbsorptionResponseValid
+    AND Nz(WPCIF_PriorAbsorptionDownsidePressure,0)==1
+    AND Close>PreviousClose,1,0);
+WPCIF_BearishAbsorptionResponse = IIf(
+    WPCIF_AbsorptionResponseValid
+    AND Nz(WPCIF_PriorAbsorptionUpsidePressure,0)==1
+    AND Close<PreviousClose,1,0);
+_SECTION_END();

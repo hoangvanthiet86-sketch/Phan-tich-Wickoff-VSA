@@ -1,104 +1,152 @@
 # Wyckoff Event — Spring / Shakeout v0.1
 
-**Trạng thái:** BẢN PHÁT TRIỂN CHƯA KIỂM THỬ. Tài liệu này phục vụ xây dựng bộ chỉ báo hoàn chỉnh trước khi quay lại chiến dịch kiểm thử tổng thể. Chưa phải đặc tả nghiệm thu cuối và chưa thay đổi bất kỳ hợp đồng đã khóa nào của Core, Candidate, Structure/Location, Confirmation hoặc Supply Test.
+**Trạng thái:** ĐÃ PHÊ DUYỆT VÀ KHÓA VỀ LOGIC D01–D14. Chủ dự án phê duyệt đặc tả tại PR #15; mốc hợp nhất phê duyệt: `ea5d1304d6751ad4a8c2b88c69f19d799c79bd8b`. Kiểm thử native/fixture/expected vẫn tạm hoãn theo quyết định hiện tại, vì vậy việc khóa đặc tả không đồng nghĩa mô-đun đã PASS hay sẵn sàng phát hành.
 
-## 1. Mục tiêu
+## 1. Mục tiêu và ranh giới
 
-Mô-đun này nhận diện một **họ sự kiện xuyên hỗ trợ rồi thu hồi** tại một pivot Low đã được xác nhận trước. Nó tách trường hợp này khỏi Supply Test thông thường, vì Supply Test v1.0 không cho phép xuyên hỗ trợ.
+Mô-đun Spring / Shakeout v0.1 nhận diện **họ hành vi xuyên hỗ trợ đã biết trước rồi thu hồi lại hỗ trợ**, sau đó theo dõi phản ứng giá ở thanh kế tiếp.
 
-Luồng dữ liệu phát triển:
+Luồng kiến trúc:
 
-`Core → Candidate → Structure/Location → Confirmation → Event modules`
+`Core → Candidate → Structure/Location → Confirmation → Wyckoff Event`
 
-Spring / Shakeout là một Event module ngang hàng với Supply Test. Mô-đun không sửa công thức upstream, không phát Buy/Sell, không quản trị vốn, không chấm điểm xác suất và không suy luận pha tích lũy chỉ từ một sự kiện.
+Spring / Shakeout là Event module ngang hàng với Supply Test. Supply Test v1.0 yêu cầu không xuyên hỗ trợ; Spring / Shakeout bắt đầu từ trường hợp `Low < SupportPrice` rồi thu hồi lại. Hai mô-đun không được diễn giải cùng một thanh khởi phát thành hai sự kiện đối nghịch.
 
-## 2. Nguồn hỗ trợ
+Mô-đun không phát Buy/Sell, không quản trị vốn, không chấm điểm xác suất, không tự gán pha tích lũy/phân phối và không suy luận ý định tổ chức từ một thanh đơn lẻ. Trước Phase Engine chỉ dùng nhãn vận hành `SPRING-LIKE`, `SHAKEOUT-LIKE`, `AMBIGUOUS RECLAIM`.
 
-Nguồn hỗ trợ duy nhất trong v0.1 là `SL_PivotLowLatestPrior...` tại thanh khởi phát `k`.
+## 2. Nguồn dữ liệu và nguyên tắc kế thừa
 
-Hỗ trợ hợp lệ khi:
+Mô-đun chỉ đọc các đầu ra upstream đã công bố và OHLCV cần thiết. Không sao chép hoặc sửa công thức upstream.
 
-- `SL_PivotLowLatestPriorValid = 1`;
-- giá pivot hữu hạn và > 0;
-- Pivot Confirm BarIndex tồn tại và nhỏ hơn BarIndex của `k`;
-- tọa độ xác nhận pivot tồn tại.
+Nguồn tối thiểu: `PriceInputValid`, `Low`, `Close`, `ClosePosition`, `ClosePositionValid`, `PriorATR`, `PriorATRValid`, `RVOL`, `RVOLValid`, `RSpread`, `RSpreadValid`, nhóm `SL_PivotLowLatestPrior...`, `BarIndex()` và `DateTime()`.
 
-Không dùng S/M/L làm hỗ trợ thay thế. Một pivot mới chỉ xác nhận tại `k` hoặc `k+1` không được dùng ngược về trước.
+S/M/L chỉ được snapshot làm bối cảnh nghiên cứu; không dùng làm hỗ trợ thay thế.
 
-## 3. Điều kiện khởi phát
+## 3. D01 — Nguồn hỗ trợ
 
-Một ứng viên Spring/Shakeout tại `k` yêu cầu:
+Nguồn hỗ trợ duy nhất là **pivot Low gần nhất đã được xác nhận trước thanh khởi phát k**.
 
-- dữ liệu giá hiện tại hợp lệ;
-- PriorATR hợp lệ và > 0;
-- hỗ trợ prior hợp lệ;
-- `Low_k < SupportPrice`;
-- độ xuyên không lớn hơn `1.00 * PriorATR_k`;
-- `Close_k >= SupportPrice`, tức thu hồi hỗ trợ ngay trên chính thanh xuyên;
-- ClosePosition hợp lệ và `ClosePosition_k >= 0.50`;
-- RVOL và RSpread hợp lệ để phân loại cường độ.
+Tại k phải dùng `SL_PivotLowLatestPrior...`. `SupportValid_k = 1` khi đồng thời:
 
-Các hằng số phát triển:
+- `SL_PivotLowLatestPriorValid_k = 1`;
+- SupportPrice hữu hạn và > 0;
+- ExtremeBarIndex/DateTime tồn tại;
+- ConfirmBarIndex/DateTime tồn tại;
+- `PivotConfirmBarIndex_k < BarIndex_k`.
+
+Không đặt tuổi tối đa của support trong v0.1. Nếu upstream có Age/BarsSinceConfirmation thì phải xuất để kiểm toán. Khi origin hợp lệ được tạo, SupportPrice và toàn bộ tọa độ pivot được snapshot và giữ cố định; pivot mới ở k+1 không được thay support đang đánh giá.
+
+## 4. D02 — Xuyên và thu hồi hỗ trợ
+
+Thanh k chỉ thuộc họ Spring/Shakeout khi:
 
 ```text
-WE_SS_MaxPenetrationATR   = 1.00
-WE_SS_DeepPenetrationATR  = 0.50
-WE_SS_MinClosePosition    = 0.50
-WE_SS_ShakeoutRSpreadMin  = 1.20
-WE_SS_ShakeoutRVOLMin     = 1.25
+Low_k < SupportPrice_k
+Close_k >= SupportPrice_k
 ```
 
-Các hằng số này là lựa chọn thiết kế v0.1 để tiếp tục phát triển; chưa được coi là ngưỡng nghiệm thu cuối. Khi quay lại giai đoạn kiểm thử, chúng phải được khóa trước khi xây expected chính thức.
+So sánh số thực nghiêm ngặt, không epsilon, không làm tròn theo hiển thị. `Low == SupportPrice` không phải xuyên. `Low < SupportPrice` nhưng `Close < SupportPrice` là phá hỗ trợ chưa thu hồi và không tạo origin hợp lệ trong v0.1. `Close == SupportPrice` được coi là vừa đủ thu hồi.
 
-## 4. Phân loại Spring-like và Shakeout-like
+## 5. D03 — Giới hạn độ xuyên
 
-Khi toàn bộ điều kiện khởi phát đạt:
+```text
+Penetration    = SupportPrice_k - Low_k
+PenetrationATR = Penetration / PriorATR_k
+WE_SS_MaxPenetrationATR = 1.00
+```
 
-- `SPRING-LIKE` nếu độ xuyên `<= 0.50 ATR` và không đồng thời có RSpread >= 1.20 cùng RVOL >= 1.25;
-- `SHAKEOUT-LIKE` nếu độ xuyên `> 0.50 ATR` **hoặc** đồng thời RSpread >= 1.20 và RVOL >= 1.25.
+Yêu cầu PriorATR hợp lệ, hữu hạn và > 0. Origin chỉ hợp lệ khi `0 < PenetrationATR <= 1.00`. Ngưỡng này đã được phê duyệt cho v0.1 và không được tối ưu theo lợi nhuận sau khi bước kiểm thử bắt đầu.
 
-Đây là phân loại vận hành của mô-đun, không phải tuyên bố rằng mọi trường hợp như vậy đều là Spring/Shakeout chuẩn trong mọi trường phái Wyckoff. Vì vậy các nhãn trong v0.1 cố ý dùng hậu tố `-LIKE`.
+## 6. D04 — Chất lượng thu hồi
 
-## 5. Xác nhận tại thanh kế tiếp
+Yêu cầu `ClosePositionValid_k = 1` và:
 
-Origin tại `k` chỉ được giải quyết tại `t = k+1`.
+```text
+ClosePosition_k >= 0.50
+```
 
-Một ứng viên được xác nhận khi:
+Biên 0.50 được bao hàm.
 
-- dữ liệu giá tại `t` hợp lệ;
-- `Low_t >= SupportPrice` đã chụp tại `k`;
-- `Close_t > Close_k`.
+## 7. D05 — Tách Origin family khỏi Kind classification
 
-Nếu một trong hai điều kiện phản ứng giá trên thất bại nhưng dữ liệu vẫn hợp lệ, sự kiện bị bác bỏ tại `k+1`. Không chờ `k+2`, không xác nhận muộn và không backfill kết luận vào `k`.
-
-## 6. Trạng thái
-
-### 6.1 Origin
-
-`WE_SS_OriginCode`:
+`WE_SS_OriginCode` chỉ trả lời có hành vi xuyên-thu hồi hợp lệ hay không:
 
 - 0 = `INSUFFICIENT DATA`
 - 1 = `NOT PRESENT`
-- 2 = `SPRING/SHAKEOUT CANDIDATE`
+- 2 = `PENETRATION RECLAIM CANDIDATE`
 
-`WE_SS_OriginKindCode` khi OriginCode=2:
+OriginCode=2 yêu cầu: giá hợp lệ, support prior hợp lệ, PriorATR hợp lệ, `Low < Support`, `Close >= Support`, `ClosePosition >= 0.50`, `PenetrationATR <= 1.00`.
 
+**RVOL/RSpread không quyết định OriginCode.** Thiếu effort data không được làm mất một origin giá hợp lệ; nó chỉ làm Kind không đủ dữ liệu.
+
+`WE_SS_OriginKindCode`:
+
+- 0 = `INSUFFICIENT EFFORT DATA`
 - 1 = `SPRING-LIKE`
 - 2 = `SHAKEOUT-LIKE`
+- 3 = `AMBIGUOUS RECLAIM`
 
-`WE_SS_OriginReasonCode`:
+`WE_SS_OriginKindValid = 1` cho code 1/2/3 và bằng 0 cho code0. Chỉ tính Kind khi OriginCode=2.
 
-- 0: không lỗi / không áp dụng;
-- 1: không xuyên hỗ trợ;
-- 2: không có pivot Low prior hợp lệ;
-- 3: PriorATR không hợp lệ;
-- 4: xuyên sâu hơn 1.00 ATR;
-- 5: Close không thu hồi hỗ trợ;
-- 6: ClosePosition dưới 0.50;
-- 7: RVOL/RSpread không hợp lệ;
-- 8: dữ liệu giá hiện tại không hợp lệ.
+## 8. D06 — Phân loại Spring-like / Shakeout-like / Ambiguous
 
-### 6.2 Resolution
+Các ngưỡng khóa:
+
+```text
+WE_SS_ShallowPenetrationATR = 0.50
+WE_SS_HighEffortRVOL        = 1.25
+WE_SS_WideSpreadRSpread     = 1.20
+```
+
+Nếu RVOL và RSpread đều hợp lệ:
+
+### SPRING-LIKE
+
+```text
+PenetrationATR <= 0.50
+AND RVOL < 1.25
+AND RSpread < 1.20
+```
+
+### SHAKEOUT-LIKE
+
+```text
+RVOL >= 1.25
+AND RSpread >= 1.20
+```
+
+và vẫn phải thỏa Origin family.
+
+### AMBIGUOUS RECLAIM
+
+Mọi origin hợp lệ còn lại khi effort data hợp lệ nhưng không rơi rõ vào hai nhóm trên. Ví dụ: xuyên sâu nhưng volume thấp; volume cao nhưng spread không rộng; spread rộng nhưng volume không cao.
+
+Nếu RVOL hoặc RSpread không hợp lệ, OriginCode vẫn có thể bằng 2 nhưng OriginKindCode=0.
+
+## 9. D07 — Xác nhận tại thanh kế tiếp
+
+Mỗi origin tại k chỉ được giải quyết tại `t = k+1`.
+
+Xác nhận khi đồng thời:
+
+```text
+Low_t   >= SupportPrice_k
+Close_t >  Close_k
+```
+
+và dữ liệu giá tại t hợp lệ. Không yêu cầu RVOL/RSpread ở k+1 và không dùng Confirmation No Supply/No Demand làm điều kiện bắt buộc.
+
+## 10. D08 — Bác bỏ, dữ liệu thiếu và không xác nhận muộn
+
+Một prior origin tại k được giải quyết duy nhất ở k+1:
+
+- `CONFIRMED` nếu D07 đạt;
+- `REJECTED` nếu dữ liệu hợp lệ nhưng một hoặc cả hai điều kiện phản ứng thất bại;
+- `INSUFFICIENT DATA` nếu dữ liệu đánh giá bắt buộc không hợp lệ.
+
+Lý do bác bỏ: (1) Close không tăng; (2) Low xuyên lại support; (3) đồng thời thất bại cả hai. Dữ liệu thiếu không được diễn giải là thất bại do cung mạnh. Không có xác nhận muộn tại k+2.
+
+## 11. D09 — Hợp đồng Resolution
 
 `WE_SS_ResolutionCode`:
 
@@ -107,44 +155,78 @@ Nếu một trong hai điều kiện phản ứng giá trên thất bại nhưng
 - 2 = `SPRING/SHAKEOUT REJECTED`
 - 3 = `SPRING/SHAKEOUT CONFIRMED`
 
-`WE_SS_Confirmed = 1` chỉ ở code 3.
+`WE_SS_ResolutionValid = 1` cho code 1/2/3, bằng 0 cho code0. `WE_SS_Confirmed = 1` chỉ ở code3.
 
-`WE_SS_ResolutionReasonCode`:
+`WE_SS_ConfirmedKindCode` phải mang nguyên KindCode của origin được xác nhận; không phân loại lại bằng dữ liệu k+1. Nếu origin KindCode=0 do thiếu effort data nhưng phản ứng giá đạt, ResolutionCode vẫn có thể bằng 3 và ConfirmedKindCode vẫn bằng 0.
 
-- 0: không lỗi / không có prior event;
-- 1: Close không tăng so với origin;
-- 2: Low xuyên lại dưới support;
+## 12. D10 — Chồng lấn
+
+Origin và Resolution là hai kênh độc lập. Một thanh có thể vừa giải quyết event từ t-1 vừa tạo origin mới tại t.
+
+Khóa event:
+
+```text
+Symbol + OriginBarIndex + OriginDateTime + SupportPivotConfirmBarIndex
+```
+
+## 13. D11 — Tọa độ và snapshot bắt buộc
+
+Khi OriginCode=2 phải snapshot tối thiểu:
+
+- OriginBarIndex/OriginDateTime;
+- Origin Low/Close/ClosePosition;
+- SupportPrice;
+- Support pivot ExtremeBarIndex/DateTime;
+- Support pivot ConfirmBarIndex/DateTime;
+- PriorATR;
+- Penetration và PenetrationATR;
+- RVOL/RSpread cùng validity;
+- OriginKindCode/Valid;
+- Age/BarsSinceConfirmation nếu upstream có;
+- S/M/L context nếu xuất để nghiên cứu.
+
+Resolution tại k+1 phải mang nguyên snapshot origin và bổ sung EvaluationBarIndex/DateTime, Low/Close, SupportHeld, CloseImproved, ResolutionCode/ReasonCode và ConfirmedKindCode.
+
+## 14. D12 — Quan hệ với Supply Test
+
+Supply Test yêu cầu `Low_k >= SupportPrice`. Spring / Shakeout yêu cầu `Low_k < SupportPrice AND Close_k >= SupportPrice`. Vì vậy cùng một thanh không được đồng thời có OriginCode=2 của cả hai mô-đun nếu triển khai đúng hợp đồng.
+
+## 15. D13 — Quan hệ với Phase Engine
+
+v0.1 không đủ dữ liệu để khẳng định Spring thuộc Phase C hoặc Shakeout thuộc tích lũy. Chỉ dùng nhãn `-LIKE` trước Phase Engine. Phase Engine tương lai có thể dùng trading range, chuỗi PS/SC/AR/ST, lịch sử hỗ trợ/kháng cự và các Event đã công bố, nhưng không được ghi ngược sự kiện vào quá khứ.
+
+## 16. D14 — Thanh hoàn tất, nhân quả và sửa dữ liệu
+
+Phạm vi v0.1: Daily, dữ liệu thanh đã hoàn tất, một mã/một khung thời gian trong mỗi lượt kiểm toán. Thanh cuối chưa được nguồn xác nhận hoàn tất chỉ là provisional. Không dùng BarCount để suy đoán đã đóng phiên.
+
+Nếu OHLCV lịch sử được sửa, kết quả phụ thuộc có thể thay đổi; hồ sơ phải phân biệt source revision với algorithmic repaint. Không Zig/Peak/Trough nhìn tương lai, không backfill, không dùng pivot mới xác nhận như thể đã biết trước.
+
+## 17. Mã lý do khóa
+
+### OriginReasonCode
+
+- 0: không lỗi/không áp dụng;
+- 1: không xuyên support;
+- 2: không có pivot Low prior hợp lệ;
+- 3: PriorATR không hợp lệ;
+- 4: xuyên sâu hơn MaxPenetrationATR;
+- 5: Close chưa thu hồi support;
+- 6: ClosePosition dưới ngưỡng;
+- 7: dữ liệu giá/ClosePosition origin không hợp lệ;
+- 8: chỉ thiếu effort data — không làm OriginCode=0, chỉ làm KindCode=0.
+
+### ResolutionReasonCode
+
+- 0: không lỗi/không có prior origin;
+- 1: Close không tăng;
+- 2: Low xuyên lại support;
 - 3: đồng thời thất bại cả hai;
 - 4: dữ liệu đánh giá không hợp lệ.
 
-## 7. Tọa độ và snapshot
+## 18. Phản ví dụ bắt buộc
 
-Khi OriginCode=2 phải lưu:
+Không được gán sai trong các tình huống: Low chỉ chạm support; xuyên nhưng Close vẫn dưới support; xuyên >1 ATR; ClosePosition <0.50; effort không rõ; pivot chỉ xác nhận tại k; pivot mới ở k+1; k+1 thất bại nhưng k+2 hồi phục; hoặc dữ liệu lịch sử bị sửa.
 
-- OriginBarIndex / OriginDateTime;
-- OriginKindCode;
-- Origin Low / Close / ClosePosition;
-- SupportPrice;
-- Support pivot extreme/confirm BarIndex và DateTime;
-- PriorATR;
-- Penetration giá và PenetrationATR;
-- RVOL và RSpread dùng để phân loại.
+## 19. Trạng thái triển khai và kiểm thử
 
-Resolution ở `k+1` phải mang nguyên snapshot của `k`, cộng EvaluationBarIndex/DateTime, Low/Close hiện tại và lý do xác nhận/bác bỏ. Pivot mới sau `k` không được thay SupportPrice của event đang giải quyết.
-
-## 8. Chồng lấn và nhân quả
-
-Origin và Resolution là hai kênh độc lập. Một thanh có thể vừa giải quyết sự kiện từ thanh trước vừa tạo event mới của chính nó.
-
-Chỉ dùng dữ liệu đã tồn tại tại thời điểm công bố. Không Zig/Peak/Trough nhìn tương lai, không backfill, không dùng BarCount để suy đoán thanh đã hoàn tất. Kết quả trên thanh cuối chưa hoàn tất là provisional.
-
-## 9. Quan hệ với các mô-đun khác
-
-- Supply Test: không xuyên hỗ trợ; Spring/Shakeout: có xuyên rồi thu hồi.
-- No Supply Candidate: có thể xuất hiện hoặc không; không phải điều kiện bắt buộc của Spring/Shakeout v0.1.
-- S/M/L: chỉ làm context nghiên cứu, không phải support fallback.
-- Phase Engine tương lai: mới là lớp tổng hợp chuỗi sự kiện; một Spring/Shakeout đơn lẻ không tự gán tích lũy.
-
-## 10. Trạng thái kiểm thử
-
-Theo quyết định hiện tại của chủ dự án, kiểm thử native và nghiệm thu được hoãn để hoàn thiện bộ chỉ báo trước. Vì vậy mọi kết quả của mô-đun v0.1 phải được ghi `UNTESTED DEVELOPMENT`, không được coi là PASS, không merge vào `main` và không phát hành.
+AFL Spring/Shakeout phải khớp đúng đặc tả này. Việc kiểm thử native, fixture/expected, hồi quy, nhân quả, append và forming-bar hiện vẫn **TẠM HOÃN** để ưu tiên hoàn thiện bộ chỉ báo. Do đó mã triển khai chỉ được gọi là `UNTESTED DEVELOPMENT`, không được coi là PASS, không được phát hành và không được hợp nhất vào `main` trước chiến dịch kiểm thử tổng thể hoặc một quyết định ngoại lệ riêng.
