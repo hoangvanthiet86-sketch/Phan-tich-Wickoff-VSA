@@ -1,0 +1,95 @@
+/*
+    Wyckoff VSA Relative Strength Context v0.1 — Exploration
+    Exploration-first acceptance surface required by R34.
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+#include_once <WyckoffVSA_RelativeStrengthContext_v0.1.afl>
+
+_SECTION_BEGIN("115. Relative Strength exploration text");
+WRS_ContextStatusText = "READY\nWRONG INTERVAL\nMARKET CONFIG MISSING\nMARKET DATA INVALID / MISSING\nPIVOT CONFIG INVALID\nADJUSTMENT BASIS INCOMPATIBLE\nADJUSTMENT BASIS NOT VERIFIED\nPROVISIONAL LAST BAR";
+WRS_BenchmarkStatusText = "NOT CONFIGURED / NOT AVAILABLE\nMISSING SYNC BAR\nINVALID VALUE\nREADY";
+WRS_StructureText = "INSUFFICIENT\nRISING RS STRUCTURE\nFALLING RS STRUCTURE\nMIXED / RANGE RS STRUCTURE";
+WRS_PriceStructureText = "INSUFFICIENT\nRISING PRICE STRUCTURE\nFALLING PRICE STRUCTURE\nMIXED / RANGE PRICE STRUCTURE";
+WRS_PriceRSRelationshipText = "INSUFFICIENT\nPRICE + RS RISING IN GEAR\nPRICE RISING / RS NON-CONFIRMING\nPRICE FALLING / RS NON-CONFIRMING STRONGER\nPRICE + RS FALLING IN GEAR\nMIXED / COMPLEX";
+WRS_LeadershipText = "INSUFFICIENT\nNESTED RELATIVE LEADERSHIP\nNESTED RELATIVE WEAKNESS\nSTOCK LEADS WEAK GROUP\nSTOCK LAGS STRONG GROUP\nMIXED / COMPLEX LEADERSHIP";
+WRS_PhaseRSText = "INSUFFICIENT\nBULLISH CONTEXT + RISING RS\nBULLISH CONTEXT + FALLING RS\nBEARISH CONTEXT + FALLING RS\nBEARISH CONTEXT + RISING RS\nUNRESOLVED / MIXED";
+WRS_VSARSText = "INSUFFICIENT\nBULLISH VSA + RISING RS\nBULLISH VSA / FALLING RS CONFLICT\nBEARISH VSA + FALLING RS\nBEARISH VSA / RISING RS CONFLICT\nMIXED / COMPLEX";
+WRS_MTFRSText = "INSUFFICIENT\nMTF BULLISH + RISING RS\nMTF BULLISH + FALLING RS\nMTF BEARISH + FALLING RS\nMTF BEARISH + RISING RS\nMIXED / COMPLEX";
+WRS_WaveDirectionText = "INSUFFICIENT\nUP RS WAVE\nDOWN RS WAVE\nFLAT RS WAVE";
+_SECTION_END();
+
+_SECTION_BEGIN("116. Relative Strength exploration columns");
+Filter = Status("lastbarinrange");
+
+AddTextColumn(WRS_CurrentSymbol,"WRS_Symbol");
+AddTextColumn(WRS_MarketBenchmarkSymbol,"WRS_MarketBenchmark");
+AddTextColumn(WRS_GroupBenchmarkSymbol,"WRS_GroupBenchmark");
+AddTextColumn(WRS_AdjustmentBasisDeclaration,"WRS_AdjustmentBasisDeclaration");
+AddColumn(WRS_NativeInterval,"WRS_NativeInterval",1.0);
+AddColumn(WRS_SchemaVersion,"WRS_SchemaVersion",1.0);
+AddColumn(WRS_ContextComputable,"WRS_ContextComputable",1.0);
+AddColumn(WRS_ContextValid,"WRS_ContextValid",1.0);
+AddColumn(WRS_ContextStatusCode,"WRS_ContextStatusCode",1.0);
+AddMultiTextColumn(WRS_ContextStatusCode,WRS_ContextStatusText,"WRS_ContextStatus");
+AddColumn(WRS_ProvisionalFlag,"WRS_ProvisionalFlag",1.0);
+AddColumn(WRS_SourceRevisionStatusCode,"WRS_SourceRevisionStatusCode",1.0);
+AddColumn(WRS_AdjustmentBasisStatusCode,"WRS_AdjustmentBasisStatusCode",1.0);
+AddColumn(WRS_MarketBenchmarkStatusCode,"WRS_MarketBenchmarkStatusCode",1.0);
+AddMultiTextColumn(WRS_MarketBenchmarkStatusCode,WRS_BenchmarkStatusText,"WRS_MarketBenchmarkStatus");
+AddColumn(WRS_GroupBenchmarkStatusCode,"WRS_GroupBenchmarkStatusCode",1.0);
+AddMultiTextColumn(WRS_GroupBenchmarkStatusCode,WRS_BenchmarkStatusText,"WRS_GroupBenchmarkStatus");
+AddColumn(WRS_PivotLeft,"WRS_PivotLeft",1.0);
+AddColumn(WRS_PivotRight,"WRS_PivotRight",1.0);
+
+AddColumn(WRS_StockVsMarketRatioValid,"WRS_SVM_RatioValid",1.0);
+AddColumn(WRS_StockVsMarketRatio,"WRS_SVM_Ratio",1.6);
+AddColumn(WRS_StockVsMarketRSStructureCode,"WRS_SVM_StructureCode",1.0);
+AddMultiTextColumn(WRS_StockVsMarketRSStructureCode,WRS_StructureText,"WRS_SVM_Structure");
+AddColumn(VarGet("WRS_SVM_PivotHighLatestValue"),"WRS_SVM_PivotHighLatest",1.6);
+AddColumn(VarGet("WRS_SVM_PivotHighPreviousValue"),"WRS_SVM_PivotHighPrevious",1.6);
+AddColumn(VarGet("WRS_SVM_PivotHighLatestExtremeBarIndex"),"WRS_SVM_HighExtremeBI",1.0);
+AddColumn(VarGet("WRS_SVM_PivotHighLatestConfirmBarIndex"),"WRS_SVM_HighConfirmBI",1.0);
+AddColumn(VarGet("WRS_SVM_PivotHighLatestExtremeDateTime"),"WRS_SVM_HighExtremeDT",formatDateTime);
+AddColumn(VarGet("WRS_SVM_PivotHighLatestConfirmDateTime"),"WRS_SVM_HighConfirmDT",formatDateTime);
+AddColumn(VarGet("WRS_SVM_PivotLowLatestValue"),"WRS_SVM_PivotLowLatest",1.6);
+AddColumn(VarGet("WRS_SVM_PivotLowPreviousValue"),"WRS_SVM_PivotLowPrevious",1.6);
+AddColumn(VarGet("WRS_SVM_PivotLowLatestExtremeBarIndex"),"WRS_SVM_LowExtremeBI",1.0);
+AddColumn(VarGet("WRS_SVM_PivotLowLatestConfirmBarIndex"),"WRS_SVM_LowConfirmBI",1.0);
+AddColumn(VarGet("WRS_SVM_PivotLowLatestExtremeDateTime"),"WRS_SVM_LowExtremeDT",formatDateTime);
+AddColumn(VarGet("WRS_SVM_PivotLowLatestConfirmDateTime"),"WRS_SVM_LowConfirmDT",formatDateTime);
+AddColumn(VarGet("WRS_SVM_WaveValid"),"WRS_SVM_WaveValid",1.0);
+AddColumn(VarGet("WRS_SVM_WaveDirectionCode"),"WRS_SVM_WaveDirectionCode",1.0);
+AddMultiTextColumn(VarGet("WRS_SVM_WaveDirectionCode"),WRS_WaveDirectionText,"WRS_SVM_WaveDirection");
+AddColumn(VarGet("WRS_SVM_WaveStartRatio"),"WRS_SVM_WaveStartRatio",1.6);
+AddColumn(VarGet("WRS_SVM_WaveEndRatio"),"WRS_SVM_WaveEndRatio",1.6);
+AddColumn(VarGet("WRS_SVM_WaveChangePct"),"WRS_SVM_WaveChangePct",1.4);
+AddColumn(VarGet("WRS_SVM_WaveDurationBars"),"WRS_SVM_WaveDurationBars",1.0);
+
+AddColumn(WRS_StockVsGroupRatioValid,"WRS_SVG_RatioValid",1.0);
+AddColumn(WRS_StockVsGroupRatio,"WRS_SVG_Ratio",1.6);
+AddColumn(WRS_StockVsGroupRSStructureCode,"WRS_SVG_StructureCode",1.0);
+AddMultiTextColumn(WRS_StockVsGroupRSStructureCode,WRS_StructureText,"WRS_SVG_Structure");
+AddColumn(VarGet("WRS_SVG_PivotHighLatestValue"),"WRS_SVG_PivotHighLatest",1.6);
+AddColumn(VarGet("WRS_SVG_PivotLowLatestValue"),"WRS_SVG_PivotLowLatest",1.6);
+
+AddColumn(WRS_GroupVsMarketRatioValid,"WRS_GVM_RatioValid",1.0);
+AddColumn(WRS_GroupVsMarketRatio,"WRS_GVM_Ratio",1.6);
+AddColumn(WRS_GroupVsMarketRSStructureCode,"WRS_GVM_StructureCode",1.0);
+AddMultiTextColumn(WRS_GroupVsMarketRSStructureCode,WRS_StructureText,"WRS_GVM_Structure");
+AddColumn(VarGet("WRS_GVM_PivotHighLatestValue"),"WRS_GVM_PivotHighLatest",1.6);
+AddColumn(VarGet("WRS_GVM_PivotLowLatestValue"),"WRS_GVM_PivotLowLatest",1.6);
+
+AddColumn(WRS_PriceStructureCode,"WRS_PriceStructureCode",1.0);
+AddMultiTextColumn(WRS_PriceStructureCode,WRS_PriceStructureText,"WRS_PriceStructure");
+AddColumn(WRS_PriceRSRelationshipCode,"WRS_PriceRSRelationshipCode",1.0);
+AddMultiTextColumn(WRS_PriceRSRelationshipCode,WRS_PriceRSRelationshipText,"WRS_PriceRSRelationship");
+AddColumn(WRS_SVG_PriceRSRelationshipCode,"WRS_SVG_PriceRSRelationshipCode",1.0);
+AddColumn(WRS_LeadershipChainCode,"WRS_LeadershipChainCode",1.0);
+AddMultiTextColumn(WRS_LeadershipChainCode,WRS_LeadershipText,"WRS_LeadershipChain");
+AddColumn(WRS_PhaseRSAlignmentCode,"WRS_PhaseRSAlignmentCode",1.0);
+AddMultiTextColumn(WRS_PhaseRSAlignmentCode,WRS_PhaseRSText,"WRS_PhaseRSAlignment");
+AddColumn(WRS_VSARSAlignmentCode,"WRS_VSARSAlignmentCode",1.0);
+AddMultiTextColumn(WRS_VSARSAlignmentCode,WRS_VSARSText,"WRS_VSARSAlignment");
+AddColumn(WRS_RSMTFRelationshipCode,"WRS_RSMTFRelationshipCode",1.0);
+AddMultiTextColumn(WRS_RSMTFRelationshipCode,WRS_MTFRSText,"WRS_RSMTFRelationship");
+_SECTION_END();
