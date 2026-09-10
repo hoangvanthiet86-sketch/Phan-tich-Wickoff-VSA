@@ -1,0 +1,390 @@
+/*
+    Wyckoff VSA Cross-Symbol Selection Context Consumer v0.1
+
+    Approved contract: PR #37, XS01-XS38.
+    Approval merge commit: d006959f11f5ec544f5f000c53448cec2643dc99
+
+    Shared one-reader function with Market/Group wrappers. Readers never take
+    writer lock. Snapshot is accepted only after Ready/generation, schema,
+    exact-symbol, interval, business-date, completion, Composite and MTF gates.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+
+_SECTION_BEGIN("112. Cross-Symbol Selection Context Consumer");
+WXS_ExpectedSchemaMajor = 1;
+WXS_ExpectedSchemaMinor = 0;
+WXS_ConsumerBusinessDateKey = LastValue(Year()*10000 + Month()*100 + Day());
+WXS_RequestedMarketSymbol = ParamStr("Selection: Market benchmark symbol","");
+WXS_RequestedGroupSymbol = ParamStr("Selection: Group benchmark symbol","");
+WXS_MarketRequested = StrLen(WXS_RequestedMarketSymbol)>0;
+WXS_GroupRequested = StrLen(WXS_RequestedGroupSymbol)>0;
+WXS_RoleConfigConflict = WXS_MarketRequested AND WXS_GroupRequested AND WXS_RequestedMarketSymbol==WXS_RequestedGroupSymbol;
+
+WXS_ConsumerStatusText = "NOT READ / INSUFFICIENT\nVALID\nNOT REQUESTED\nMISSING\nWRITER BUSY / WRITE IN PROGRESS / UNSTABLE GENERATION\nSCHEMA VERSION MISMATCH\nSYMBOL MISMATCH\nINTERVAL MISMATCH\nSTALE BUSINESS DATE\nFUTURE BUSINESS DATE\nPROVISIONAL SOURCE\nINVALID COMPLETION PROVENANCE\nINVALID COMPOSITE PAYLOAD\nINVALID MTF PAYLOAD\nINVALID SOURCE DATETIME";
+
+function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
+{
+    global WXS_ExpectedSchemaMajor, WXS_ExpectedSchemaMinor, WXS_ConsumerBusinessDateKey;
+
+    StatusCode = 0;
+    SnapshotPrefix = "";
+    SnapshotSourceSymbol = "";
+    ReadyA = Null;
+    ReadyB = Null;
+    GenerationA = Null;
+    GenerationB = Null;
+    SchemaMajor = Null;
+    SchemaMinor = Null;
+    SourceInterval = Null;
+    SourceBusinessDateKey = Null;
+    SourceBarDateTime = Null;
+    PublishedAtDateTime = Null;
+    CompletionBasisCode = Null;
+    CompletionDeclarationCode = Null;
+    CompositePayloadValid = Null;
+    MTFPayloadValid = Null;
+
+    ContextMultiplicityCode = Null;
+    ContextAmbiguous = Null;
+    CurrentRangeContextID = Null;
+    RangeStatusCode = Null;
+    PhaseStateCode = Null;
+    StructuralDevelopmentCode = Null;
+    FamilyHypothesisCode = Null;
+    DirectionalContextCode = Null;
+    EvidenceBalanceCode = Null;
+    HypothesisAlignmentCode = Null;
+    HypothesisRevisionCode = Null;
+    CurrentEventMask = Null;
+    ProvisionalFlag = Null;
+    PrimaryRangeLow = Null;
+    PrimaryRangeHigh = Null;
+    RangeAgeBars = Null;
+
+    L_ContextPresent = Null;
+    L_RangeContextID = Null;
+    L_RangeStatusCode = Null;
+    L_PhaseStateCode = Null;
+    L_FamilyHypothesisCode = Null;
+    L_EvidenceBalanceCode = Null;
+    L_MixedEvidenceReasonCode = Null;
+    L_PrimaryRangeLow = Null;
+    L_PrimaryRangeHigh = Null;
+    L_RangeAgeBars = Null;
+
+    U_ContextPresent = Null;
+    U_RangeContextID = Null;
+    U_RangeStatusCode = Null;
+    U_PhaseStateCode = Null;
+    U_FamilyHypothesisCode = Null;
+    U_EvidenceBalanceCode = Null;
+    U_MixedEvidenceReasonCode = Null;
+    U_PrimaryRangeLow = Null;
+    U_PrimaryRangeHigh = Null;
+    U_RangeAgeBars = Null;
+
+    MTF_SnapshotContractValid = Null;
+    MTF_DailyValid = Null;
+    MTF_WeeklyValid = Null;
+    MTF_MonthlyValid = Null;
+    MTF_D_DirectionalContextCode = Null;
+    MTF_W_DirectionalContextCode = Null;
+    MTF_M_DirectionalContextCode = Null;
+    MTF_D_PhaseStateCode = Null;
+    MTF_W_PhaseStateCode = Null;
+    MTF_M_PhaseStateCode = Null;
+    MTF_D_FamilyHypothesisCode = Null;
+    MTF_W_FamilyHypothesisCode = Null;
+    MTF_M_FamilyHypothesisCode = Null;
+    MTF_D_EvidenceBalanceCode = Null;
+    MTF_W_EvidenceBalanceCode = Null;
+    MTF_M_EvidenceBalanceCode = Null;
+    MTF_DirectionalAlignmentCode = Null;
+    MTF_EvidenceAlignmentCode = Null;
+    MTF_PhaseRelationshipCode = Null;
+    MTF_ConflictReasonCode = Null;
+    MTF_WeeklySnapshotStatusCode = Null;
+    MTF_MonthlySnapshotStatusCode = Null;
+    MTF_D_SourceBarDateTime = Null;
+    MTF_W_SourcePeriodOrdinal = Null;
+    MTF_M_SourcePeriodOrdinal = Null;
+    MTF_W_SourceBarDateTime = Null;
+    MTF_M_SourceBarDateTime = Null;
+    MTF_W_GenerationID = Null;
+    MTF_M_GenerationID = Null;
+    MTF_W_SchemaMajor = Null;
+    MTF_W_SchemaMinor = Null;
+    MTF_M_SchemaMajor = Null;
+    MTF_M_SchemaMinor = Null;
+
+    if (NOT RequestedFlag)
+    {
+        StatusCode = 2;
+    }
+    else
+    if (StrLen(ExpectedSymbol)==0)
+    {
+        StatusCode = 0;
+    }
+    else
+    {
+        SnapshotPrefix = "WVSA_SELCTX_v01_" + ExpectedSymbol + "_";
+        ReadyA = StaticVarGet(SnapshotPrefix+"Ready");
+        GenerationA = StaticVarGet(SnapshotPrefix+"CommittedGenerationID");
+
+        if (IsNull(ReadyA) OR IsNull(GenerationA))
+        {
+            StatusCode = 3;
+        }
+        else
+        if (ReadyA!=1 OR GenerationA<=0)
+        {
+            StatusCode = 4;
+        }
+        else
+        {
+            // Read entire stable-candidate bundle.
+            SchemaMajor = StaticVarGet(SnapshotPrefix+"SchemaMajor");
+            SchemaMinor = StaticVarGet(SnapshotPrefix+"SchemaMinor");
+            SnapshotSourceSymbol = StaticVarGetText(SnapshotPrefix+"SourceSymbol");
+            SourceInterval = StaticVarGet(SnapshotPrefix+"SourceInterval");
+            SourceBusinessDateKey = StaticVarGet(SnapshotPrefix+"SourceBusinessDateKey");
+            SourceBarDateTime = StaticVarGet(SnapshotPrefix+"SourceBarDateTime");
+            PublishedAtDateTime = StaticVarGet(SnapshotPrefix+"PublishedAtDateTime");
+            CompletionBasisCode = StaticVarGet(SnapshotPrefix+"CompletionBasisCode");
+            CompletionDeclarationCode = StaticVarGet(SnapshotPrefix+"CompletionDeclarationCode");
+            CompositePayloadValid = StaticVarGet(SnapshotPrefix+"CompositePayloadValid");
+            MTFPayloadValid = StaticVarGet(SnapshotPrefix+"MTFPayloadValid");
+
+            ContextMultiplicityCode = StaticVarGet(SnapshotPrefix+"ContextMultiplicityCode");
+            ContextAmbiguous = StaticVarGet(SnapshotPrefix+"ContextAmbiguous");
+            CurrentRangeContextID = StaticVarGet(SnapshotPrefix+"CurrentRangeContextID");
+            RangeStatusCode = StaticVarGet(SnapshotPrefix+"RangeStatusCode");
+            PhaseStateCode = StaticVarGet(SnapshotPrefix+"PhaseStateCode");
+            StructuralDevelopmentCode = StaticVarGet(SnapshotPrefix+"StructuralDevelopmentCode");
+            FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"FamilyHypothesisCode");
+            DirectionalContextCode = StaticVarGet(SnapshotPrefix+"DirectionalContextCode");
+            EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"EvidenceBalanceCode");
+            HypothesisAlignmentCode = StaticVarGet(SnapshotPrefix+"HypothesisAlignmentCode");
+            HypothesisRevisionCode = StaticVarGet(SnapshotPrefix+"HypothesisRevisionCode");
+            CurrentEventMask = StaticVarGet(SnapshotPrefix+"CurrentEventMask");
+            ProvisionalFlag = StaticVarGet(SnapshotPrefix+"ProvisionalFlag");
+            PrimaryRangeLow = StaticVarGet(SnapshotPrefix+"PrimaryRangeLow");
+            PrimaryRangeHigh = StaticVarGet(SnapshotPrefix+"PrimaryRangeHigh");
+            RangeAgeBars = StaticVarGet(SnapshotPrefix+"RangeAgeBars");
+
+            L_ContextPresent = StaticVarGet(SnapshotPrefix+"L_ContextPresent");
+            L_RangeContextID = StaticVarGet(SnapshotPrefix+"L_RangeContextID");
+            L_RangeStatusCode = StaticVarGet(SnapshotPrefix+"L_RangeStatusCode");
+            L_PhaseStateCode = StaticVarGet(SnapshotPrefix+"L_PhaseStateCode");
+            L_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"L_FamilyHypothesisCode");
+            L_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"L_EvidenceBalanceCode");
+            L_MixedEvidenceReasonCode = StaticVarGet(SnapshotPrefix+"L_MixedEvidenceReasonCode");
+            L_PrimaryRangeLow = StaticVarGet(SnapshotPrefix+"L_PrimaryRangeLow");
+            L_PrimaryRangeHigh = StaticVarGet(SnapshotPrefix+"L_PrimaryRangeHigh");
+            L_RangeAgeBars = StaticVarGet(SnapshotPrefix+"L_RangeAgeBars");
+
+            U_ContextPresent = StaticVarGet(SnapshotPrefix+"U_ContextPresent");
+            U_RangeContextID = StaticVarGet(SnapshotPrefix+"U_RangeContextID");
+            U_RangeStatusCode = StaticVarGet(SnapshotPrefix+"U_RangeStatusCode");
+            U_PhaseStateCode = StaticVarGet(SnapshotPrefix+"U_PhaseStateCode");
+            U_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"U_FamilyHypothesisCode");
+            U_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"U_EvidenceBalanceCode");
+            U_MixedEvidenceReasonCode = StaticVarGet(SnapshotPrefix+"U_MixedEvidenceReasonCode");
+            U_PrimaryRangeLow = StaticVarGet(SnapshotPrefix+"U_PrimaryRangeLow");
+            U_PrimaryRangeHigh = StaticVarGet(SnapshotPrefix+"U_PrimaryRangeHigh");
+            U_RangeAgeBars = StaticVarGet(SnapshotPrefix+"U_RangeAgeBars");
+
+            MTF_SnapshotContractValid = StaticVarGet(SnapshotPrefix+"MTF_SnapshotContractValid");
+            MTF_DailyValid = StaticVarGet(SnapshotPrefix+"MTF_DailyValid");
+            MTF_WeeklyValid = StaticVarGet(SnapshotPrefix+"MTF_WeeklyValid");
+            MTF_MonthlyValid = StaticVarGet(SnapshotPrefix+"MTF_MonthlyValid");
+            MTF_D_DirectionalContextCode = StaticVarGet(SnapshotPrefix+"MTF_D_DirectionalContextCode");
+            MTF_W_DirectionalContextCode = StaticVarGet(SnapshotPrefix+"MTF_W_DirectionalContextCode");
+            MTF_M_DirectionalContextCode = StaticVarGet(SnapshotPrefix+"MTF_M_DirectionalContextCode");
+            MTF_D_PhaseStateCode = StaticVarGet(SnapshotPrefix+"MTF_D_PhaseStateCode");
+            MTF_W_PhaseStateCode = StaticVarGet(SnapshotPrefix+"MTF_W_PhaseStateCode");
+            MTF_M_PhaseStateCode = StaticVarGet(SnapshotPrefix+"MTF_M_PhaseStateCode");
+            MTF_D_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"MTF_D_FamilyHypothesisCode");
+            MTF_W_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"MTF_W_FamilyHypothesisCode");
+            MTF_M_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"MTF_M_FamilyHypothesisCode");
+            MTF_D_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"MTF_D_EvidenceBalanceCode");
+            MTF_W_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"MTF_W_EvidenceBalanceCode");
+            MTF_M_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"MTF_M_EvidenceBalanceCode");
+            MTF_DirectionalAlignmentCode = StaticVarGet(SnapshotPrefix+"MTF_DirectionalAlignmentCode");
+            MTF_EvidenceAlignmentCode = StaticVarGet(SnapshotPrefix+"MTF_EvidenceAlignmentCode");
+            MTF_PhaseRelationshipCode = StaticVarGet(SnapshotPrefix+"MTF_PhaseRelationshipCode");
+            MTF_ConflictReasonCode = StaticVarGet(SnapshotPrefix+"MTF_ConflictReasonCode");
+            MTF_WeeklySnapshotStatusCode = StaticVarGet(SnapshotPrefix+"MTF_WeeklySnapshotStatusCode");
+            MTF_MonthlySnapshotStatusCode = StaticVarGet(SnapshotPrefix+"MTF_MonthlySnapshotStatusCode");
+            MTF_D_SourceBarDateTime = StaticVarGet(SnapshotPrefix+"MTF_D_SourceBarDateTime");
+            MTF_W_SourcePeriodOrdinal = StaticVarGet(SnapshotPrefix+"MTF_W_SourcePeriodOrdinal");
+            MTF_M_SourcePeriodOrdinal = StaticVarGet(SnapshotPrefix+"MTF_M_SourcePeriodOrdinal");
+            MTF_W_SourceBarDateTime = StaticVarGet(SnapshotPrefix+"MTF_W_SourceBarDateTime");
+            MTF_M_SourceBarDateTime = StaticVarGet(SnapshotPrefix+"MTF_M_SourceBarDateTime");
+            MTF_W_GenerationID = StaticVarGet(SnapshotPrefix+"MTF_W_GenerationID");
+            MTF_M_GenerationID = StaticVarGet(SnapshotPrefix+"MTF_M_GenerationID");
+            MTF_W_SchemaMajor = StaticVarGet(SnapshotPrefix+"MTF_W_SchemaMajor");
+            MTF_W_SchemaMinor = StaticVarGet(SnapshotPrefix+"MTF_W_SchemaMinor");
+            MTF_M_SchemaMajor = StaticVarGet(SnapshotPrefix+"MTF_M_SchemaMajor");
+            MTF_M_SchemaMinor = StaticVarGet(SnapshotPrefix+"MTF_M_SchemaMinor");
+
+            GenerationB = StaticVarGet(SnapshotPrefix+"CommittedGenerationID");
+            ReadyB = StaticVarGet(SnapshotPrefix+"Ready");
+
+            CompletionValid = CompletionBasisCode==1 OR (CompletionBasisCode==2 AND CompletionDeclarationCode==1);
+            CompositeCoreValid = CompositePayloadValid==1 AND
+                NOT IsNull(ContextMultiplicityCode) AND NOT IsNull(DirectionalContextCode) AND
+                NOT IsNull(PhaseStateCode) AND NOT IsNull(EvidenceBalanceCode) AND
+                NOT IsNull(HypothesisAlignmentCode) AND NOT IsNull(ProvisionalFlag);
+            MTFCoreValid = MTFPayloadValid==1 AND MTF_SnapshotContractValid==1 AND
+                MTF_DailyValid==1 AND MTF_WeeklyValid==1 AND MTF_MonthlyValid==1 AND
+                NOT IsNull(MTF_DirectionalAlignmentCode) AND
+                NOT IsNull(MTF_EvidenceAlignmentCode) AND NOT IsNull(MTF_PhaseRelationshipCode);
+
+            if (ReadyB!=1 OR GenerationB!=GenerationA OR GenerationB<=0)
+                StatusCode = 4;
+            else
+            if (SchemaMajor!=WXS_ExpectedSchemaMajor OR SchemaMinor!=WXS_ExpectedSchemaMinor)
+                StatusCode = 5;
+            else
+            if (SnapshotSourceSymbol!=ExpectedSymbol)
+                StatusCode = 6;
+            else
+            if (SourceInterval!=inDaily)
+                StatusCode = 7;
+            else
+            if (IsNull(SourceBusinessDateKey) OR SourceBusinessDateKey<=0 OR IsNull(SourceBarDateTime))
+                StatusCode = 14;
+            else
+            if (SourceBusinessDateKey < WXS_ConsumerBusinessDateKey)
+                StatusCode = 8;
+            else
+            if (SourceBusinessDateKey > WXS_ConsumerBusinessDateKey)
+                StatusCode = 9;
+            else
+            if (ProvisionalFlag!=0)
+                StatusCode = 10;
+            else
+            if (NOT CompletionValid)
+                StatusCode = 11;
+            else
+            if (NOT CompositeCoreValid)
+                StatusCode = 12;
+            else
+            if (NOT MTFCoreValid)
+                StatusCode = 13;
+            else
+                StatusCode = 1;
+        }
+    }
+
+    // Shared role output contract. Dynamic variables are global in AFL.
+    VarSetText(OutPrefix+"RequestedSymbol",ExpectedSymbol);
+    VarSetText(OutPrefix+"SnapshotSourceSymbol",SnapshotSourceSymbol);
+    VarSet(OutPrefix+"StatusCode",StatusCode);
+    VarSet(OutPrefix+"Valid",StatusCode==1);
+    VarSet(OutPrefix+"ReadyA",ReadyA);
+    VarSet(OutPrefix+"ReadyB",ReadyB);
+    VarSet(OutPrefix+"GenerationA",GenerationA);
+    VarSet(OutPrefix+"GenerationB",GenerationB);
+    VarSet(OutPrefix+"SchemaMajor",SchemaMajor);
+    VarSet(OutPrefix+"SchemaMinor",SchemaMinor);
+    VarSet(OutPrefix+"SourceInterval",SourceInterval);
+    VarSet(OutPrefix+"SourceBusinessDateKey",SourceBusinessDateKey);
+    VarSet(OutPrefix+"SourceBarDateTime",SourceBarDateTime);
+    VarSet(OutPrefix+"PublishedAtDateTime",PublishedAtDateTime);
+    VarSet(OutPrefix+"CompletionBasisCode",CompletionBasisCode);
+    VarSet(OutPrefix+"CompletionDeclarationCode",CompletionDeclarationCode);
+    VarSet(OutPrefix+"CompositePayloadValid",CompositePayloadValid);
+    VarSet(OutPrefix+"MTFPayloadValid",MTFPayloadValid);
+
+    VarSet(OutPrefix+"ContextMultiplicityCode",ContextMultiplicityCode);
+    VarSet(OutPrefix+"ContextAmbiguous",ContextAmbiguous);
+    VarSet(OutPrefix+"CurrentRangeContextID",CurrentRangeContextID);
+    VarSet(OutPrefix+"RangeStatusCode",RangeStatusCode);
+    VarSet(OutPrefix+"PhaseStateCode",PhaseStateCode);
+    VarSet(OutPrefix+"StructuralDevelopmentCode",StructuralDevelopmentCode);
+    VarSet(OutPrefix+"FamilyHypothesisCode",FamilyHypothesisCode);
+    VarSet(OutPrefix+"DirectionalContextCode",DirectionalContextCode);
+    VarSet(OutPrefix+"EvidenceBalanceCode",EvidenceBalanceCode);
+    VarSet(OutPrefix+"HypothesisAlignmentCode",HypothesisAlignmentCode);
+    VarSet(OutPrefix+"HypothesisRevisionCode",HypothesisRevisionCode);
+    VarSet(OutPrefix+"CurrentEventMask",CurrentEventMask);
+    VarSet(OutPrefix+"ProvisionalFlag",ProvisionalFlag);
+    VarSet(OutPrefix+"PrimaryRangeLow",PrimaryRangeLow);
+    VarSet(OutPrefix+"PrimaryRangeHigh",PrimaryRangeHigh);
+    VarSet(OutPrefix+"RangeAgeBars",RangeAgeBars);
+
+    VarSet(OutPrefix+"L_ContextPresent",L_ContextPresent);
+    VarSet(OutPrefix+"L_RangeContextID",L_RangeContextID);
+    VarSet(OutPrefix+"L_RangeStatusCode",L_RangeStatusCode);
+    VarSet(OutPrefix+"L_PhaseStateCode",L_PhaseStateCode);
+    VarSet(OutPrefix+"L_FamilyHypothesisCode",L_FamilyHypothesisCode);
+    VarSet(OutPrefix+"L_EvidenceBalanceCode",L_EvidenceBalanceCode);
+    VarSet(OutPrefix+"L_MixedEvidenceReasonCode",L_MixedEvidenceReasonCode);
+    VarSet(OutPrefix+"L_PrimaryRangeLow",L_PrimaryRangeLow);
+    VarSet(OutPrefix+"L_PrimaryRangeHigh",L_PrimaryRangeHigh);
+    VarSet(OutPrefix+"L_RangeAgeBars",L_RangeAgeBars);
+
+    VarSet(OutPrefix+"U_ContextPresent",U_ContextPresent);
+    VarSet(OutPrefix+"U_RangeContextID",U_RangeContextID);
+    VarSet(OutPrefix+"U_RangeStatusCode",U_RangeStatusCode);
+    VarSet(OutPrefix+"U_PhaseStateCode",U_PhaseStateCode);
+    VarSet(OutPrefix+"U_FamilyHypothesisCode",U_FamilyHypothesisCode);
+    VarSet(OutPrefix+"U_EvidenceBalanceCode",U_EvidenceBalanceCode);
+    VarSet(OutPrefix+"U_MixedEvidenceReasonCode",U_MixedEvidenceReasonCode);
+    VarSet(OutPrefix+"U_PrimaryRangeLow",U_PrimaryRangeLow);
+    VarSet(OutPrefix+"U_PrimaryRangeHigh",U_PrimaryRangeHigh);
+    VarSet(OutPrefix+"U_RangeAgeBars",U_RangeAgeBars);
+
+    VarSet(OutPrefix+"MTF_SnapshotContractValid",MTF_SnapshotContractValid);
+    VarSet(OutPrefix+"MTF_DailyValid",MTF_DailyValid);
+    VarSet(OutPrefix+"MTF_WeeklyValid",MTF_WeeklyValid);
+    VarSet(OutPrefix+"MTF_MonthlyValid",MTF_MonthlyValid);
+    VarSet(OutPrefix+"MTF_D_DirectionalContextCode",MTF_D_DirectionalContextCode);
+    VarSet(OutPrefix+"MTF_W_DirectionalContextCode",MTF_W_DirectionalContextCode);
+    VarSet(OutPrefix+"MTF_M_DirectionalContextCode",MTF_M_DirectionalContextCode);
+    VarSet(OutPrefix+"MTF_D_PhaseStateCode",MTF_D_PhaseStateCode);
+    VarSet(OutPrefix+"MTF_W_PhaseStateCode",MTF_W_PhaseStateCode);
+    VarSet(OutPrefix+"MTF_M_PhaseStateCode",MTF_M_PhaseStateCode);
+    VarSet(OutPrefix+"MTF_D_FamilyHypothesisCode",MTF_D_FamilyHypothesisCode);
+    VarSet(OutPrefix+"MTF_W_FamilyHypothesisCode",MTF_W_FamilyHypothesisCode);
+    VarSet(OutPrefix+"MTF_M_FamilyHypothesisCode",MTF_M_FamilyHypothesisCode);
+    VarSet(OutPrefix+"MTF_D_EvidenceBalanceCode",MTF_D_EvidenceBalanceCode);
+    VarSet(OutPrefix+"MTF_W_EvidenceBalanceCode",MTF_W_EvidenceBalanceCode);
+    VarSet(OutPrefix+"MTF_M_EvidenceBalanceCode",MTF_M_EvidenceBalanceCode);
+    VarSet(OutPrefix+"MTF_DirectionalAlignmentCode",MTF_DirectionalAlignmentCode);
+    VarSet(OutPrefix+"MTF_EvidenceAlignmentCode",MTF_EvidenceAlignmentCode);
+    VarSet(OutPrefix+"MTF_PhaseRelationshipCode",MTF_PhaseRelationshipCode);
+    VarSet(OutPrefix+"MTF_ConflictReasonCode",MTF_ConflictReasonCode);
+    VarSet(OutPrefix+"MTF_WeeklySnapshotStatusCode",MTF_WeeklySnapshotStatusCode);
+    VarSet(OutPrefix+"MTF_MonthlySnapshotStatusCode",MTF_MonthlySnapshotStatusCode);
+    VarSet(OutPrefix+"MTF_D_SourceBarDateTime",MTF_D_SourceBarDateTime);
+    VarSet(OutPrefix+"MTF_W_SourcePeriodOrdinal",MTF_W_SourcePeriodOrdinal);
+    VarSet(OutPrefix+"MTF_M_SourcePeriodOrdinal",MTF_M_SourcePeriodOrdinal);
+    VarSet(OutPrefix+"MTF_W_SourceBarDateTime",MTF_W_SourceBarDateTime);
+    VarSet(OutPrefix+"MTF_M_SourceBarDateTime",MTF_M_SourceBarDateTime);
+    VarSet(OutPrefix+"MTF_W_GenerationID",MTF_W_GenerationID);
+    VarSet(OutPrefix+"MTF_M_GenerationID",MTF_M_GenerationID);
+    VarSet(OutPrefix+"MTF_W_SchemaMajor",MTF_W_SchemaMajor);
+    VarSet(OutPrefix+"MTF_W_SchemaMinor",MTF_W_SchemaMinor);
+    VarSet(OutPrefix+"MTF_M_SchemaMajor",MTF_M_SchemaMajor);
+    VarSet(OutPrefix+"MTF_M_SchemaMinor",MTF_M_SchemaMinor);
+
+    return StatusCode;
+}
+
+WXS_MarketStatusCodeScalar = WXS_ReadSelectionSnapshot("WXSM_",WXS_RequestedMarketSymbol,WXS_MarketRequested);
+WXS_GroupStatusCodeScalar = WXS_ReadSelectionSnapshot("WXSG_",WXS_RequestedGroupSymbol,WXS_GroupRequested);
+WXS_MarketValidScalar = WXS_MarketStatusCodeScalar==1;
+WXS_GroupValidScalar = WXS_GroupStatusCodeScalar==1;
+
+WXS_MarketStatusCode = 0*BarIndex() + WXS_MarketStatusCodeScalar;
+WXS_GroupStatusCode = 0*BarIndex() + WXS_GroupStatusCodeScalar;
+WXS_MarketValid = 0*BarIndex() + WXS_MarketValidScalar;
+WXS_GroupValid = 0*BarIndex() + WXS_GroupValidScalar;
+WXS_ConsumerBusinessDateKeyArray = 0*BarIndex() + WXS_ConsumerBusinessDateKey;
+WXS_RoleConfigConflictArray = 0*BarIndex() + WXS_RoleConfigConflict;
+_SECTION_END();
