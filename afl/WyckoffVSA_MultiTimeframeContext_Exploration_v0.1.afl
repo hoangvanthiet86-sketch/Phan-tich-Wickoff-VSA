@@ -1,0 +1,98 @@
+/*
+    Wyckoff VSA Multi-Timeframe Context v0.1 — Exploration
+
+    Current-state audit interface for approved PR #28 D01-D36.
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+#include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>
+
+_SECTION_BEGIN("97. Multi-Timeframe current-state Exploration");
+// D33: v0.1 is current-state only. The dedicated Exploration intentionally
+// emits one latest-row record rather than pretending to reconstruct a causal
+// historical MTF timeline.
+Filter = Status("lastbarinrange");
+
+AddTextColumn(Name(),"WMTF_Symbol");
+AddColumn(DateTime(),"WMTF_DailyBarDateTime",formatDateTime);
+AddColumn(WMTF_DailyValid,"WMTF_DailyValid",1.0);
+AddColumn(WMTF_SnapshotContractValid,"WMTF_SnapshotContractValid",1.0);
+
+// Snapshot health and provenance.
+AddColumn(WMTF_WeeklySnapshotStatusCode,"WMTF_WeeklySnapshotStatusCode",1.0);
+AddMultiTextColumn(WMTF_WeeklySnapshotStatusCode,WTSC_StatusText,"WMTF_WeeklySnapshotStatus");
+AddColumn(WMTF_W_SourceBarDateTime,"WMTF_W_SourceBarDateTime",formatDateTime);
+AddColumn(WMTF_W_SourcePeriodOrdinal,"WMTF_W_SourcePeriodOrdinal",1.0);
+AddColumn(WMTF_W_GenerationID,"WMTF_W_GenerationID",1.0);
+AddColumn(WMTF_W_SchemaMajor,"WMTF_W_SchemaMajor",1.0);
+AddColumn(WMTF_W_SchemaMinor,"WMTF_W_SchemaMinor",1.0);
+AddTextColumn(WTSC_W_ProducerCompositeVersion,"WMTF_W_CompositeVersion");
+AddTextColumn(WTSC_W_ProducerContractVersion,"WMTF_W_SnapshotContractVersion");
+
+AddColumn(WMTF_MonthlySnapshotStatusCode,"WMTF_MonthlySnapshotStatusCode",1.0);
+AddMultiTextColumn(WMTF_MonthlySnapshotStatusCode,WTSC_StatusText,"WMTF_MonthlySnapshotStatus");
+AddColumn(WMTF_M_SourceBarDateTime,"WMTF_M_SourceBarDateTime",formatDateTime);
+AddColumn(WMTF_M_SourcePeriodOrdinal,"WMTF_M_SourcePeriodOrdinal",1.0);
+AddColumn(WMTF_M_GenerationID,"WMTF_M_GenerationID",1.0);
+AddColumn(WMTF_M_SchemaMajor,"WMTF_M_SchemaMajor",1.0);
+AddColumn(WMTF_M_SchemaMinor,"WMTF_M_SchemaMinor",1.0);
+AddTextColumn(WTSC_M_ProducerCompositeVersion,"WMTF_M_CompositeVersion");
+AddTextColumn(WTSC_M_ProducerContractVersion,"WMTF_M_SnapshotContractVersion");
+
+// Per-timeframe state.
+AddColumn(WMTF_D_ContextMultiplicityCode,"WMTF_D_ContextMultiplicityCode",1.0);
+AddColumn(WMTF_D_PhaseStateCode,"WMTF_D_PhaseStateCode",1.0);
+AddMultiTextColumn(WMTF_D_PhaseStateCode,WPC_PhaseText,"WMTF_D_PhaseState");
+AddColumn(WMTF_D_FamilyHypothesisCode,"WMTF_D_FamilyHypothesisCode",1.0);
+AddMultiTextColumn(WMTF_D_FamilyHypothesisCode,WPC_FamilyText,"WMTF_D_FamilyHypothesis");
+AddColumn(WMTF_D_DirectionalContextCode,"WMTF_D_DirectionalContextCode",1.0);
+AddMultiTextColumn(WMTF_D_DirectionalContextCode,WCI_DirectionalContextText,"WMTF_D_DirectionalContext");
+AddColumn(WMTF_D_EvidenceBalanceCode,"WMTF_D_EvidenceBalanceCode",1.0);
+AddMultiTextColumn(WMTF_D_EvidenceBalanceCode,WCI_EvidenceBalanceText,"WMTF_D_EvidenceBalance");
+AddColumn(WMTF_D_RangeStatusCode,"WMTF_D_RangeStatusCode",1.0);
+AddColumn(WMTF_D_RangeContextID,"WMTF_D_RangeContextID",1.0);
+AddColumn(WMTF_D_PrimaryRangeLow,"WMTF_D_PrimaryRangeLow",1.12);
+AddColumn(WMTF_D_PrimaryRangeHigh,"WMTF_D_PrimaryRangeHigh",1.12);
+AddColumn(WMTF_D_EventMask,"WMTF_D_EventMask",1.0);
+AddColumn(WMTF_D_EventSourceDateTime,"WMTF_D_EventSourceDateTime",formatDateTime);
+
+AddColumn(WMTF_W_ContextMultiplicityCode,"WMTF_W_ContextMultiplicityCode",1.0);
+AddColumn(WMTF_W_PhaseStateCode,"WMTF_W_PhaseStateCode",1.0);
+AddMultiTextColumn(WMTF_W_PhaseStateCode,WPC_PhaseText,"WMTF_W_PhaseState");
+AddColumn(WMTF_W_FamilyHypothesisCode,"WMTF_W_FamilyHypothesisCode",1.0);
+AddMultiTextColumn(WMTF_W_FamilyHypothesisCode,WPC_FamilyText,"WMTF_W_FamilyHypothesis");
+AddColumn(WMTF_W_DirectionalContextCode,"WMTF_W_DirectionalContextCode",1.0);
+AddMultiTextColumn(WMTF_W_DirectionalContextCode,WCI_DirectionalContextText,"WMTF_W_DirectionalContext");
+AddColumn(WMTF_W_EvidenceBalanceCode,"WMTF_W_EvidenceBalanceCode",1.0);
+AddMultiTextColumn(WMTF_W_EvidenceBalanceCode,WCI_EvidenceBalanceText,"WMTF_W_EvidenceBalance");
+AddColumn(WMTF_W_RangeStatusCode,"WMTF_W_RangeStatusCode",1.0);
+AddColumn(WMTF_W_RangeContextID,"WMTF_W_RangeContextID",1.0);
+AddColumn(WMTF_W_PrimaryRangeLow,"WMTF_W_PrimaryRangeLow",1.12);
+AddColumn(WMTF_W_PrimaryRangeHigh,"WMTF_W_PrimaryRangeHigh",1.12);
+AddColumn(WMTF_W_EventMask,"WMTF_W_EventMask",1.0);
+AddColumn(WMTF_W_EventSourceDateTime,"WMTF_W_EventSourceDateTime",formatDateTime);
+
+AddColumn(WMTF_M_ContextMultiplicityCode,"WMTF_M_ContextMultiplicityCode",1.0);
+AddColumn(WMTF_M_PhaseStateCode,"WMTF_M_PhaseStateCode",1.0);
+AddMultiTextColumn(WMTF_M_PhaseStateCode,WPC_PhaseText,"WMTF_M_PhaseState");
+AddColumn(WMTF_M_FamilyHypothesisCode,"WMTF_M_FamilyHypothesisCode",1.0);
+AddMultiTextColumn(WMTF_M_FamilyHypothesisCode,WPC_FamilyText,"WMTF_M_FamilyHypothesis");
+AddColumn(WMTF_M_DirectionalContextCode,"WMTF_M_DirectionalContextCode",1.0);
+AddMultiTextColumn(WMTF_M_DirectionalContextCode,WCI_DirectionalContextText,"WMTF_M_DirectionalContext");
+AddColumn(WMTF_M_EvidenceBalanceCode,"WMTF_M_EvidenceBalanceCode",1.0);
+AddMultiTextColumn(WMTF_M_EvidenceBalanceCode,WCI_EvidenceBalanceText,"WMTF_M_EvidenceBalance");
+AddColumn(WMTF_M_RangeStatusCode,"WMTF_M_RangeStatusCode",1.0);
+AddColumn(WMTF_M_RangeContextID,"WMTF_M_RangeContextID",1.0);
+AddColumn(WMTF_M_PrimaryRangeLow,"WMTF_M_PrimaryRangeLow",1.12);
+AddColumn(WMTF_M_PrimaryRangeHigh,"WMTF_M_PrimaryRangeHigh",1.12);
+AddColumn(WMTF_M_EventMask,"WMTF_M_EventMask",1.0);
+AddColumn(WMTF_M_EventSourceDateTime,"WMTF_M_EventSourceDateTime",formatDateTime);
+
+// Cross-timeframe diagnostics.
+AddColumn(WMTF_DirectionalAlignmentCode,"WMTF_DirectionalAlignmentCode",1.0);
+AddMultiTextColumn(WMTF_DirectionalAlignmentCode,WMTF_DirectionalAlignmentText,"WMTF_DirectionalAlignment");
+AddColumn(WMTF_EvidenceAlignmentCode,"WMTF_EvidenceAlignmentCode",1.0);
+AddMultiTextColumn(WMTF_EvidenceAlignmentCode,WMTF_EvidenceAlignmentText,"WMTF_EvidenceAlignment");
+AddColumn(WMTF_PhaseRelationshipCode,"WMTF_PhaseRelationshipCode",1.0);
+AddMultiTextColumn(WMTF_PhaseRelationshipCode,WMTF_PhaseRelationshipText,"WMTF_PhaseRelationship");
+AddColumn(WMTF_ConflictReasonCode,"WMTF_ConflictReasonCode",1.0);
+_SECTION_END();
