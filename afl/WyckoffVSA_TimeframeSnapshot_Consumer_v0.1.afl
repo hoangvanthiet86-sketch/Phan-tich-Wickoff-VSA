@@ -1,0 +1,271 @@
+/*
+    Wyckoff VSA Timeframe Snapshot Consumer v0.1
+
+    Approved contract: PR #29, S01-S32.
+    Approval merge commit: a098a253cb139c6e2fc226a9aba8b051f3b5fa59
+
+    Daily current-state deserializer/validator for Weekly and Monthly scalar
+    snapshots. It does not compute MTF alignment and never substitutes one
+    timeframe for another.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+
+_SECTION_BEGIN("91. Timeframe Snapshot Consumer contract");
+WTSC_ExpectedSchemaMajor = 1;
+WTSC_ExpectedSchemaMinor = 0;
+WTSC_ExpectedCompositeVersion = "0.1";
+WTSC_ExpectedContractVersion = "0.1";
+WTSC_ClockBasisCode = 1; // LOCAL SYSTEM
+WTSC_Now = Now(5);
+WTSC_WeekEpoch = _DT("2000-01-03 00:00:00");
+WTSC_CurrentWeeklyOrdinal = Floor(DateTimeDiff(WTSC_Now,WTSC_WeekEpoch)/604800);
+WTSC_CurrentMonthlyOrdinal = Now(8)*12 + Now(7);
+WTSC_ExpectedWeeklyOrdinal = WTSC_CurrentWeeklyOrdinal - 1;
+WTSC_ExpectedMonthlyOrdinal = WTSC_CurrentMonthlyOrdinal - 1;
+WTSC_ConsumerIntervalValid = Interval()==inDaily;
+WTSC_Symbol = Name();
+
+WTSC_StatusText = "NOT READ / INSUFFICIENT\nVALID\nMISSING\nWRITE IN PROGRESS / UNSTABLE GENERATION\nSCHEMA VERSION MISMATCH\nSYMBOL MISMATCH\nTIMEFRAME MISMATCH\nSTALE PERIOD\nFUTURE PERIOD\nPROVISIONAL SOURCE\nINVALID PAYLOAD";
+
+// -------------------------------------------------------------------------
+// Weekly snapshot read: generation A -> payload -> generation B.
+// -------------------------------------------------------------------------
+WTSC_W_Prefix = "WVSA_MTF_v01_" + WTSC_Symbol + "_W_";
+WTSC_W_ReadyA = StaticVarGet(WTSC_W_Prefix+"Ready");
+WTSC_W_GenerationA = StaticVarGet(WTSC_W_Prefix+"CommittedGenerationID");
+WTSC_W_SchemaMajor = StaticVarGet(WTSC_W_Prefix+"SchemaMajor");
+WTSC_W_SchemaMinor = StaticVarGet(WTSC_W_Prefix+"SchemaMinor");
+WTSC_W_SymbolText = StaticVarGetText(WTSC_W_Prefix+"Symbol");
+WTSC_W_TimeframeText = StaticVarGetText(WTSC_W_Prefix+"TimeframeCode");
+WTSC_W_ProducerCompositeVersion = StaticVarGetText(WTSC_W_Prefix+"ProducerCompositeVersion");
+WTSC_W_ProducerContractVersion = StaticVarGetText(WTSC_W_Prefix+"ProducerContractVersion");
+WTSC_W_SourcePeriodOrdinal = StaticVarGet(WTSC_W_Prefix+"SourcePeriodOrdinal");
+WTSC_W_SourceBarDateTime = StaticVarGet(WTSC_W_Prefix+"SourceBarDateTime");
+WTSC_W_PublishedAtDateTime = StaticVarGet(WTSC_W_Prefix+"PublishedAtDateTime");
+WTSC_W_CompletionBasisCode = StaticVarGet(WTSC_W_Prefix+"CompletionBasisCode");
+WTSC_W_SourceClockBasisCode = StaticVarGet(WTSC_W_Prefix+"ClockBasisCode");
+
+WTSC_W_ContextMultiplicityCode = StaticVarGet(WTSC_W_Prefix+"ContextMultiplicityCode");
+WTSC_W_ContextAmbiguous = StaticVarGet(WTSC_W_Prefix+"ContextAmbiguous");
+WTSC_W_CurrentRangeContextID = StaticVarGet(WTSC_W_Prefix+"CurrentRangeContextID");
+WTSC_W_RangeStatusCode = StaticVarGet(WTSC_W_Prefix+"RangeStatusCode");
+WTSC_W_PrimaryRangeLow = StaticVarGet(WTSC_W_Prefix+"PrimaryRangeLow");
+WTSC_W_PrimaryRangeHigh = StaticVarGet(WTSC_W_Prefix+"PrimaryRangeHigh");
+WTSC_W_PrimaryRangeWidth = StaticVarGet(WTSC_W_Prefix+"PrimaryRangeWidth");
+WTSC_W_RangeAgeBars = StaticVarGet(WTSC_W_Prefix+"RangeAgeBars");
+WTSC_W_PhaseStateCode = StaticVarGet(WTSC_W_Prefix+"PhaseStateCode");
+WTSC_W_StructuralDevelopmentCode = StaticVarGet(WTSC_W_Prefix+"StructuralDevelopmentCode");
+WTSC_W_FamilyHypothesisCode = StaticVarGet(WTSC_W_Prefix+"FamilyHypothesisCode");
+WTSC_W_DirectionalContextCode = StaticVarGet(WTSC_W_Prefix+"DirectionalContextCode");
+WTSC_W_EvidenceBalanceCode = StaticVarGet(WTSC_W_Prefix+"EvidenceBalanceCode");
+WTSC_W_HypothesisAlignmentCode = StaticVarGet(WTSC_W_Prefix+"HypothesisAlignmentCode");
+WTSC_W_HypothesisRevisionCode = StaticVarGet(WTSC_W_Prefix+"HypothesisRevisionCode");
+WTSC_W_CurrentEventMask = StaticVarGet(WTSC_W_Prefix+"CurrentEventMask");
+WTSC_W_ProvisionalFlag = StaticVarGet(WTSC_W_Prefix+"ProvisionalFlag");
+
+WTSC_W_L_ContextPresent = StaticVarGet(WTSC_W_Prefix+"L_ContextPresent");
+WTSC_W_L_RangeContextID = StaticVarGet(WTSC_W_Prefix+"L_RangeContextID");
+WTSC_W_L_RangeStatusCode = StaticVarGet(WTSC_W_Prefix+"L_RangeStatusCode");
+WTSC_W_L_PhaseStateCode = StaticVarGet(WTSC_W_Prefix+"L_PhaseStateCode");
+WTSC_W_L_FamilyHypothesisCode = StaticVarGet(WTSC_W_Prefix+"L_FamilyHypothesisCode");
+WTSC_W_L_EvidenceBalanceCode = StaticVarGet(WTSC_W_Prefix+"L_EvidenceBalanceCode");
+WTSC_W_L_MixedEvidenceReasonCode = StaticVarGet(WTSC_W_Prefix+"L_MixedEvidenceReasonCode");
+WTSC_W_L_PrimaryRangeLow = StaticVarGet(WTSC_W_Prefix+"L_PrimaryRangeLow");
+WTSC_W_L_PrimaryRangeHigh = StaticVarGet(WTSC_W_Prefix+"L_PrimaryRangeHigh");
+WTSC_W_L_RangeAgeBars = StaticVarGet(WTSC_W_Prefix+"L_RangeAgeBars");
+
+WTSC_W_U_ContextPresent = StaticVarGet(WTSC_W_Prefix+"U_ContextPresent");
+WTSC_W_U_RangeContextID = StaticVarGet(WTSC_W_Prefix+"U_RangeContextID");
+WTSC_W_U_RangeStatusCode = StaticVarGet(WTSC_W_Prefix+"U_RangeStatusCode");
+WTSC_W_U_PhaseStateCode = StaticVarGet(WTSC_W_Prefix+"U_PhaseStateCode");
+WTSC_W_U_FamilyHypothesisCode = StaticVarGet(WTSC_W_Prefix+"U_FamilyHypothesisCode");
+WTSC_W_U_EvidenceBalanceCode = StaticVarGet(WTSC_W_Prefix+"U_EvidenceBalanceCode");
+WTSC_W_U_MixedEvidenceReasonCode = StaticVarGet(WTSC_W_Prefix+"U_MixedEvidenceReasonCode");
+WTSC_W_U_PrimaryRangeLow = StaticVarGet(WTSC_W_Prefix+"U_PrimaryRangeLow");
+WTSC_W_U_PrimaryRangeHigh = StaticVarGet(WTSC_W_Prefix+"U_PrimaryRangeHigh");
+WTSC_W_U_RangeAgeBars = StaticVarGet(WTSC_W_Prefix+"U_RangeAgeBars");
+
+WTSC_W_GenerationB = StaticVarGet(WTSC_W_Prefix+"CommittedGenerationID");
+WTSC_W_ReadyB = StaticVarGet(WTSC_W_Prefix+"Ready");
+
+WTSC_W_Missing = IsNull(WTSC_W_GenerationA) OR IsNull(WTSC_W_SchemaMajor) OR IsNull(WTSC_W_SourcePeriodOrdinal);
+WTSC_W_Unstable = WTSC_W_ReadyA!=1 OR WTSC_W_ReadyB!=1 OR WTSC_W_GenerationA!=WTSC_W_GenerationB OR WTSC_W_GenerationA<=0;
+WTSC_W_SchemaMismatch =
+    WTSC_W_SchemaMajor!=WTSC_ExpectedSchemaMajor OR
+    WTSC_W_SchemaMinor!=WTSC_ExpectedSchemaMinor OR
+    WTSC_W_ProducerCompositeVersion!=WTSC_ExpectedCompositeVersion OR
+    WTSC_W_ProducerContractVersion!=WTSC_ExpectedContractVersion;
+WTSC_W_SymbolMismatch = WTSC_W_SymbolText!=WTSC_Symbol;
+WTSC_W_TimeframeMismatch = WTSC_W_TimeframeText!="W";
+WTSC_W_Future = WTSC_W_SourcePeriodOrdinal>=WTSC_CurrentWeeklyOrdinal;
+WTSC_W_Stale = WTSC_W_SourcePeriodOrdinal!=WTSC_ExpectedWeeklyOrdinal;
+WTSC_W_Provisional = WTSC_W_ProvisionalFlag!=0;
+WTSC_W_PayloadValid =
+    WTSC_W_ContextMultiplicityCode>=0 AND WTSC_W_ContextMultiplicityCode<=2 AND
+    WTSC_W_PhaseStateCode>=0 AND WTSC_W_PhaseStateCode<=7 AND
+    WTSC_W_FamilyHypothesisCode>=0 AND WTSC_W_FamilyHypothesisCode<=7 AND
+    WTSC_W_DirectionalContextCode>=0 AND WTSC_W_DirectionalContextCode<=4 AND
+    WTSC_W_EvidenceBalanceCode>=0 AND WTSC_W_EvidenceBalanceCode<=3 AND
+    WTSC_W_HypothesisAlignmentCode>=0 AND WTSC_W_HypothesisAlignmentCode<=3 AND
+    WTSC_W_CurrentEventMask>=0 AND
+    WTSC_W_CompletionBasisCode==1 AND WTSC_W_SourceClockBasisCode==1 AND
+    NOT IsNull(WTSC_W_SourceBarDateTime) AND
+    (WTSC_W_ContextMultiplicityCode!=1 OR NOT IsNull(WTSC_W_CurrentRangeContextID)) AND
+    (WTSC_W_ContextMultiplicityCode!=2 OR (WTSC_W_L_ContextPresent==1 AND WTSC_W_U_ContextPresent==1));
+
+WTSC_W_StatusCode = 0;
+if (WTSC_ConsumerIntervalValid)
+{
+    WTSC_W_StatusCode = IIf(WTSC_W_Missing,2,
+        IIf(WTSC_W_Unstable,3,
+        IIf(WTSC_W_SchemaMismatch,4,
+        IIf(WTSC_W_SymbolMismatch,5,
+        IIf(WTSC_W_TimeframeMismatch,6,
+        IIf(WTSC_W_Future,8,
+        IIf(WTSC_W_Stale,7,
+        IIf(WTSC_W_Provisional,9,
+        IIf(NOT WTSC_W_PayloadValid,10,1)))))))));
+}
+WTSC_W_Valid = WTSC_W_StatusCode==1;
+
+// -------------------------------------------------------------------------
+// Monthly snapshot read: generation A -> payload -> generation B.
+// -------------------------------------------------------------------------
+WTSC_M_Prefix = "WVSA_MTF_v01_" + WTSC_Symbol + "_M_";
+WTSC_M_ReadyA = StaticVarGet(WTSC_M_Prefix+"Ready");
+WTSC_M_GenerationA = StaticVarGet(WTSC_M_Prefix+"CommittedGenerationID");
+WTSC_M_SchemaMajor = StaticVarGet(WTSC_M_Prefix+"SchemaMajor");
+WTSC_M_SchemaMinor = StaticVarGet(WTSC_M_Prefix+"SchemaMinor");
+WTSC_M_SymbolText = StaticVarGetText(WTSC_M_Prefix+"Symbol");
+WTSC_M_TimeframeText = StaticVarGetText(WTSC_M_Prefix+"TimeframeCode");
+WTSC_M_ProducerCompositeVersion = StaticVarGetText(WTSC_M_Prefix+"ProducerCompositeVersion");
+WTSC_M_ProducerContractVersion = StaticVarGetText(WTSC_M_Prefix+"ProducerContractVersion");
+WTSC_M_SourcePeriodOrdinal = StaticVarGet(WTSC_M_Prefix+"SourcePeriodOrdinal");
+WTSC_M_SourceBarDateTime = StaticVarGet(WTSC_M_Prefix+"SourceBarDateTime");
+WTSC_M_PublishedAtDateTime = StaticVarGet(WTSC_M_Prefix+"PublishedAtDateTime");
+WTSC_M_CompletionBasisCode = StaticVarGet(WTSC_M_Prefix+"CompletionBasisCode");
+WTSC_M_SourceClockBasisCode = StaticVarGet(WTSC_M_Prefix+"ClockBasisCode");
+
+WTSC_M_ContextMultiplicityCode = StaticVarGet(WTSC_M_Prefix+"ContextMultiplicityCode");
+WTSC_M_ContextAmbiguous = StaticVarGet(WTSC_M_Prefix+"ContextAmbiguous");
+WTSC_M_CurrentRangeContextID = StaticVarGet(WTSC_M_Prefix+"CurrentRangeContextID");
+WTSC_M_RangeStatusCode = StaticVarGet(WTSC_M_Prefix+"RangeStatusCode");
+WTSC_M_PrimaryRangeLow = StaticVarGet(WTSC_M_Prefix+"PrimaryRangeLow");
+WTSC_M_PrimaryRangeHigh = StaticVarGet(WTSC_M_Prefix+"PrimaryRangeHigh");
+WTSC_M_PrimaryRangeWidth = StaticVarGet(WTSC_M_Prefix+"PrimaryRangeWidth");
+WTSC_M_RangeAgeBars = StaticVarGet(WTSC_M_Prefix+"RangeAgeBars");
+WTSC_M_PhaseStateCode = StaticVarGet(WTSC_M_Prefix+"PhaseStateCode");
+WTSC_M_StructuralDevelopmentCode = StaticVarGet(WTSC_M_Prefix+"StructuralDevelopmentCode");
+WTSC_M_FamilyHypothesisCode = StaticVarGet(WTSC_M_Prefix+"FamilyHypothesisCode");
+WTSC_M_DirectionalContextCode = StaticVarGet(WTSC_M_Prefix+"DirectionalContextCode");
+WTSC_M_EvidenceBalanceCode = StaticVarGet(WTSC_M_Prefix+"EvidenceBalanceCode");
+WTSC_M_HypothesisAlignmentCode = StaticVarGet(WTSC_M_Prefix+"HypothesisAlignmentCode");
+WTSC_M_HypothesisRevisionCode = StaticVarGet(WTSC_M_Prefix+"HypothesisRevisionCode");
+WTSC_M_CurrentEventMask = StaticVarGet(WTSC_M_Prefix+"CurrentEventMask");
+WTSC_M_ProvisionalFlag = StaticVarGet(WTSC_M_Prefix+"ProvisionalFlag");
+
+WTSC_M_L_ContextPresent = StaticVarGet(WTSC_M_Prefix+"L_ContextPresent");
+WTSC_M_L_RangeContextID = StaticVarGet(WTSC_M_Prefix+"L_RangeContextID");
+WTSC_M_L_RangeStatusCode = StaticVarGet(WTSC_M_Prefix+"L_RangeStatusCode");
+WTSC_M_L_PhaseStateCode = StaticVarGet(WTSC_M_Prefix+"L_PhaseStateCode");
+WTSC_M_L_FamilyHypothesisCode = StaticVarGet(WTSC_M_Prefix+"L_FamilyHypothesisCode");
+WTSC_M_L_EvidenceBalanceCode = StaticVarGet(WTSC_M_Prefix+"L_EvidenceBalanceCode");
+WTSC_M_L_MixedEvidenceReasonCode = StaticVarGet(WTSC_M_Prefix+"L_MixedEvidenceReasonCode");
+WTSC_M_L_PrimaryRangeLow = StaticVarGet(WTSC_M_Prefix+"L_PrimaryRangeLow");
+WTSC_M_L_PrimaryRangeHigh = StaticVarGet(WTSC_M_Prefix+"L_PrimaryRangeHigh");
+WTSC_M_L_RangeAgeBars = StaticVarGet(WTSC_M_Prefix+"L_RangeAgeBars");
+
+WTSC_M_U_ContextPresent = StaticVarGet(WTSC_M_Prefix+"U_ContextPresent");
+WTSC_M_U_RangeContextID = StaticVarGet(WTSC_M_Prefix+"U_RangeContextID");
+WTSC_M_U_RangeStatusCode = StaticVarGet(WTSC_M_Prefix+"U_RangeStatusCode");
+WTSC_M_U_PhaseStateCode = StaticVarGet(WTSC_M_Prefix+"U_PhaseStateCode");
+WTSC_M_U_FamilyHypothesisCode = StaticVarGet(WTSC_M_Prefix+"U_FamilyHypothesisCode");
+WTSC_M_U_EvidenceBalanceCode = StaticVarGet(WTSC_M_Prefix+"U_EvidenceBalanceCode");
+WTSC_M_U_MixedEvidenceReasonCode = StaticVarGet(WTSC_M_Prefix+"U_MixedEvidenceReasonCode");
+WTSC_M_U_PrimaryRangeLow = StaticVarGet(WTSC_M_Prefix+"U_PrimaryRangeLow");
+WTSC_M_U_PrimaryRangeHigh = StaticVarGet(WTSC_M_Prefix+"U_PrimaryRangeHigh");
+WTSC_M_U_RangeAgeBars = StaticVarGet(WTSC_M_Prefix+"U_RangeAgeBars");
+
+WTSC_M_GenerationB = StaticVarGet(WTSC_M_Prefix+"CommittedGenerationID");
+WTSC_M_ReadyB = StaticVarGet(WTSC_M_Prefix+"Ready");
+
+WTSC_M_Missing = IsNull(WTSC_M_GenerationA) OR IsNull(WTSC_M_SchemaMajor) OR IsNull(WTSC_M_SourcePeriodOrdinal);
+WTSC_M_Unstable = WTSC_M_ReadyA!=1 OR WTSC_M_ReadyB!=1 OR WTSC_M_GenerationA!=WTSC_M_GenerationB OR WTSC_M_GenerationA<=0;
+WTSC_M_SchemaMismatch =
+    WTSC_M_SchemaMajor!=WTSC_ExpectedSchemaMajor OR
+    WTSC_M_SchemaMinor!=WTSC_ExpectedSchemaMinor OR
+    WTSC_M_ProducerCompositeVersion!=WTSC_ExpectedCompositeVersion OR
+    WTSC_M_ProducerContractVersion!=WTSC_ExpectedContractVersion;
+WTSC_M_SymbolMismatch = WTSC_M_SymbolText!=WTSC_Symbol;
+WTSC_M_TimeframeMismatch = WTSC_M_TimeframeText!="M";
+WTSC_M_Future = WTSC_M_SourcePeriodOrdinal>=WTSC_CurrentMonthlyOrdinal;
+WTSC_M_Stale = WTSC_M_SourcePeriodOrdinal!=WTSC_ExpectedMonthlyOrdinal;
+WTSC_M_Provisional = WTSC_M_ProvisionalFlag!=0;
+WTSC_M_PayloadValid =
+    WTSC_M_ContextMultiplicityCode>=0 AND WTSC_M_ContextMultiplicityCode<=2 AND
+    WTSC_M_PhaseStateCode>=0 AND WTSC_M_PhaseStateCode<=7 AND
+    WTSC_M_FamilyHypothesisCode>=0 AND WTSC_M_FamilyHypothesisCode<=7 AND
+    WTSC_M_DirectionalContextCode>=0 AND WTSC_M_DirectionalContextCode<=4 AND
+    WTSC_M_EvidenceBalanceCode>=0 AND WTSC_M_EvidenceBalanceCode<=3 AND
+    WTSC_M_HypothesisAlignmentCode>=0 AND WTSC_M_HypothesisAlignmentCode<=3 AND
+    WTSC_M_CurrentEventMask>=0 AND
+    WTSC_M_CompletionBasisCode==1 AND WTSC_M_SourceClockBasisCode==1 AND
+    NOT IsNull(WTSC_M_SourceBarDateTime) AND
+    (WTSC_M_ContextMultiplicityCode!=1 OR NOT IsNull(WTSC_M_CurrentRangeContextID)) AND
+    (WTSC_M_ContextMultiplicityCode!=2 OR (WTSC_M_L_ContextPresent==1 AND WTSC_M_U_ContextPresent==1));
+
+WTSC_M_StatusCode = 0;
+if (WTSC_ConsumerIntervalValid)
+{
+    WTSC_M_StatusCode = IIf(WTSC_M_Missing,2,
+        IIf(WTSC_M_Unstable,3,
+        IIf(WTSC_M_SchemaMismatch,4,
+        IIf(WTSC_M_SymbolMismatch,5,
+        IIf(WTSC_M_TimeframeMismatch,6,
+        IIf(WTSC_M_Future,8,
+        IIf(WTSC_M_Stale,7,
+        IIf(WTSC_M_Provisional,9,
+        IIf(NOT WTSC_M_PayloadValid,10,1)))))))));
+}
+WTSC_M_Valid = WTSC_M_StatusCode==1;
+
+// S23/S19: validity and payload remain separate by timeframe. No fallback and
+// no OR of higher-timeframe EventMask into the Daily event stream.
+WTSC_AuthoritativeHigherSnapshotCount = WTSC_W_Valid + WTSC_M_Valid;
+
+WTSC_W_StatusArray = 0*BarIndex()+WTSC_W_StatusCode;
+WTSC_M_StatusArray = 0*BarIndex()+WTSC_M_StatusCode;
+AddTextColumn(Name(),"WTSC_Symbol");
+AddColumn(0*BarIndex()+WTSC_ConsumerIntervalValid,"WTSC_DailyConsumerIntervalValid",1.0);
+AddColumn(0*BarIndex()+WTSC_CurrentWeeklyOrdinal,"WTSC_CurrentWeeklyOrdinal",1.0);
+AddColumn(0*BarIndex()+WTSC_ExpectedWeeklyOrdinal,"WTSC_ExpectedWeeklyOrdinal",1.0);
+AddColumn(WTSC_W_StatusArray,"WTSC_W_StatusCode",1.0);
+AddMultiTextColumn(WTSC_W_StatusArray,WTSC_StatusText,"WTSC_W_Status");
+AddColumn(0*BarIndex()+WTSC_W_SourcePeriodOrdinal,"WTSC_W_SourcePeriodOrdinal",1.0);
+AddColumn(0*BarIndex()+WTSC_W_SourceBarDateTime,"WTSC_W_SourceBarDateTime",formatDateTime);
+AddColumn(0*BarIndex()+WTSC_W_PublishedAtDateTime,"WTSC_W_PublishedAtDateTime",formatDateTime);
+AddColumn(0*BarIndex()+WTSC_W_GenerationB,"WTSC_W_GenerationID",1.0);
+AddColumn(0*BarIndex()+WTSC_W_ContextMultiplicityCode,"WTSC_W_ContextMultiplicityCode",1.0);
+AddColumn(0*BarIndex()+WTSC_W_PhaseStateCode,"WTSC_W_PhaseStateCode",1.0);
+AddColumn(0*BarIndex()+WTSC_W_FamilyHypothesisCode,"WTSC_W_FamilyHypothesisCode",1.0);
+AddColumn(0*BarIndex()+WTSC_W_DirectionalContextCode,"WTSC_W_DirectionalContextCode",1.0);
+AddColumn(0*BarIndex()+WTSC_W_EvidenceBalanceCode,"WTSC_W_EvidenceBalanceCode",1.0);
+AddColumn(0*BarIndex()+WTSC_W_CurrentEventMask,"WTSC_W_CurrentEventMask",1.0);
+
+AddColumn(0*BarIndex()+WTSC_CurrentMonthlyOrdinal,"WTSC_CurrentMonthlyOrdinal",1.0);
+AddColumn(0*BarIndex()+WTSC_ExpectedMonthlyOrdinal,"WTSC_ExpectedMonthlyOrdinal",1.0);
+AddColumn(WTSC_M_StatusArray,"WTSC_M_StatusCode",1.0);
+AddMultiTextColumn(WTSC_M_StatusArray,WTSC_StatusText,"WTSC_M_Status");
+AddColumn(0*BarIndex()+WTSC_M_SourcePeriodOrdinal,"WTSC_M_SourcePeriodOrdinal",1.0);
+AddColumn(0*BarIndex()+WTSC_M_SourceBarDateTime,"WTSC_M_SourceBarDateTime",formatDateTime);
+AddColumn(0*BarIndex()+WTSC_M_PublishedAtDateTime,"WTSC_M_PublishedAtDateTime",formatDateTime);
+AddColumn(0*BarIndex()+WTSC_M_GenerationB,"WTSC_M_GenerationID",1.0);
+AddColumn(0*BarIndex()+WTSC_M_ContextMultiplicityCode,"WTSC_M_ContextMultiplicityCode",1.0);
+AddColumn(0*BarIndex()+WTSC_M_PhaseStateCode,"WTSC_M_PhaseStateCode",1.0);
+AddColumn(0*BarIndex()+WTSC_M_FamilyHypothesisCode,"WTSC_M_FamilyHypothesisCode",1.0);
+AddColumn(0*BarIndex()+WTSC_M_DirectionalContextCode,"WTSC_M_DirectionalContextCode",1.0);
+AddColumn(0*BarIndex()+WTSC_M_EvidenceBalanceCode,"WTSC_M_EvidenceBalanceCode",1.0);
+AddColumn(0*BarIndex()+WTSC_M_CurrentEventMask,"WTSC_M_CurrentEventMask",1.0);
+AddColumn(0*BarIndex()+WTSC_AuthoritativeHigherSnapshotCount,"WTSC_AuthoritativeHigherSnapshotCount",1.0);
+_SECTION_END();
