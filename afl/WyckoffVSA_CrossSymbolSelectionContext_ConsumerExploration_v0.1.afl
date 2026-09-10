@@ -1,0 +1,45 @@
+/* Cross-Symbol Selection Context Consumer Exploration v0.1 */
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>
+
+_SECTION_BEGIN("113. Cross-Symbol Consumer Exploration");
+Filter = Status("lastbarinrange");
+AddTextColumn(Name(),"WXS_StockSymbol");
+AddColumn(WXS_ConsumerBusinessDateKeyArray,"WXS_StockBusinessDateKey",1.0);
+AddColumn(WXS_RoleConfigConflictArray,"WXS_RoleConfigConflict",1.0);
+
+AddTextColumn(VarGetText("WXSM_RequestedSymbol"),"Market RequestedSymbol");
+AddTextColumn(VarGetText("WXSM_SnapshotSourceSymbol"),"Market SnapshotSourceSymbol");
+AddColumn(WXS_MarketStatusCode,"Market StatusCode",1.0);
+AddMultiTextColumn(WXS_MarketStatusCode,WXS_ConsumerStatusText,"Market Status");
+AddColumn(0*BarIndex()+VarGet("WXSM_SourceBusinessDateKey"),"Market SourceBusinessDateKey",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_SourceBarDateTime"),"Market SourceBarDateTime",formatDateTime);
+AddColumn(0*BarIndex()+VarGet("WXSM_GenerationA"),"Market GenerationA",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_GenerationB"),"Market GenerationB",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_ReadyA"),"Market ReadyA",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_ReadyB"),"Market ReadyB",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_CompositePayloadValid"),"Market CompositePayloadValid",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_MTFPayloadValid"),"Market MTFPayloadValid",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_DirectionalContextCode"),"Market DirectionalContextCode",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_PhaseStateCode"),"Market PhaseStateCode",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_EvidenceBalanceCode"),"Market EvidenceBalanceCode",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_MTF_DirectionalAlignmentCode"),"Market MTF DirectionalAlignmentCode",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_MTF_ConflictReasonCode"),"Market MTF ConflictReasonCode",1.0);
+
+AddTextColumn(VarGetText("WXSG_RequestedSymbol"),"Group RequestedSymbol");
+AddTextColumn(VarGetText("WXSG_SnapshotSourceSymbol"),"Group SnapshotSourceSymbol");
+AddColumn(WXS_GroupStatusCode,"Group StatusCode",1.0);
+AddMultiTextColumn(WXS_GroupStatusCode,WXS_ConsumerStatusText,"Group Status");
+AddColumn(0*BarIndex()+VarGet("WXSG_SourceBusinessDateKey"),"Group SourceBusinessDateKey",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_SourceBarDateTime"),"Group SourceBarDateTime",formatDateTime);
+AddColumn(0*BarIndex()+VarGet("WXSG_GenerationA"),"Group GenerationA",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_GenerationB"),"Group GenerationB",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_ReadyA"),"Group ReadyA",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_ReadyB"),"Group ReadyB",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_CompositePayloadValid"),"Group CompositePayloadValid",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_MTFPayloadValid"),"Group MTFPayloadValid",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_DirectionalContextCode"),"Group DirectionalContextCode",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_PhaseStateCode"),"Group PhaseStateCode",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_EvidenceBalanceCode"),"Group EvidenceBalanceCode",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_MTF_DirectionalAlignmentCode"),"Group MTF DirectionalAlignmentCode",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_MTF_ConflictReasonCode"),"Group MTF ConflictReasonCode",1.0);
+_SECTION_END();
