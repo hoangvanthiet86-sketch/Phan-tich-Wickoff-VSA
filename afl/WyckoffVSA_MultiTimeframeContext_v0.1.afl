@@ -1,0 +1,261 @@
+/*
+    Wyckoff VSA Multi-Timeframe Context Engine v0.1
+
+    Approved specification: PR #28, D01-D36.
+    Approval merge commit: 794f947761fcb2c9043fd6d30fb9dd1a48f8c2bc
+    Snapshot contract: PR #29, S01-S32.
+
+    Current-state Daily / Weekly / Monthly aggregator only.
+    It consumes canonical Daily Composite state and validated Weekly/Monthly
+    snapshots. It does not recreate Event, Phase, Family or VSA logic.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    No weighted score, no confidence/probability and no trading signal.
+*/
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+
+_SECTION_BEGIN("94. Multi-Timeframe current-state inputs");
+WMTF_Zero = 0 * BarIndex();
+WMTF_Null = Null + WMTF_Zero;
+WMTF_BaseIntervalValid = Interval()==inDaily;
+
+// Daily authoritative current state. v0.1 is current-state only, so the
+// Composite values are sampled from the latest bar rather than expanded into
+// a historical MTF timeline.
+WMTF_D_ProvisionalFlagRaw = LastValue(WCI_ProvisionalFlag);
+WMTF_DailyValidScalar = WMTF_BaseIntervalValid AND WMTF_D_ProvisionalFlagRaw==0;
+WMTF_WeeklyValidScalar = WTSC_W_Valid;
+WMTF_MonthlyValidScalar = WTSC_M_Valid;
+WMTF_SnapshotContractValidScalar = WMTF_DailyValidScalar AND WMTF_WeeklyValidScalar AND WMTF_MonthlyValidScalar;
+
+WMTF_D_ContextMultiplicityCodeRaw = LastValue(WCI_ContextMultiplicityCode);
+WMTF_D_ContextAmbiguousRaw = LastValue(WCI_ContextAmbiguous);
+WMTF_D_RangeContextIDRaw = LastValue(WCI_CurrentRangeContextID);
+WMTF_D_RangeStatusCodeRaw = LastValue(WCI_RangeStatusCode);
+WMTF_D_RangeLowRaw = LastValue(WCI_PrimaryRangeLow);
+WMTF_D_RangeHighRaw = LastValue(WCI_PrimaryRangeHigh);
+WMTF_D_RangeAgeBarsRaw = LastValue(WCI_RangeAgeBars);
+WMTF_D_PhaseStateCodeRaw = LastValue(WCI_PhaseStateCode);
+WMTF_D_FamilyHypothesisCodeRaw = LastValue(WCI_FamilyHypothesisCode);
+WMTF_D_DirectionalContextCodeRaw = LastValue(WCI_DirectionalContextCode);
+WMTF_D_EvidenceBalanceCodeRaw = LastValue(WCI_EvidenceBalanceCode);
+WMTF_D_CurrentEventMaskRaw = LastValue(WCI_CurrentEventMask);
+WMTF_D_SourceBarDateTimeRaw = LastValue(WCI_SourceDateTime);
+
+// Fail closed at the public MTF boundary. Raw source values remain available
+// upstream for audit; authoritative WMTF fields below are unavailable when the
+// corresponding source is invalid.
+WMTF_D_ContextMultiplicityCodeScalar = IIf(WMTF_DailyValidScalar,WMTF_D_ContextMultiplicityCodeRaw,0);
+WMTF_D_RangeContextIDScalar = IIf(WMTF_DailyValidScalar,WMTF_D_RangeContextIDRaw,Null);
+WMTF_D_RangeStatusCodeScalar = IIf(WMTF_DailyValidScalar,WMTF_D_RangeStatusCodeRaw,0);
+WMTF_D_RangeLowScalar = IIf(WMTF_DailyValidScalar,WMTF_D_RangeLowRaw,Null);
+WMTF_D_RangeHighScalar = IIf(WMTF_DailyValidScalar,WMTF_D_RangeHighRaw,Null);
+WMTF_D_RangeAgeBarsScalar = IIf(WMTF_DailyValidScalar,WMTF_D_RangeAgeBarsRaw,Null);
+WMTF_D_PhaseStateCodeScalar = IIf(WMTF_DailyValidScalar,WMTF_D_PhaseStateCodeRaw,0);
+WMTF_D_FamilyHypothesisCodeScalar = IIf(WMTF_DailyValidScalar,WMTF_D_FamilyHypothesisCodeRaw,0);
+WMTF_D_DirectionalContextCodeScalar = IIf(WMTF_DailyValidScalar,WMTF_D_DirectionalContextCodeRaw,0);
+WMTF_D_EvidenceBalanceCodeScalar = IIf(WMTF_DailyValidScalar,WMTF_D_EvidenceBalanceCodeRaw,0);
+WMTF_D_CurrentEventMaskScalar = IIf(WMTF_DailyValidScalar,WMTF_D_CurrentEventMaskRaw,0);
+
+WMTF_W_ContextMultiplicityCodeScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_ContextMultiplicityCode,0);
+WMTF_W_RangeContextIDScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_CurrentRangeContextID,Null);
+WMTF_W_RangeStatusCodeScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_RangeStatusCode,0);
+WMTF_W_RangeLowScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_PrimaryRangeLow,Null);
+WMTF_W_RangeHighScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_PrimaryRangeHigh,Null);
+WMTF_W_RangeAgeBarsScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_RangeAgeBars,Null);
+WMTF_W_PhaseStateCodeScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_PhaseStateCode,0);
+WMTF_W_FamilyHypothesisCodeScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_FamilyHypothesisCode,0);
+WMTF_W_DirectionalContextCodeScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_DirectionalContextCode,0);
+WMTF_W_EvidenceBalanceCodeScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_EvidenceBalanceCode,0);
+WMTF_W_CurrentEventMaskScalar = IIf(WMTF_WeeklyValidScalar,WTSC_W_CurrentEventMask,0);
+
+WMTF_M_ContextMultiplicityCodeScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_ContextMultiplicityCode,0);
+WMTF_M_RangeContextIDScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_CurrentRangeContextID,Null);
+WMTF_M_RangeStatusCodeScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_RangeStatusCode,0);
+WMTF_M_RangeLowScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_PrimaryRangeLow,Null);
+WMTF_M_RangeHighScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_PrimaryRangeHigh,Null);
+WMTF_M_RangeAgeBarsScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_RangeAgeBars,Null);
+WMTF_M_PhaseStateCodeScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_PhaseStateCode,0);
+WMTF_M_FamilyHypothesisCodeScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_FamilyHypothesisCode,0);
+WMTF_M_DirectionalContextCodeScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_DirectionalContextCode,0);
+WMTF_M_EvidenceBalanceCodeScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_EvidenceBalanceCode,0);
+WMTF_M_CurrentEventMaskScalar = IIf(WMTF_MonthlyValidScalar,WTSC_M_CurrentEventMask,0);
+_SECTION_END();
+
+_SECTION_BEGIN("95. Multi-Timeframe categorical relationships");
+WMTF_DirectionalAlignmentText = "INSUFFICIENT MTF DATA\nUNRESOLVED / NON-DIRECTIONAL\nBULLISH ALIGNMENT\nBEARISH ALIGNMENT\nBASE COUNTER TO HIGHER CONTEXT\nHIGHER TIMEFRAMES CONFLICT\nMIXED / COMPLEX MTF CONTEXT";
+WMTF_EvidenceAlignmentText = "INSUFFICIENT\nBULLISH EVIDENCE ALIGNED\nBEARISH EVIDENCE ALIGNED\nBASE EVIDENCE COUNTER TO HIGHER\nHIGHER EVIDENCE CONFLICT\nMIXED / COMPLEX EVIDENCE";
+WMTF_PhaseRelationshipText = "INSUFFICIENT\nSAME PHASE STATE\nDAILY STRUCTURALLY EARLIER\nDAILY STRUCTURALLY LATER\nDIVERGENT PHASE STATES\nAMBIGUOUS: MULTIPLE CONTEXTS";
+
+WMTF_DDir = WMTF_D_DirectionalContextCodeScalar;
+WMTF_WDir = WMTF_W_DirectionalContextCodeScalar;
+WMTF_MDir = WMTF_M_DirectionalContextCodeScalar;
+WMTF_DirectionalSourcesValid = WMTF_SnapshotContractValidScalar;
+WMTF_AnyMultiplicityAmbiguous =
+    WMTF_D_ContextMultiplicityCodeScalar==2 OR
+    WMTF_W_ContextMultiplicityCodeScalar==2 OR
+    WMTF_M_ContextMultiplicityCodeScalar==2;
+WMTF_AnyDirectionalMixed = WMTF_DDir==4 OR WMTF_WDir==4 OR WMTF_MDir==4;
+WMTF_WMDirectional = (WMTF_WDir==2 OR WMTF_WDir==3) AND (WMTF_MDir==2 OR WMTF_MDir==3);
+WMTF_WMSameDirectional = WMTF_WMDirectional AND WMTF_WDir==WMTF_MDir;
+WMTF_WMOppositeDirectional = WMTF_WMDirectional AND WMTF_WDir!=WMTF_MDir;
+WMTF_DDirectional = WMTF_DDir==2 OR WMTF_DDir==3;
+
+WMTF_DirectionalAlignmentCodeScalar = 0;
+if (WMTF_DirectionalSourcesValid)
+{
+    WMTF_DirectionalAlignmentCodeScalar = IIf(
+        WMTF_AnyMultiplicityAmbiguous OR WMTF_AnyDirectionalMixed,6,
+        IIf(WMTF_WMOppositeDirectional,5,
+        IIf(WMTF_WMSameDirectional AND WMTF_DDirectional AND WMTF_DDir!=WMTF_WDir,4,
+        IIf(WMTF_DDir==2 AND WMTF_WDir==2 AND WMTF_MDir==2,2,
+        IIf(WMTF_DDir==3 AND WMTF_WDir==3 AND WMTF_MDir==3,3,
+        IIf(WMTF_DDir==0 OR WMTF_WDir==0 OR WMTF_MDir==0,0,
+        IIf(WMTF_DDir==1 OR WMTF_WDir==1 OR WMTF_MDir==1,1,6)))))));
+}
+
+WMTF_DEvidence = WMTF_D_EvidenceBalanceCodeScalar;
+WMTF_WEvidence = WMTF_W_EvidenceBalanceCodeScalar;
+WMTF_MEvidence = WMTF_M_EvidenceBalanceCodeScalar;
+WMTF_EvidenceAlignmentCodeScalar = 0;
+if (WMTF_SnapshotContractValidScalar)
+{
+    WMTF_EvidenceAlignmentCodeScalar = IIf(
+        WMTF_DEvidence==0 OR WMTF_WEvidence==0 OR WMTF_MEvidence==0,0,
+        IIf(WMTF_DEvidence==3 OR WMTF_WEvidence==3 OR WMTF_MEvidence==3,5,
+        IIf(WMTF_WEvidence!=WMTF_MEvidence,4,
+        IIf(WMTF_DEvidence!=WMTF_WEvidence,3,
+        IIf(WMTF_DEvidence==1 AND WMTF_WEvidence==1 AND WMTF_MEvidence==1,1,
+        IIf(WMTF_DEvidence==2 AND WMTF_WEvidence==2 AND WMTF_MEvidence==2,2,5))))));
+}
+
+WMTF_DPhase = WMTF_D_PhaseStateCodeScalar;
+WMTF_WPhase = WMTF_W_PhaseStateCodeScalar;
+WMTF_MPhase = WMTF_M_PhaseStateCodeScalar;
+WMTF_PhaseRelationshipCodeScalar = 0;
+if (WMTF_SnapshotContractValidScalar)
+{
+    WMTF_PhaseRelationshipCodeScalar = IIf(
+        WMTF_AnyMultiplicityAmbiguous,5,
+        IIf(WMTF_DPhase==0 OR WMTF_WPhase==0 OR WMTF_MPhase==0,0,
+        IIf(WMTF_DPhase==WMTF_WPhase AND WMTF_DPhase==WMTF_MPhase,1,
+        IIf(WMTF_DPhase==7 OR WMTF_WPhase==7 OR WMTF_MPhase==7,4,
+        IIf(WMTF_DPhase<WMTF_WPhase AND WMTF_DPhase<WMTF_MPhase,2,
+        IIf(WMTF_DPhase>WMTF_WPhase AND WMTF_DPhase>WMTF_MPhase,3,4))))));
+}
+
+// Diagnostic bit mask, not a score. Multiple reasons may coexist.
+// 1 invalid source; 2 unresolved directional; 4 ambiguous/mixed context;
+// 8 W/M directional conflict; 16 base counter; 32 other directional complex;
+// 64 W/M evidence conflict; 128 base evidence counter; 256 mixed evidence;
+// 512 phase divergence; 1024 phase ambiguity.
+WMTF_ConflictReasonMaskScalar =
+      IIf(NOT WMTF_SnapshotContractValidScalar,1,0)
+    + IIf(WMTF_SnapshotContractValidScalar AND WMTF_DirectionalAlignmentCodeScalar==1,2,0)
+    + IIf(WMTF_SnapshotContractValidScalar AND (WMTF_AnyMultiplicityAmbiguous OR WMTF_AnyDirectionalMixed),4,0)
+    + IIf(WMTF_DirectionalAlignmentCodeScalar==5,8,0)
+    + IIf(WMTF_DirectionalAlignmentCodeScalar==4,16,0)
+    + IIf(WMTF_DirectionalAlignmentCodeScalar==6 AND NOT (WMTF_AnyMultiplicityAmbiguous OR WMTF_AnyDirectionalMixed),32,0)
+    + IIf(WMTF_EvidenceAlignmentCodeScalar==4,64,0)
+    + IIf(WMTF_EvidenceAlignmentCodeScalar==3,128,0)
+    + IIf(WMTF_EvidenceAlignmentCodeScalar==5,256,0)
+    + IIf(WMTF_PhaseRelationshipCodeScalar==4,512,0)
+    + IIf(WMTF_PhaseRelationshipCodeScalar==5,1024,0);
+_SECTION_END();
+
+_SECTION_BEGIN("96. Multi-Timeframe public interface");
+// Expand current-state scalars only for formula interoperability. This is not
+// historical MTF backfill: every bar carries the same current snapshot state.
+WMTF_SnapshotContractValid = WMTF_Zero + WMTF_SnapshotContractValidScalar;
+WMTF_DailyValid = WMTF_Zero + WMTF_DailyValidScalar;
+WMTF_WeeklySnapshotStatusCode = WMTF_Zero + WTSC_W_StatusCode;
+WMTF_MonthlySnapshotStatusCode = WMTF_Zero + WTSC_M_StatusCode;
+
+WMTF_D_ContextMultiplicityCode = WMTF_Zero + WMTF_D_ContextMultiplicityCodeScalar;
+WMTF_W_ContextMultiplicityCode = WMTF_Zero + WMTF_W_ContextMultiplicityCodeScalar;
+WMTF_M_ContextMultiplicityCode = WMTF_Zero + WMTF_M_ContextMultiplicityCodeScalar;
+
+WMTF_D_PhaseStateCode = WMTF_Zero + WMTF_D_PhaseStateCodeScalar;
+WMTF_W_PhaseStateCode = WMTF_Zero + WMTF_W_PhaseStateCodeScalar;
+WMTF_M_PhaseStateCode = WMTF_Zero + WMTF_M_PhaseStateCodeScalar;
+WMTF_D_FamilyHypothesisCode = WMTF_Zero + WMTF_D_FamilyHypothesisCodeScalar;
+WMTF_W_FamilyHypothesisCode = WMTF_Zero + WMTF_W_FamilyHypothesisCodeScalar;
+WMTF_M_FamilyHypothesisCode = WMTF_Zero + WMTF_M_FamilyHypothesisCodeScalar;
+WMTF_D_DirectionalContextCode = WMTF_Zero + WMTF_D_DirectionalContextCodeScalar;
+WMTF_W_DirectionalContextCode = WMTF_Zero + WMTF_W_DirectionalContextCodeScalar;
+WMTF_M_DirectionalContextCode = WMTF_Zero + WMTF_M_DirectionalContextCodeScalar;
+WMTF_D_EvidenceBalanceCode = WMTF_Zero + WMTF_D_EvidenceBalanceCodeScalar;
+WMTF_W_EvidenceBalanceCode = WMTF_Zero + WMTF_W_EvidenceBalanceCodeScalar;
+WMTF_M_EvidenceBalanceCode = WMTF_Zero + WMTF_M_EvidenceBalanceCodeScalar;
+WMTF_DirectionalAlignmentCode = WMTF_Zero + WMTF_DirectionalAlignmentCodeScalar;
+WMTF_EvidenceAlignmentCode = WMTF_Zero + WMTF_EvidenceAlignmentCodeScalar;
+WMTF_PhaseRelationshipCode = WMTF_Zero + WMTF_PhaseRelationshipCodeScalar;
+WMTF_ConflictReasonCode = WMTF_Zero + WMTF_ConflictReasonMaskScalar;
+
+WMTF_D_RangeContextID = WMTF_Zero + WMTF_D_RangeContextIDScalar;
+WMTF_W_RangeContextID = WMTF_Zero + WMTF_W_RangeContextIDScalar;
+WMTF_M_RangeContextID = WMTF_Zero + WMTF_M_RangeContextIDScalar;
+WMTF_D_RangeStatusCode = WMTF_Zero + WMTF_D_RangeStatusCodeScalar;
+WMTF_W_RangeStatusCode = WMTF_Zero + WMTF_W_RangeStatusCodeScalar;
+WMTF_M_RangeStatusCode = WMTF_Zero + WMTF_M_RangeStatusCodeScalar;
+WMTF_D_PrimaryRangeLow = WMTF_Zero + WMTF_D_RangeLowScalar;
+WMTF_D_PrimaryRangeHigh = WMTF_Zero + WMTF_D_RangeHighScalar;
+WMTF_W_PrimaryRangeLow = WMTF_Zero + WMTF_W_RangeLowScalar;
+WMTF_W_PrimaryRangeHigh = WMTF_Zero + WMTF_W_RangeHighScalar;
+WMTF_M_PrimaryRangeLow = WMTF_Zero + WMTF_M_RangeLowScalar;
+WMTF_M_PrimaryRangeHigh = WMTF_Zero + WMTF_M_RangeHighScalar;
+WMTF_D_RangeAgeBars = WMTF_Zero + WMTF_D_RangeAgeBarsScalar;
+WMTF_W_RangeAgeBars = WMTF_Zero + WMTF_W_RangeAgeBarsScalar;
+WMTF_M_RangeAgeBars = WMTF_Zero + WMTF_M_RangeAgeBarsScalar;
+
+WMTF_D_EventMask = WMTF_Zero + WMTF_D_CurrentEventMaskScalar;
+WMTF_W_EventMask = WMTF_Zero + WMTF_W_CurrentEventMaskScalar;
+WMTF_M_EventMask = WMTF_Zero + WMTF_M_CurrentEventMaskScalar;
+WMTF_D_EventSourceDateTime = IIf(WMTF_D_EventMask>0,WMTF_D_SourceBarDateTimeRaw,Null);
+WMTF_W_EventSourceDateTime = IIf(WMTF_W_EventMask>0,WTSC_W_SourceBarDateTime,Null);
+WMTF_M_EventSourceDateTime = IIf(WMTF_M_EventMask>0,WTSC_M_SourceBarDateTime,Null);
+
+// Snapshot health / provenance.
+WMTF_W_SourcePeriodOrdinal = WMTF_Zero + WTSC_W_SourcePeriodOrdinal;
+WMTF_M_SourcePeriodOrdinal = WMTF_Zero + WTSC_M_SourcePeriodOrdinal;
+WMTF_W_SourceBarDateTime = WMTF_Zero + WTSC_W_SourceBarDateTime;
+WMTF_M_SourceBarDateTime = WMTF_Zero + WTSC_M_SourceBarDateTime;
+WMTF_W_PublishedAtDateTime = WMTF_Zero + WTSC_W_PublishedAtDateTime;
+WMTF_M_PublishedAtDateTime = WMTF_Zero + WTSC_M_PublishedAtDateTime;
+WMTF_W_GenerationID = WMTF_Zero + WTSC_W_GenerationB;
+WMTF_M_GenerationID = WMTF_Zero + WTSC_M_GenerationB;
+WMTF_W_SchemaMajor = WMTF_Zero + WTSC_W_SchemaMajor;
+WMTF_W_SchemaMinor = WMTF_Zero + WTSC_W_SchemaMinor;
+WMTF_M_SchemaMajor = WMTF_Zero + WTSC_M_SchemaMajor;
+WMTF_M_SchemaMinor = WMTF_Zero + WTSC_M_SchemaMinor;
+
+// Multiple-context diagnostics remain separate by timeframe. They are never
+// used to manufacture a singleton winner.
+WMTF_D_L_ContextPresent = WMTF_Zero + LastValue(WCI_L_ContextPresent);
+WMTF_D_L_RangeContextID = WMTF_Zero + LastValue(WCI_L_RangeContextID);
+WMTF_D_L_PrimaryRangeLow = WMTF_Zero + LastValue(WCI_L_PrimaryRangeLow);
+WMTF_D_L_PrimaryRangeHigh = WMTF_Zero + LastValue(WCI_L_PrimaryRangeHigh);
+WMTF_D_U_ContextPresent = WMTF_Zero + LastValue(WCI_U_ContextPresent);
+WMTF_D_U_RangeContextID = WMTF_Zero + LastValue(WCI_U_RangeContextID);
+WMTF_D_U_PrimaryRangeLow = WMTF_Zero + LastValue(WCI_U_PrimaryRangeLow);
+WMTF_D_U_PrimaryRangeHigh = WMTF_Zero + LastValue(WCI_U_PrimaryRangeHigh);
+
+WMTF_W_L_ContextPresent = WMTF_Zero + IIf(WMTF_WeeklyValidScalar,WTSC_W_L_ContextPresent,0);
+WMTF_W_L_RangeContextID = WMTF_Zero + IIf(WMTF_WeeklyValidScalar,WTSC_W_L_RangeContextID,Null);
+WMTF_W_L_PrimaryRangeLow = WMTF_Zero + IIf(WMTF_WeeklyValidScalar,WTSC_W_L_PrimaryRangeLow,Null);
+WMTF_W_L_PrimaryRangeHigh = WMTF_Zero + IIf(WMTF_WeeklyValidScalar,WTSC_W_L_PrimaryRangeHigh,Null);
+WMTF_W_U_ContextPresent = WMTF_Zero + IIf(WMTF_WeeklyValidScalar,WTSC_W_U_ContextPresent,0);
+WMTF_W_U_RangeContextID = WMTF_Zero + IIf(WMTF_WeeklyValidScalar,WTSC_W_U_RangeContextID,Null);
+WMTF_W_U_PrimaryRangeLow = WMTF_Zero + IIf(WMTF_WeeklyValidScalar,WTSC_W_U_PrimaryRangeLow,Null);
+WMTF_W_U_PrimaryRangeHigh = WMTF_Zero + IIf(WMTF_WeeklyValidScalar,WTSC_W_U_PrimaryRangeHigh,Null);
+
+WMTF_M_L_ContextPresent = WMTF_Zero + IIf(WMTF_MonthlyValidScalar,WTSC_M_L_ContextPresent,0);
+WMTF_M_L_RangeContextID = WMTF_Zero + IIf(WMTF_MonthlyValidScalar,WTSC_M_L_RangeContextID,Null);
+WMTF_M_L_PrimaryRangeLow = WMTF_Zero + IIf(WMTF_MonthlyValidScalar,WTSC_M_L_PrimaryRangeLow,Null);
+WMTF_M_L_PrimaryRangeHigh = WMTF_Zero + IIf(WMTF_MonthlyValidScalar,WTSC_M_L_PrimaryRangeHigh,Null);
+WMTF_M_U_ContextPresent = WMTF_Zero + IIf(WMTF_MonthlyValidScalar,WTSC_M_U_ContextPresent,0);
+WMTF_M_U_RangeContextID = WMTF_Zero + IIf(WMTF_MonthlyValidScalar,WTSC_M_U_RangeContextID,Null);
+WMTF_M_U_PrimaryRangeLow = WMTF_Zero + IIf(WMTF_MonthlyValidScalar,WTSC_M_U_PrimaryRangeLow,Null);
+WMTF_M_U_PrimaryRangeHigh = WMTF_Zero + IIf(WMTF_MonthlyValidScalar,WTSC_M_U_PrimaryRangeHigh,Null);
+_SECTION_END();
