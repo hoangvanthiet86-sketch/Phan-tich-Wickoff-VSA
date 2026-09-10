@@ -1,0 +1,130 @@
+/*
+    Derived-Series Pivot Kernel v0.1 — Structure/Location equivalence harness
+
+    K27-K29 audit harness. It runs the new generic kernel against the exact
+    Structure/Location v1.0 source inputs and exposes cell-by-cell mismatch
+    flags/counts for the locked behavioral oracle.
+
+    IMPORTANT: presence of this harness is not native test evidence.
+    It must later be executed in AmiBroker 6.20.01 during the integrated test
+    campaign. Until then: SOURCE-EQUIVALENCE HARNESS READY / NATIVE PENDING.
+*/
+#include_once <WyckoffVSA_StructureLocation_v1.0.afl>
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+
+_SECTION_BEGIN("102. Derived pivot equivalence setup");
+function WDP_AuditEqual( a, b )
+{
+    return IIf(IsNull(a) AND IsNull(b),1,
+           IIf(IsNull(a) OR IsNull(b),0,a==b));
+}
+
+WDP_AuditOffset = Cum(1)-1;
+
+// High oracle: same source validity, same A/B, same source coordinates.
+WDP_PrepareWindow("EQH",SL_SourcePriceValid,SL_PivotLeft,SL_PivotRight,
+                  SL_SourceBarIndex,SL_SourceDateTime,WDP_AuditOffset);
+WDP_CalcPivotKind("EQH","High",1,High,
+                  VarGet("WDP_EQH_PivotWindowValid"),
+                  IIf(VarGet("WDP_EQH_PivotConfigValid"),SL_PivotLeft,1),
+                  IIf(VarGet("WDP_EQH_PivotConfigValid"),SL_PivotRight,1),
+                  SL_SourceBarIndex,SL_SourceDateTime);
+
+// Low oracle: same source validity, same A/B, same source coordinates.
+WDP_PrepareWindow("EQL",SL_SourcePriceValid,SL_PivotLeft,SL_PivotRight,
+                  SL_SourceBarIndex,SL_SourceDateTime,WDP_AuditOffset);
+WDP_CalcPivotKind("EQL","Low",0,Low,
+                  VarGet("WDP_EQL_PivotWindowValid"),
+                  IIf(VarGet("WDP_EQL_PivotConfigValid"),SL_PivotLeft,1),
+                  IIf(VarGet("WDP_EQL_PivotConfigValid"),SL_PivotRight,1),
+                  SL_SourceBarIndex,SL_SourceDateTime);
+_SECTION_END();
+
+_SECTION_BEGIN("103. Window cell-by-cell equivalence");
+WDP_EQ_WindowMismatch =
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotConfigValid"),SL_PivotConfigValid) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotWindowValidCount"),SL_PivotWindowValidCount) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotWindowStatusCode"),SL_PivotWindowStatusCode) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotWindowValid"),SL_PivotWindowValid) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotWindowStartBarIndex"),SL_PivotWindowStartBarIndex) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotWindowEndBarIndex"),SL_PivotWindowEndBarIndex) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotWindowStartDateTime"),SL_PivotWindowStartDateTime) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotWindowEndDateTime"),SL_PivotWindowEndDateTime) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotCandidateBarIndex"),SL_PivotCandidateBarIndex) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotCandidateDateTime"),SL_PivotCandidateDateTime);
+
+WDP_EQ_WindowMismatchCount = LastValue(Cum(WDP_EQ_WindowMismatch));
+_SECTION_END();
+
+_SECTION_BEGIN("104. High-pivot cell-by-cell equivalence");
+WDP_EQ_HighMismatch =
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighEventValid"),VarGet("SL_PivotHighEventValid")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighEventCode"),VarGet("SL_PivotHighEventCode")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighEventValue"),VarGet("SL_PivotHighEventPrice")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighExtremeBarIndex"),VarGet("SL_PivotHighExtremeBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighExtremeDateTime"),VarGet("SL_PivotHighExtremeDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighConfirmBarIndex"),VarGet("SL_PivotHighConfirmBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighConfirmDateTime"),VarGet("SL_PivotHighConfirmDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighConfirmationLag"),VarGet("SL_PivotHighConfirmationLag")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestValid"),VarGet("SL_PivotHighLatestValid")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestValue"),VarGet("SL_PivotHighLatestPrice")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestExtremeBarIndex"),VarGet("SL_PivotHighLatestExtremeBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestExtremeDateTime"),VarGet("SL_PivotHighLatestExtremeDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestConfirmBarIndex"),VarGet("SL_PivotHighLatestConfirmBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestConfirmDateTime"),VarGet("SL_PivotHighLatestConfirmDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestAge"),VarGet("SL_PivotHighLatestAge")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestBarsSinceConfirmation"),VarGet("SL_PivotHighLatestBarsSinceConfirmation")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestPriorValid"),VarGet("SL_PivotHighLatestPriorValid")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestPriorValue"),VarGet("SL_PivotHighLatestPriorPrice")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestPriorExtremeBarIndex"),VarGet("SL_PivotHighLatestPriorExtremeBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestPriorExtremeDateTime"),VarGet("SL_PivotHighLatestPriorExtremeDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestPriorConfirmBarIndex"),VarGet("SL_PivotHighLatestPriorConfirmBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestPriorConfirmDateTime"),VarGet("SL_PivotHighLatestPriorConfirmDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestPriorAge"),VarGet("SL_PivotHighLatestPriorAge")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQH_PivotHighLatestPriorBarsSinceConfirmation"),VarGet("SL_PivotHighLatestPriorBarsSinceConfirmation"));
+
+WDP_EQ_HighMismatchCount = LastValue(Cum(WDP_EQ_HighMismatch));
+_SECTION_END();
+
+_SECTION_BEGIN("105. Low-pivot cell-by-cell equivalence");
+WDP_EQ_LowMismatch =
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowEventValid"),VarGet("SL_PivotLowEventValid")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowEventCode"),VarGet("SL_PivotLowEventCode")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowEventValue"),VarGet("SL_PivotLowEventPrice")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowExtremeBarIndex"),VarGet("SL_PivotLowExtremeBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowExtremeDateTime"),VarGet("SL_PivotLowExtremeDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowConfirmBarIndex"),VarGet("SL_PivotLowConfirmBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowConfirmDateTime"),VarGet("SL_PivotLowConfirmDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowConfirmationLag"),VarGet("SL_PivotLowConfirmationLag")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestValid"),VarGet("SL_PivotLowLatestValid")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestValue"),VarGet("SL_PivotLowLatestPrice")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestExtremeBarIndex"),VarGet("SL_PivotLowLatestExtremeBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestExtremeDateTime"),VarGet("SL_PivotLowLatestExtremeDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestConfirmBarIndex"),VarGet("SL_PivotLowLatestConfirmBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestConfirmDateTime"),VarGet("SL_PivotLowLatestConfirmDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestAge"),VarGet("SL_PivotLowLatestAge")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestBarsSinceConfirmation"),VarGet("SL_PivotLowLatestBarsSinceConfirmation")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestPriorValid"),VarGet("SL_PivotLowLatestPriorValid")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestPriorValue"),VarGet("SL_PivotLowLatestPriorPrice")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestPriorExtremeBarIndex"),VarGet("SL_PivotLowLatestPriorExtremeBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestPriorExtremeDateTime"),VarGet("SL_PivotLowLatestPriorExtremeDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestPriorConfirmBarIndex"),VarGet("SL_PivotLowLatestPriorConfirmBarIndex")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestPriorConfirmDateTime"),VarGet("SL_PivotLowLatestPriorConfirmDateTime")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestPriorAge"),VarGet("SL_PivotLowLatestPriorAge")) OR
+    NOT WDP_AuditEqual(VarGet("WDP_EQL_PivotLowLatestPriorBarsSinceConfirmation"),VarGet("SL_PivotLowLatestPriorBarsSinceConfirmation"));
+
+WDP_EQ_LowMismatchCount = LastValue(Cum(WDP_EQ_LowMismatch));
+WDP_EQ_AnyMismatch = WDP_EQ_WindowMismatch OR WDP_EQ_HighMismatch OR WDP_EQ_LowMismatch;
+WDP_EQ_AnyMismatchCount = LastValue(Cum(WDP_EQ_AnyMismatch));
+_SECTION_END();
+
+_SECTION_BEGIN("106. Equivalence audit exploration");
+AddColumn(WDP_EQ_WindowMismatch,"WDP_EQ_WindowMismatch",1.0);
+AddColumn(WDP_EQ_HighMismatch,"WDP_EQ_HighMismatch",1.0);
+AddColumn(WDP_EQ_LowMismatch,"WDP_EQ_LowMismatch",1.0);
+AddColumn(WDP_EQ_AnyMismatch,"WDP_EQ_AnyMismatch",1.0);
+AddColumn(0*BarIndex()+WDP_EQ_WindowMismatchCount,"WDP_EQ_WindowMismatchCount",1.0);
+AddColumn(0*BarIndex()+WDP_EQ_HighMismatchCount,"WDP_EQ_HighMismatchCount",1.0);
+AddColumn(0*BarIndex()+WDP_EQ_LowMismatchCount,"WDP_EQ_LowMismatchCount",1.0);
+AddColumn(0*BarIndex()+WDP_EQ_AnyMismatchCount,"WDP_EQ_AnyMismatchCount",1.0);
+_SECTION_END();
