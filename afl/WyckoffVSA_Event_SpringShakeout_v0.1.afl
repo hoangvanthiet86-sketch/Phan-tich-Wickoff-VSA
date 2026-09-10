@@ -1,0 +1,256 @@
+/*
+    Wyckoff VSA Spring / Shakeout Event v0.1
+    Development module. UNTESTED DEVELOPMENT.
+    Penetration of previously confirmed pivot-low support, same-bar reclaim,
+    then next-bar price confirmation. No trading signal.
+
+    Development specification:
+    docs/wyckoff-event-spring-shakeout-v0.1-spec.md
+*/
+#include_once <WyckoffVSA_Confirmation_v1.0.afl>
+
+_SECTION_BEGIN("30. Spring Shakeout constants and input contract");
+WE_SS_MaxPenetrationATR = 1.00;
+WE_SS_DeepPenetrationATR = 0.50;
+WE_SS_MinClosePosition = 0.50;
+WE_SS_ShakeoutRSpreadMin = 1.20;
+WE_SS_ShakeoutRVOLMin = 1.25;
+
+function WE_SS_Finite( x )
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WE_SS_SourceBarIndex = BarIndex();
+WE_SS_SourceDateTime = DateTime();
+
+WE_SS_OriginPriceValid = IIf(
+    PriceInputValid==1
+    AND WE_SS_Finite(Low)
+    AND WE_SS_Finite(Close)
+    AND Close>0
+    AND Low<=Close,1,0);
+
+WE_SS_PriorSupportPriceRaw = SL_PivotLowLatestPriorPrice;
+WE_SS_PriorSupportValid = IIf(
+    SL_PivotLowLatestPriorValid==1
+    AND WE_SS_Finite(WE_SS_PriorSupportPriceRaw)
+    AND WE_SS_PriorSupportPriceRaw>0
+    AND WE_SS_Finite(SL_PivotLowLatestPriorConfirmBarIndex)
+    AND SL_PivotLowLatestPriorConfirmBarIndex<WE_SS_SourceBarIndex
+    AND NOT IsNull(SL_PivotLowLatestPriorConfirmDateTime),1,0);
+
+WE_SS_PriorATRValid = IIf(
+    PriorATRValid==1
+    AND WE_SS_Finite(PriorATR)
+    AND PriorATR>0,1,0);
+
+WE_SS_EffortShapeValid = IIf(
+    RVOLValid==1
+    AND RSpreadValid==1
+    AND ClosePositionValid==1
+    AND WE_SS_Finite(RVOL)
+    AND WE_SS_Finite(RSpread)
+    AND WE_SS_Finite(ClosePosition),1,0);
+
+WE_SS_SafeSupport = IIf(WE_SS_PriorSupportValid,WE_SS_PriorSupportPriceRaw,0);
+WE_SS_SafeATR = IIf(WE_SS_PriorATRValid,PriorATR,1);
+WE_SS_PenetrationRaw = WE_SS_SafeSupport-Low;
+WE_SS_PenetrationATRRaw = WE_SS_PenetrationRaw/WE_SS_SafeATR;
+WE_SS_PenetrationMetricValid = IIf(
+    WE_SS_OriginPriceValid
+    AND WE_SS_PriorSupportValid
+    AND WE_SS_PriorATRValid
+    AND WE_SS_Finite(WE_SS_PenetrationRaw)
+    AND WE_SS_Finite(WE_SS_PenetrationATRRaw),1,0);
+
+WE_SS_OriginStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nSPRING/SHAKEOUT CANDIDATE";
+WE_SS_OriginKindText = "\nSPRING-LIKE\nSHAKEOUT-LIKE";
+WE_SS_ResolutionStatusText = "INSUFFICIENT DATA\nNO PRIOR SPRING/SHAKEOUT\nSPRING/SHAKEOUT REJECTED\nSPRING/SHAKEOUT CONFIRMED";
+_SECTION_END();
+
+_SECTION_BEGIN("31. Spring Shakeout origin at current bar");
+WE_SS_OriginDependenciesValid = IIf(
+    WE_SS_OriginPriceValid
+    AND WE_SS_PriorSupportValid
+    AND WE_SS_PriorATRValid
+    AND WE_SS_EffortShapeValid
+    AND WE_SS_PenetrationMetricValid,1,0);
+
+WE_SS_PenetratesSupport = IIf(
+    WE_SS_OriginDependenciesValid
+    AND Low<WE_SS_PriorSupportPriceRaw,1,0);
+
+WE_SS_PenetrationWithinLimit = IIf(
+    WE_SS_PenetratesSupport
+    AND WE_SS_PenetrationATRRaw<=WE_SS_MaxPenetrationATR,1,0);
+
+WE_SS_ReclaimsSupport = IIf(
+    WE_SS_OriginDependenciesValid
+    AND Close>=WE_SS_PriorSupportPriceRaw,1,0);
+
+WE_SS_ClosePositionStrongEnough = IIf(
+    WE_SS_EffortShapeValid
+    AND ClosePosition>=WE_SS_MinClosePosition,1,0);
+
+WE_SS_OriginCode = IIf(
+    NOT WE_SS_OriginPriceValid,0,
+    IIf(NOT WE_SS_PriorSupportValid,0,
+    IIf(NOT WE_SS_PriorATRValid OR NOT WE_SS_PenetrationMetricValid,0,
+    IIf(NOT WE_SS_EffortShapeValid,0,
+    IIf(Low>=WE_SS_PriorSupportPriceRaw,1,
+    IIf(WE_SS_PenetrationATRRaw>WE_SS_MaxPenetrationATR,1,
+    IIf(Close<WE_SS_PriorSupportPriceRaw,1,
+    IIf(ClosePosition<WE_SS_MinClosePosition,1,2))))))));
+
+WE_SS_OriginValid = IIf(WE_SS_OriginCode>0,1,0);
+WE_SS_OriginReasonCode = IIf(
+    NOT WE_SS_OriginPriceValid,8,
+    IIf(NOT WE_SS_PriorSupportValid,2,
+    IIf(NOT WE_SS_PriorATRValid OR NOT WE_SS_PenetrationMetricValid,3,
+    IIf(NOT WE_SS_EffortShapeValid,7,
+    IIf(Low>=WE_SS_PriorSupportPriceRaw,1,
+    IIf(WE_SS_PenetrationATRRaw>WE_SS_MaxPenetrationATR,4,
+    IIf(Close<WE_SS_PriorSupportPriceRaw,5,
+    IIf(ClosePosition<WE_SS_MinClosePosition,6,0))))))));
+
+WE_SS_ShakeoutByDepth = IIf(
+    WE_SS_OriginCode==2
+    AND WE_SS_PenetrationATRRaw>WE_SS_DeepPenetrationATR,1,0);
+
+WE_SS_ShakeoutByEffort = IIf(
+    WE_SS_OriginCode==2
+    AND RSpread>=WE_SS_ShakeoutRSpreadMin
+    AND RVOL>=WE_SS_ShakeoutRVOLMin,1,0);
+
+WE_SS_OriginKindCode = IIf(
+    WE_SS_OriginCode==2,
+    IIf(WE_SS_ShakeoutByDepth OR WE_SS_ShakeoutByEffort,2,1),Null);
+
+WE_SS_OriginBarIndex = IIf(WE_SS_OriginCode==2,WE_SS_SourceBarIndex,Null);
+WE_SS_OriginDateTime = IIf(WE_SS_OriginCode==2,WE_SS_SourceDateTime,Null);
+WE_SS_OriginLow = IIf(WE_SS_OriginCode==2,Low,Null);
+WE_SS_OriginClose = IIf(WE_SS_OriginCode==2,Close,Null);
+WE_SS_OriginClosePosition = IIf(WE_SS_OriginCode==2,ClosePosition,Null);
+WE_SS_SupportPrice = IIf(WE_SS_OriginCode==2,WE_SS_PriorSupportPriceRaw,Null);
+WE_SS_OriginPriorATR = IIf(WE_SS_OriginCode==2,PriorATR,Null);
+WE_SS_Penetration = IIf(WE_SS_OriginCode==2,WE_SS_PenetrationRaw,Null);
+WE_SS_PenetrationATR = IIf(WE_SS_OriginCode==2,WE_SS_PenetrationATRRaw,Null);
+WE_SS_OriginRVOL = IIf(WE_SS_OriginCode==2,RVOL,Null);
+WE_SS_OriginRSpread = IIf(WE_SS_OriginCode==2,RSpread,Null);
+WE_SS_SupportPivotExtremeBarIndex = IIf(WE_SS_OriginCode==2,SL_PivotLowLatestPriorExtremeBarIndex,Null);
+WE_SS_SupportPivotExtremeDateTime = IIf(WE_SS_OriginCode==2,SL_PivotLowLatestPriorExtremeDateTime,Null);
+WE_SS_SupportPivotConfirmBarIndex = IIf(WE_SS_OriginCode==2,SL_PivotLowLatestPriorConfirmBarIndex,Null);
+WE_SS_SupportPivotConfirmDateTime = IIf(WE_SS_OriginCode==2,SL_PivotLowLatestPriorConfirmDateTime,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("32. Spring Shakeout next-bar resolution");
+WE_SS_PriorOriginCodeRaw = Ref(WE_SS_OriginCode,-1);
+WE_SS_PriorOriginPresent = IIf(Nz(WE_SS_PriorOriginCodeRaw,-1)==2,1,0);
+
+WE_SS_PriorOriginBarIndex = Ref(WE_SS_OriginBarIndex,-1);
+WE_SS_PriorOriginDateTime = Ref(WE_SS_OriginDateTime,-1);
+WE_SS_PriorOriginKindCode = Ref(WE_SS_OriginKindCode,-1);
+WE_SS_PriorOriginLow = Ref(WE_SS_OriginLow,-1);
+WE_SS_PriorOriginClose = Ref(WE_SS_OriginClose,-1);
+WE_SS_PriorOriginClosePosition = Ref(WE_SS_OriginClosePosition,-1);
+WE_SS_PriorSupportPrice = Ref(WE_SS_SupportPrice,-1);
+WE_SS_PriorOriginPriorATR = Ref(WE_SS_OriginPriorATR,-1);
+WE_SS_PriorPenetration = Ref(WE_SS_Penetration,-1);
+WE_SS_PriorPenetrationATR = Ref(WE_SS_PenetrationATR,-1);
+WE_SS_PriorOriginRVOL = Ref(WE_SS_OriginRVOL,-1);
+WE_SS_PriorOriginRSpread = Ref(WE_SS_OriginRSpread,-1);
+WE_SS_PriorSupportPivotExtremeBarIndex = Ref(WE_SS_SupportPivotExtremeBarIndex,-1);
+WE_SS_PriorSupportPivotExtremeDateTime = Ref(WE_SS_SupportPivotExtremeDateTime,-1);
+WE_SS_PriorSupportPivotConfirmBarIndex = Ref(WE_SS_SupportPivotConfirmBarIndex,-1);
+WE_SS_PriorSupportPivotConfirmDateTime = Ref(WE_SS_SupportPivotConfirmDateTime,-1);
+
+WE_SS_EvaluationPriceValid = IIf(
+    PriceInputValid==1
+    AND WE_SS_Finite(Low)
+    AND WE_SS_Finite(Close)
+    AND Close>0
+    AND Low<=Close,1,0);
+
+WE_SS_EvaluationSupportHeld = IIf(
+    WE_SS_PriorOriginPresent
+    AND WE_SS_EvaluationPriceValid
+    AND WE_SS_Finite(WE_SS_PriorSupportPrice)
+    AND Low>=WE_SS_PriorSupportPrice,1,0);
+
+WE_SS_EvaluationCloseUp = IIf(
+    WE_SS_PriorOriginPresent
+    AND WE_SS_EvaluationPriceValid
+    AND WE_SS_Finite(WE_SS_PriorOriginClose)
+    AND Close>WE_SS_PriorOriginClose,1,0);
+
+WE_SS_ResolutionCode = IIf(
+    NOT WE_SS_PriorOriginPresent,1,
+    IIf(NOT WE_SS_EvaluationPriceValid OR NOT WE_SS_Finite(WE_SS_PriorOriginClose) OR NOT WE_SS_Finite(WE_SS_PriorSupportPrice),0,
+    IIf(WE_SS_EvaluationSupportHeld AND WE_SS_EvaluationCloseUp,3,2)));
+
+WE_SS_ResolutionValid = IIf(WE_SS_ResolutionCode>0,1,0);
+WE_SS_Confirmed = IIf(WE_SS_ResolutionCode==3,1,0);
+
+WE_SS_ResolutionReasonCode = IIf(
+    NOT WE_SS_PriorOriginPresent,0,
+    IIf(NOT WE_SS_EvaluationPriceValid OR NOT WE_SS_Finite(WE_SS_PriorOriginClose) OR NOT WE_SS_Finite(WE_SS_PriorSupportPrice),4,
+    IIf(NOT WE_SS_EvaluationCloseUp AND NOT WE_SS_EvaluationSupportHeld,3,
+    IIf(NOT WE_SS_EvaluationCloseUp,1,
+    IIf(NOT WE_SS_EvaluationSupportHeld,2,0)))));
+
+WE_SS_ResolutionOriginBarIndex = IIf(WE_SS_PriorOriginPresent,WE_SS_PriorOriginBarIndex,Null);
+WE_SS_ResolutionOriginDateTime = IIf(WE_SS_PriorOriginPresent,WE_SS_PriorOriginDateTime,Null);
+WE_SS_ResolutionOriginKindCode = IIf(WE_SS_PriorOriginPresent,WE_SS_PriorOriginKindCode,Null);
+WE_SS_ResolutionOriginLow = IIf(WE_SS_PriorOriginPresent,WE_SS_PriorOriginLow,Null);
+WE_SS_ResolutionOriginClose = IIf(WE_SS_PriorOriginPresent,WE_SS_PriorOriginClose,Null);
+WE_SS_ResolutionSupportPrice = IIf(WE_SS_PriorOriginPresent,WE_SS_PriorSupportPrice,Null);
+WE_SS_ResolutionPenetrationATR = IIf(WE_SS_PriorOriginPresent,WE_SS_PriorPenetrationATR,Null);
+WE_SS_EvaluationBarIndex = IIf(WE_SS_PriorOriginPresent,WE_SS_SourceBarIndex,Null);
+WE_SS_EvaluationDateTime = IIf(WE_SS_PriorOriginPresent,WE_SS_SourceDateTime,Null);
+WE_SS_EvaluationLow = IIf(WE_SS_PriorOriginPresent AND WE_SS_EvaluationPriceValid,Low,Null);
+WE_SS_EvaluationClose = IIf(WE_SS_PriorOriginPresent AND WE_SS_EvaluationPriceValid,Close,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("33. Spring Shakeout exploration");
+// Development output only. Do not alter upstream Filter or create trading assignments.
+AddColumn(WE_SS_SourceBarIndex,"WE_SS_SourceBarIndex",1.0);
+AddColumn(WE_SS_SourceDateTime,"WE_SS_SourceDateTime",formatDateTime);
+AddColumn(WE_SS_OriginCode,"WE_SS_OriginCode",1.0);
+AddColumn(WE_SS_OriginValid,"WE_SS_OriginValid",1.0);
+AddColumn(WE_SS_OriginReasonCode,"WE_SS_OriginReasonCode",1.0);
+AddMultiTextColumn(WE_SS_OriginCode,WE_SS_OriginStatusText,"WE_SS_OriginStatus");
+AddColumn(WE_SS_OriginKindCode,"WE_SS_OriginKindCode",1.0);
+AddMultiTextColumn(WE_SS_OriginKindCode,WE_SS_OriginKindText,"WE_SS_OriginKind");
+AddColumn(WE_SS_OriginBarIndex,"WE_SS_OriginBarIndex",1.0);
+AddColumn(WE_SS_OriginDateTime,"WE_SS_OriginDateTime",formatDateTime);
+AddColumn(WE_SS_SupportPrice,"WE_SS_SupportPrice",1.12);
+AddColumn(WE_SS_Penetration,"WE_SS_Penetration",1.12);
+AddColumn(WE_SS_PenetrationATR,"WE_SS_PenetrationATR",1.12);
+AddColumn(WE_SS_OriginPriorATR,"WE_SS_OriginPriorATR",1.12);
+AddColumn(WE_SS_OriginLow,"WE_SS_OriginLow",1.12);
+AddColumn(WE_SS_OriginClose,"WE_SS_OriginClose",1.12);
+AddColumn(WE_SS_OriginClosePosition,"WE_SS_OriginClosePosition",1.12);
+AddColumn(WE_SS_OriginRVOL,"WE_SS_OriginRVOL",1.12);
+AddColumn(WE_SS_OriginRSpread,"WE_SS_OriginRSpread",1.12);
+AddColumn(WE_SS_SupportPivotExtremeBarIndex,"WE_SS_SupportPivotExtremeBarIndex",1.0);
+AddColumn(WE_SS_SupportPivotExtremeDateTime,"WE_SS_SupportPivotExtremeDateTime",formatDateTime);
+AddColumn(WE_SS_SupportPivotConfirmBarIndex,"WE_SS_SupportPivotConfirmBarIndex",1.0);
+AddColumn(WE_SS_SupportPivotConfirmDateTime,"WE_SS_SupportPivotConfirmDateTime",formatDateTime);
+AddColumn(WE_SS_ResolutionCode,"WE_SS_ResolutionCode",1.0);
+AddColumn(WE_SS_ResolutionValid,"WE_SS_ResolutionValid",1.0);
+AddColumn(WE_SS_Confirmed,"WE_SS_Confirmed",1.0);
+AddColumn(WE_SS_ResolutionReasonCode,"WE_SS_ResolutionReasonCode",1.0);
+AddMultiTextColumn(WE_SS_ResolutionCode,WE_SS_ResolutionStatusText,"WE_SS_ResolutionStatus");
+AddColumn(WE_SS_ResolutionOriginBarIndex,"WE_SS_ResolutionOriginBarIndex",1.0);
+AddColumn(WE_SS_ResolutionOriginDateTime,"WE_SS_ResolutionOriginDateTime",formatDateTime);
+AddColumn(WE_SS_ResolutionOriginKindCode,"WE_SS_ResolutionOriginKindCode",1.0);
+AddColumn(WE_SS_ResolutionOriginLow,"WE_SS_ResolutionOriginLow",1.12);
+AddColumn(WE_SS_ResolutionOriginClose,"WE_SS_ResolutionOriginClose",1.12);
+AddColumn(WE_SS_ResolutionSupportPrice,"WE_SS_ResolutionSupportPrice",1.12);
+AddColumn(WE_SS_ResolutionPenetrationATR,"WE_SS_ResolutionPenetrationATR",1.12);
+AddColumn(WE_SS_EvaluationBarIndex,"WE_SS_EvaluationBarIndex",1.0);
+AddColumn(WE_SS_EvaluationDateTime,"WE_SS_EvaluationDateTime",formatDateTime);
+AddColumn(WE_SS_EvaluationLow,"WE_SS_EvaluationLow",1.12);
+AddColumn(WE_SS_EvaluationClose,"WE_SS_EvaluationClose",1.12);
+_SECTION_END();
