@@ -1,0 +1,18 @@
+/* Monthly Snapshot Publisher v0.1 — explicit S31 entrypoint. */
+#include_once <WyckoffVSA_TimeframeSnapshot_Publisher_v0.1.afl>
+
+_SECTION_BEGIN("93. Monthly Snapshot Publisher audit entrypoint");
+WTSPM_ExpectedInterval = inMonthly;
+WTSPM_EntrypointIntervalValid = Interval()==WTSPM_ExpectedInterval;
+WTSPM_Prefix = "WVSA_MTF_v01_" + Name() + "_M_";
+WTSPM_Ready = StaticVarGet(WTSPM_Prefix+"Ready");
+WTSPM_Generation = StaticVarGet(WTSPM_Prefix+"CommittedGenerationID");
+WTSPM_SourcePeriodOrdinal = StaticVarGet(WTSPM_Prefix+"SourcePeriodOrdinal");
+WTSPM_SourceBarDateTime = StaticVarGet(WTSPM_Prefix+"SourceBarDateTime");
+
+AddColumn(0*BarIndex()+WTSPM_EntrypointIntervalValid,"WTSPM_EntrypointIntervalValid",1.0);
+AddColumn(0*BarIndex()+WTSPM_Ready,"WTSPM_Ready",1.0);
+AddColumn(0*BarIndex()+WTSPM_Generation,"WTSPM_GenerationID",1.0);
+AddColumn(0*BarIndex()+WTSPM_SourcePeriodOrdinal,"WTSPM_SourcePeriodOrdinal",1.0);
+AddColumn(0*BarIndex()+WTSPM_SourceBarDateTime,"WTSPM_SourceBarDateTime",formatDateTime);
+_SECTION_END();
