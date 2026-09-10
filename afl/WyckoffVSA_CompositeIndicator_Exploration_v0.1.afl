@@ -10,8 +10,10 @@
 #include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
 
 _SECTION_BEGIN("87. Composite exploration identity and status text");
+WCI_SingletonRangeStatusCode = IIf(WCI_ContextMultiplicityCode==1,WCI_RangeStatusCode,Null);
+
 AddTextColumn(Name(),"WCI_Symbol");
-AddMultiTextColumn(WCI_RangeStatusCode,WPCP_RangeStatusText,"WCI_SingletonRangeStatus");
+AddMultiTextColumn(WCI_SingletonRangeStatusCode,WPCP_RangeStatusText,"WCI_SingletonRangeStatus");
 AddMultiTextColumn(WCI_L_RangeStatusCode,WPCP_RangeStatusText,"WCI_L_RangeStatus");
 AddMultiTextColumn(WCI_U_RangeStatusCode,WPCP_RangeStatusText,"WCI_U_RangeStatus");
 AddMultiTextColumn(WCI_L_PhaseStateCode,WPC_PhaseText,"WCI_L_PhaseState");
