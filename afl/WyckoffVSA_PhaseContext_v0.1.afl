@@ -1,0 +1,991 @@
+/*
+    Wyckoff VSA Phase / Context Engine v0.1
+
+    Approved specification: PR #22
+    Merge commit: 3fe48b06a635cf105472b27d296fabeee5589488
+
+    D38 is satisfied at development source/interface level by the separately
+    specified SOW/LPSY stack. This file consumes upstream outputs; it does not
+    recreate Candidate, Event, Structural Sequence or SOW/LPSY formulas.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    No trading signal, no weighted probability score, no P&F target.
+*/
+#include_once <WyckoffVSA_PhaseContext_InputFacade_v0.1.afl>
+
+_SECTION_BEGIN("71. Phase Context enums and output arrays");
+function WPC_Finite( x )
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WPC_SourceBI = BarIndex();
+WPC_SourceDT = DateTime();
+WPC_Zero = 0 * WPC_SourceBI;
+WPC_Null = Null + WPC_Zero;
+
+WPC_PriorTrendText = "PRIOR TREND INSUFFICIENT\nPRIOR UPTREND CONTEXT\nPRIOR DOWNTREND CONTEXT\nPRIOR TREND MIXED";
+WPC_PhaseText = "INSUFFICIENT CONTEXT\nPHASE-A-LIKE\nPHASE-B-LIKE\nPHASE-C-CANDIDATE\nPHASE-C-LIKE\nPHASE-D-LIKE\nPHASE-E-LIKE\nRANGE INVALIDATED / SUPERSEDED";
+WPC_FamilyText = "INSUFFICIENT\nUNRESOLVED LOWER RANGE\nUNRESOLVED UPPER RANGE\nACCUMULATION-HYPOTHESIS\nREDISTRIBUTION-HYPOTHESIS\nDISTRIBUTION-HYPOTHESIS\nREACCUMULATION-HYPOTHESIS\nMIXED / CONFLICTING EVIDENCE";
+WPC_EvidenceText = "INSUFFICIENT EVIDENCE\nBULLISH EVIDENCE PRESENT\nBEARISH EVIDENCE PRESENT\nMIXED EVIDENCE";
+WPC_PhaseCDirectionText = "NONE\nBULLISH\nBEARISH\nMIXED";
+
+// Shared per-bar transition diagnostics.
+WPC_L_SupersessionOccurred = WPC_Zero;
+WPC_U_SupersessionOccurred = WPC_Zero;
+WPC_L_SupersededRangeContextID = WPC_Null;
+WPC_U_SupersededRangeContextID = WPC_Null;
+
+// Lower-derived RangeContext channel.
+WPC_L_ContextPresent = WPC_Zero;
+WPC_L_RangeContextID = WPC_Null;
+WPC_L_RangeAnchorSequenceID = WPC_Null;
+WPC_L_RangeAnchorSideCode = WPC_Null;
+WPC_L_PrimaryRangeLow = WPC_Null;
+WPC_L_PrimaryRangeHigh = WPC_Null;
+WPC_L_PrimaryRangeWidth = WPC_Null;
+WPC_L_RangeKnownAtBarIndex = WPC_Null;
+WPC_L_RangeKnownAtDateTime = WPC_Null;
+WPC_L_RangeAgeBars = WPC_Null;
+WPC_L_RangeActive = WPC_Zero;
+WPC_L_RangeTerminal = WPC_Zero;
+WPC_L_RangePosition = WPC_Null;
+WPC_L_RangePositionValid = WPC_Zero;
+
+WPC_L_PriorTrendContextCode = WPC_Zero;
+WPC_L_PriorHigh1Price = WPC_Null;
+WPC_L_PriorHigh1BarIndex = WPC_Null;
+WPC_L_PriorHigh2Price = WPC_Null;
+WPC_L_PriorHigh2BarIndex = WPC_Null;
+WPC_L_PriorLow1Price = WPC_Null;
+WPC_L_PriorLow1BarIndex = WPC_Null;
+WPC_L_PriorLow2Price = WPC_Null;
+WPC_L_PriorLow2BarIndex = WPC_Null;
+
+WPC_L_PhaseStateCode = WPC_Zero;
+WPC_L_PhaseOriginBarIndex = WPC_Null;
+WPC_L_PhaseOriginDateTime = WPC_Null;
+WPC_L_PhaseKnownAtBarIndex = WPC_Null;
+WPC_L_PhaseKnownAtDateTime = WPC_Null;
+WPC_L_PhaseTransitionReasonCode = WPC_Zero;
+WPC_L_PhaseCDirectionCode = WPC_Zero;
+WPC_L_PhaseCSourceCode = WPC_Zero;
+WPC_L_PhaseCOriginBarIndex = WPC_Null;
+WPC_L_PhaseCKnownAtBarIndex = WPC_Null;
+WPC_L_PhaseDKnownAtBarIndex = WPC_Null;
+WPC_L_PhaseEKnownAtBarIndex = WPC_Null;
+WPC_L_SpringLikeContextFlag = WPC_Zero;
+WPC_L_UTADLikeContextFlag = WPC_Zero;
+
+WPC_L_FamilyHypothesisCode = WPC_Zero;
+WPC_L_HypothesisKnownAtBarIndex = WPC_Null;
+WPC_L_HypothesisRevisionCode = WPC_Zero;
+WPC_L_BullishEvidenceState = WPC_Zero;
+WPC_L_BearishEvidenceState = WPC_Zero;
+WPC_L_EvidenceBalanceCode = WPC_Zero;
+
+WPC_L_SOSLinkedCount = WPC_Zero;
+WPC_L_LPSLinkedCount = WPC_Zero;
+WPC_L_SOWLinkedCount = WPC_Zero;
+WPC_L_LPSYLinkedCount = WPC_Zero;
+WPC_L_NoSupplyAfterStrengthCount = WPC_Zero;
+WPC_L_NoDemandAfterWeaknessCount = WPC_Zero;
+WPC_L_SupportInteractionCount = WPC_Zero;
+WPC_L_ResistanceInteractionCount = WPC_Zero;
+WPC_L_FalseBreakReclaimCount = WPC_Zero;
+WPC_L_HigherLowCount = WPC_Zero;
+WPC_L_LowerHighCount = WPC_Zero;
+WPC_L_BullishAbsorptionResponseCount = WPC_Zero;
+WPC_L_BearishAbsorptionResponseCount = WPC_Zero;
+
+WPC_L_CurrentSpringLinked = WPC_Zero;
+WPC_L_CurrentSupplyTestLinked = WPC_Zero;
+WPC_L_CurrentUpthrustLinked = WPC_Zero;
+WPC_L_CurrentSOSLinked = WPC_Zero;
+WPC_L_CurrentLPSLinked = WPC_Zero;
+WPC_L_CurrentSOWLinked = WPC_Zero;
+WPC_L_CurrentLPSYLinked = WPC_Zero;
+WPC_L_CurrentNoSupplyAfterStrength = WPC_Zero;
+WPC_L_CurrentNoDemandAfterWeakness = WPC_Zero;
+WPC_L_CurrentBullishAbsorptionResponse = WPC_Zero;
+WPC_L_CurrentBearishAbsorptionResponse = WPC_Zero;
+
+WPC_L_BullishBreakoutStateCode = WPC_Zero;
+WPC_L_BearishBreakdownStateCode = WPC_Zero;
+WPC_L_BullishBreakoutSOSBarIndex = WPC_Null;
+WPC_L_BearishBreakdownSOWBarIndex = WPC_Null;
+
+// Upper-derived RangeContext channel.
+WPC_U_ContextPresent = WPC_Zero;
+WPC_U_RangeContextID = WPC_Null;
+WPC_U_RangeAnchorSequenceID = WPC_Null;
+WPC_U_RangeAnchorSideCode = WPC_Null;
+WPC_U_PrimaryRangeLow = WPC_Null;
+WPC_U_PrimaryRangeHigh = WPC_Null;
+WPC_U_PrimaryRangeWidth = WPC_Null;
+WPC_U_RangeKnownAtBarIndex = WPC_Null;
+WPC_U_RangeKnownAtDateTime = WPC_Null;
+WPC_U_RangeAgeBars = WPC_Null;
+WPC_U_RangeActive = WPC_Zero;
+WPC_U_RangeTerminal = WPC_Zero;
+WPC_U_RangePosition = WPC_Null;
+WPC_U_RangePositionValid = WPC_Zero;
+
+WPC_U_PriorTrendContextCode = WPC_Zero;
+WPC_U_PriorHigh1Price = WPC_Null;
+WPC_U_PriorHigh1BarIndex = WPC_Null;
+WPC_U_PriorHigh2Price = WPC_Null;
+WPC_U_PriorHigh2BarIndex = WPC_Null;
+WPC_U_PriorLow1Price = WPC_Null;
+WPC_U_PriorLow1BarIndex = WPC_Null;
+WPC_U_PriorLow2Price = WPC_Null;
+WPC_U_PriorLow2BarIndex = WPC_Null;
+
+WPC_U_PhaseStateCode = WPC_Zero;
+WPC_U_PhaseOriginBarIndex = WPC_Null;
+WPC_U_PhaseOriginDateTime = WPC_Null;
+WPC_U_PhaseKnownAtBarIndex = WPC_Null;
+WPC_U_PhaseKnownAtDateTime = WPC_Null;
+WPC_U_PhaseTransitionReasonCode = WPC_Zero;
+WPC_U_PhaseCDirectionCode = WPC_Zero;
+WPC_U_PhaseCSourceCode = WPC_Zero;
+WPC_U_PhaseCOriginBarIndex = WPC_Null;
+WPC_U_PhaseCKnownAtBarIndex = WPC_Null;
+WPC_U_PhaseDKnownAtBarIndex = WPC_Null;
+WPC_U_PhaseEKnownAtBarIndex = WPC_Null;
+WPC_U_SpringLikeContextFlag = WPC_Zero;
+WPC_U_UTADLikeContextFlag = WPC_Zero;
+
+WPC_U_FamilyHypothesisCode = WPC_Zero;
+WPC_U_HypothesisKnownAtBarIndex = WPC_Null;
+WPC_U_HypothesisRevisionCode = WPC_Zero;
+WPC_U_BullishEvidenceState = WPC_Zero;
+WPC_U_BearishEvidenceState = WPC_Zero;
+WPC_U_EvidenceBalanceCode = WPC_Zero;
+
+WPC_U_SOSLinkedCount = WPC_Zero;
+WPC_U_LPSLinkedCount = WPC_Zero;
+WPC_U_SOWLinkedCount = WPC_Zero;
+WPC_U_LPSYLinkedCount = WPC_Zero;
+WPC_U_NoSupplyAfterStrengthCount = WPC_Zero;
+WPC_U_NoDemandAfterWeaknessCount = WPC_Zero;
+WPC_U_SupportInteractionCount = WPC_Zero;
+WPC_U_ResistanceInteractionCount = WPC_Zero;
+WPC_U_FalseBreakReclaimCount = WPC_Zero;
+WPC_U_HigherLowCount = WPC_Zero;
+WPC_U_LowerHighCount = WPC_Zero;
+WPC_U_BullishAbsorptionResponseCount = WPC_Zero;
+WPC_U_BearishAbsorptionResponseCount = WPC_Zero;
+
+WPC_U_CurrentSpringLinked = WPC_Zero;
+WPC_U_CurrentSupplyTestLinked = WPC_Zero;
+WPC_U_CurrentUpthrustLinked = WPC_Zero;
+WPC_U_CurrentSOSLinked = WPC_Zero;
+WPC_U_CurrentLPSLinked = WPC_Zero;
+WPC_U_CurrentSOWLinked = WPC_Zero;
+WPC_U_CurrentLPSYLinked = WPC_Zero;
+WPC_U_CurrentNoSupplyAfterStrength = WPC_Zero;
+WPC_U_CurrentNoDemandAfterWeakness = WPC_Zero;
+WPC_U_CurrentBullishAbsorptionResponse = WPC_Zero;
+WPC_U_CurrentBearishAbsorptionResponse = WPC_Zero;
+
+WPC_U_BullishBreakoutStateCode = WPC_Zero;
+WPC_U_BearishBreakdownStateCode = WPC_Zero;
+WPC_U_BullishBreakoutSOSBarIndex = WPC_Null;
+WPC_U_BearishBreakdownSOWBarIndex = WPC_Null;
+_SECTION_END();
+
+_SECTION_BEGIN("72. Causal lower and upper RangeContext state machines");
+// ----------------------- LOWER CHANNEL SCALARS -----------------------
+WPC_LCtx = 0; WPC_LSeq = -1; WPC_LClimaxBI = -1; WPC_LAutoBI = -1;
+WPC_LID = 0; WPC_LLow = 0; WPC_LHigh = 0; WPC_LWidth = 0;
+WPC_LKnownOff = -1; WPC_LKnownBI = 0; WPC_LKnownDT = 0;
+WPC_LTrend = 0;
+WPC_LH1=0; WPC_LH1BI=-1; WPC_LH2=0; WPC_LH2BI=-1;
+WPC_LL1=0; WPC_LL1BI=-1; WPC_LL2=0; WPC_LL2BI=-1;
+WPC_LPhase = 0; WPC_LPhaseOriginBI = 0; WPC_LPhaseOriginDT = 0;
+WPC_LPhaseKnownBI = 0; WPC_LPhaseKnownDT = 0; WPC_LPhaseReason = 0;
+WPC_LCdir = 0; WPC_LCsource = 0; WPC_LCOriginBI = -1; WPC_LCOriginDT = 0; WPC_LCKnownBI = -1;
+WPC_LDKnownBI = -1; WPC_LEKnownBI = -1;
+WPC_LFamily = 0; WPC_LHypKnownBI = -1;
+WPC_LBullEvidence = 0; WPC_LBearEvidence = 0;
+WPC_LSOSCount=0; WPC_LLPSCount=0; WPC_LSOWCount=0; WPC_LLPSYCount=0;
+WPC_LNSCount=0; WPC_LNDCount=0; WPC_LSupInt=0; WPC_LResInt=0; WPC_LFalseBreak=0;
+WPC_LHLCount=0; WPC_LLHighCount=0; WPC_LBullAbsCount=0; WPC_LBearAbsCount=0;
+WPC_LLastPivotLowValid=0; WPC_LLastPivotLow=0; WPC_LLastPivotHighValid=0; WPC_LLastPivotHigh=0;
+WPC_LBullBreakState=0; WPC_LBullBreakSOSBI=-1; WPC_LBullBreakSOSHigh=0; WPC_LBullBackupKnownBI=-1;
+WPC_LBearBreakState=0; WPC_LBearBreakSOWBI=-1; WPC_LBearBreakSOWLow=0; WPC_LBearRetestKnownBI=-1;
+
+// ----------------------- UPPER CHANNEL SCALARS -----------------------
+WPC_UCtx = 0; WPC_USeq = -1; WPC_UClimaxBI = -1; WPC_UAutoBI = -1;
+WPC_UID = 0; WPC_ULow = 0; WPC_UHigh = 0; WPC_UWidth = 0;
+WPC_UKnownOff = -1; WPC_UKnownBI = 0; WPC_UKnownDT = 0;
+WPC_UTrend = 0;
+WPC_UH1=0; WPC_UH1BI=-1; WPC_UH2=0; WPC_UH2BI=-1;
+WPC_UL1=0; WPC_UL1BI=-1; WPC_UL2=0; WPC_UL2BI=-1;
+WPC_UPhase = 0; WPC_UPhaseOriginBI = 0; WPC_UPhaseOriginDT = 0;
+WPC_UPhaseKnownBI = 0; WPC_UPhaseKnownDT = 0; WPC_UPhaseReason = 0;
+WPC_UCdir = 0; WPC_UCsource = 0; WPC_UCOriginBI = -1; WPC_UCOriginDT = 0; WPC_UCKnownBI = -1;
+WPC_UDKnownBI = -1; WPC_UEKnownBI = -1;
+WPC_UFamily = 0; WPC_UHypKnownBI = -1;
+WPC_UBullEvidence = 0; WPC_UBearEvidence = 0;
+WPC_USOSCount=0; WPC_ULPSCount=0; WPC_USOWCount=0; WPC_ULPSYCount=0;
+WPC_UNSCount=0; WPC_UNDCount=0; WPC_USupInt=0; WPC_UResInt=0; WPC_UFalseBreak=0;
+WPC_UHLCount=0; WPC_ULHighCount=0; WPC_UBullAbsCount=0; WPC_UBearAbsCount=0;
+WPC_ULastPivotLowValid=0; WPC_ULastPivotLow=0; WPC_ULastPivotHighValid=0; WPC_ULastPivotHigh=0;
+WPC_UBullBreakState=0; WPC_UBullBreakSOSBI=-1; WPC_UBullBreakSOSHigh=0; WPC_UBullBackupKnownBI=-1;
+WPC_UBearBreakState=0; WPC_UBearBreakSOWBI=-1; WPC_UBearBreakSOWLow=0; WPC_UBearRetestKnownBI=-1;
+
+for (WPC_i=0; WPC_i<BarCount; WPC_i++)
+{
+    // =============================================================
+    // LOWER-DERIVED RANGE CONTEXT
+    // =============================================================
+    WPC_LCreated = 0;
+    WPC_LRevisionNow = 0;
+
+    // D35: a new Structural Sequence key supersedes the old future context.
+    if (WPC_LCtx AND WPCIF_L_RangeSnapshotValid[WPC_i])
+    {
+        WPC_LKeyChanged = WSS_LowerActiveSequenceOrdinal[WPC_i] != WPC_LSeq
+            OR WSS_LowerActiveSCOriginBI[WPC_i] != WPC_LClimaxBI
+            OR WSS_LowerActiveARExtremeBI[WPC_i] != WPC_LAutoBI;
+        if (WPC_LKeyChanged)
+        {
+            WPC_L_SupersessionOccurred[WPC_i] = 1;
+            WPC_L_SupersededRangeContextID[WPC_i] = WPC_LID;
+            WPC_LCtx = 0;
+        }
+    }
+
+    // D03/D31: create Phase-A-like only when morphology-complete is known.
+    if (WPCIF_L_PhaseAReady[WPC_i])
+    {
+        WPC_LNeedNew = (NOT WPC_LCtx)
+            OR WSS_LowerActiveSequenceOrdinal[WPC_i] != WPC_LSeq
+            OR WSS_LowerActiveSCOriginBI[WPC_i] != WPC_LClimaxBI
+            OR WSS_LowerActiveARExtremeBI[WPC_i] != WPC_LAutoBI;
+        if (WPC_LNeedNew)
+        {
+            WPC_LCreated = 1;
+            WPC_LCtx = 1;
+            WPC_LSeq = WSS_LowerActiveSequenceOrdinal[WPC_i];
+            WPC_LClimaxBI = WSS_LowerActiveSCOriginBI[WPC_i];
+            WPC_LAutoBI = WSS_LowerActiveARExtremeBI[WPC_i];
+            WPC_LLow = WSS_LowerActiveRangeLower[WPC_i];
+            WPC_LHigh = WSS_LowerActiveRangeUpper[WPC_i];
+            WPC_LWidth = WSS_LowerActiveRangeWidth[WPC_i];
+            WPC_LID = 1000000000 + WPC_LSeq;
+            WPC_LKnownOff = WPC_i;
+            WPC_LKnownBI = WPC_SourceBI[WPC_i];
+            WPC_LKnownDT = WPC_SourceDT[WPC_i];
+
+            // D02: prior trend is snapshotted from the two latest confirmed
+            // swing highs/lows whose EXTREMES are strictly before climax origin.
+            WPC_hCount=0; WPC_hPrev=0; WPC_hPrevBI=-1; WPC_hLast=0; WPC_hLastBI=-1;
+            WPC_lCount=0; WPC_lPrev=0; WPC_lPrevBI=-1; WPC_lLast=0; WPC_lLastBI=-1;
+            for (WPC_j=0; WPC_j<=WPC_i; WPC_j++)
+            {
+                if (SL_PivotHighEventCode[WPC_j]==2
+                    AND WPC_Finite(SL_PivotHighExtremeBarIndex[WPC_j])
+                    AND SL_PivotHighExtremeBarIndex[WPC_j] < WPC_LClimaxBI)
+                {
+                    WPC_hPrev=WPC_hLast; WPC_hPrevBI=WPC_hLastBI;
+                    WPC_hLast=SL_PivotHighEventPrice[WPC_j]; WPC_hLastBI=SL_PivotHighExtremeBarIndex[WPC_j];
+                    WPC_hCount++;
+                }
+                if (SL_PivotLowEventCode[WPC_j]==2
+                    AND WPC_Finite(SL_PivotLowExtremeBarIndex[WPC_j])
+                    AND SL_PivotLowExtremeBarIndex[WPC_j] < WPC_LClimaxBI)
+                {
+                    WPC_lPrev=WPC_lLast; WPC_lPrevBI=WPC_lLastBI;
+                    WPC_lLast=SL_PivotLowEventPrice[WPC_j]; WPC_lLastBI=SL_PivotLowExtremeBarIndex[WPC_j];
+                    WPC_lCount++;
+                }
+            }
+            WPC_LH1=WPC_hPrev; WPC_LH1BI=WPC_hPrevBI; WPC_LH2=WPC_hLast; WPC_LH2BI=WPC_hLastBI;
+            WPC_LL1=WPC_lPrev; WPC_LL1BI=WPC_lPrevBI; WPC_LL2=WPC_lLast; WPC_LL2BI=WPC_lLastBI;
+            if (WPC_hCount<2 OR WPC_lCount<2) WPC_LTrend=0;
+            else if (WPC_LH2>WPC_LH1 AND WPC_LL2>WPC_LL1) WPC_LTrend=1;
+            else if (WPC_LH2<WPC_LH1 AND WPC_LL2<WPC_LL1) WPC_LTrend=2;
+            else WPC_LTrend=3;
+
+            WPC_LPhase=1; WPC_LPhaseOriginBI=WPC_LClimaxBI; WPC_LPhaseOriginDT=0;
+            WPC_LPhaseKnownBI=WPC_LKnownBI; WPC_LPhaseKnownDT=WPC_LKnownDT; WPC_LPhaseReason=1;
+            WPC_LCdir=0; WPC_LCsource=0; WPC_LCOriginBI=-1; WPC_LCOriginDT=0; WPC_LCKnownBI=-1;
+            WPC_LDKnownBI=-1; WPC_LEKnownBI=-1;
+            WPC_LFamily=1; WPC_LHypKnownBI=WPC_LKnownBI;
+            WPC_LBullEvidence=0; WPC_LBearEvidence=0;
+            WPC_LSOSCount=0; WPC_LLPSCount=0; WPC_LSOWCount=0; WPC_LLPSYCount=0;
+            WPC_LNSCount=0; WPC_LNDCount=0; WPC_LSupInt=0; WPC_LResInt=0; WPC_LFalseBreak=0;
+            WPC_LHLCount=0; WPC_LLHighCount=0; WPC_LBullAbsCount=0; WPC_LBearAbsCount=0;
+            WPC_LLastPivotLowValid=0; WPC_LLastPivotHighValid=0;
+            WPC_LBullBreakState=0; WPC_LBullBreakSOSBI=-1; WPC_LBullBreakSOSHigh=0; WPC_LBullBackupKnownBI=-1;
+            WPC_LBearBreakState=0; WPC_LBearBreakSOWBI=-1; WPC_LBearBreakSOWLow=0; WPC_LBearRetestKnownBI=-1;
+        }
+    }
+
+    if (WPC_LCtx)
+    {
+        // Phase A is an observable transition bar. Phase B starts from the
+        // next loaded observation unless a later transition occurs.
+        if ((NOT WPC_LCreated) AND WPC_LPhase==1)
+        {
+            WPC_LPhase=2;
+            WPC_LPhaseOriginBI=WPC_SourceBI[WPC_i];
+            WPC_LPhaseKnownBI=WPC_SourceBI[WPC_i];
+            WPC_LPhaseKnownDT=WPC_SourceDT[WPC_i];
+            WPC_LPhaseReason=2;
+        }
+
+        // D06/D09 range interaction diagnostics.
+        if (WPCIF_CurrentPriceValid[WPC_i])
+        {
+            if (Low[WPC_i]<=WPC_LLow AND High[WPC_i]>=WPC_LLow) WPC_LSupInt++;
+            if (High[WPC_i]>=WPC_LHigh AND Low[WPC_i]<=WPC_LHigh) WPC_LResInt++;
+            if ((Low[WPC_i]<WPC_LLow AND Close[WPC_i]>=WPC_LLow)
+                OR (High[WPC_i]>WPC_LHigh AND Close[WPC_i]<=WPC_LHigh)) WPC_LFalseBreak++;
+        }
+
+        // D28 confirmed swing progression is context, never a phase oracle.
+        if (SL_PivotLowEventCode[WPC_i]==2
+            AND SL_PivotLowExtremeBarIndex[WPC_i]>WPC_LKnownBI)
+        {
+            if (WPC_LLastPivotLowValid AND SL_PivotLowEventPrice[WPC_i]>WPC_LLastPivotLow) WPC_LHLCount++;
+            WPC_LLastPivotLow=SL_PivotLowEventPrice[WPC_i]; WPC_LLastPivotLowValid=1;
+        }
+        if (SL_PivotHighEventCode[WPC_i]==2
+            AND SL_PivotHighExtremeBarIndex[WPC_i]>WPC_LKnownBI)
+        {
+            if (WPC_LLastPivotHighValid AND SL_PivotHighEventPrice[WPC_i]<WPC_LLastPivotHigh) WPC_LLHighCount++;
+            WPC_LLastPivotHigh=SL_PivotHighEventPrice[WPC_i]; WPC_LLastPivotHighValid=1;
+        }
+
+        WPC_LMid=(WPC_LLow+WPC_LHigh)/2;
+        WPC_LSpring = WPCIF_SpringConfirmed[WPC_i]
+            AND WPC_Finite(WPCIF_SpringOriginBI[WPC_i])
+            AND WPCIF_SpringOriginBI[WPC_i]>WPC_LKnownBI
+            AND WPCIF_SpringOriginLow[WPC_i]<WPC_LLow
+            AND WPCIF_SpringOriginClose[WPC_i]>=WPC_LLow;
+        WPC_LSupply = WPCIF_SupplyTestConfirmed[WPC_i]
+            AND WPC_Finite(WPCIF_SupplyTestOriginBI[WPC_i])
+            AND WPCIF_SupplyTestOriginBI[WPC_i]>WPC_LKnownBI
+            AND WPCIF_SupplyTestSupport[WPC_i]>=WPC_LLow
+            AND WPCIF_SupplyTestSupport[WPC_i]<=WPC_LMid;
+        WPC_LUT = WPCIF_UpthrustConfirmed[WPC_i]
+            AND WPC_Finite(WPCIF_UpthrustOriginBI[WPC_i])
+            AND WPCIF_UpthrustOriginBI[WPC_i]>WPC_LKnownBI
+            AND WPCIF_UpthrustOriginHigh[WPC_i]>WPC_LHigh
+            AND WPCIF_UpthrustOriginClose[WPC_i]<=WPC_LHigh;
+        WPC_LSOS = WPCIF_SOSEvent[WPC_i]
+            AND WPCIF_SOSBI[WPC_i]>WPC_LKnownBI
+            AND WPCIF_SOSBreakoutLevel[WPC_i]>=WPC_LLow
+            AND WPCIF_SOSBreakoutLevel[WPC_i]<=WPC_LHigh;
+        WPC_LLPS = WPCIF_LPSConfirmed[WPC_i]
+            AND WPCIF_LPSOriginBI[WPC_i]>WPC_LKnownBI
+            AND WPCIF_LPSBreakoutLevel[WPC_i]>=WPC_LLow
+            AND WPCIF_LPSBreakoutLevel[WPC_i]<=WPC_LHigh;
+        WPC_LSOW = WPCIF_L_SOWEvent[WPC_i]
+            AND WE_SW_L_SOWSequenceOrdinal[WPC_i]==WPC_LSeq
+            AND WE_SW_L_SOWBarIndex[WPC_i]>WPC_LKnownBI;
+        WPC_LLPSY = WPCIF_L_LPSYEvent[WPC_i]
+            AND WE_SW_L_LPSYSequenceOrdinal[WPC_i]==WPC_LSeq
+            AND WE_SW_L_LPSYKnownAtBarIndex[WPC_i]>WPC_LKnownBI;
+
+        WPC_L_CurrentSpringLinked[WPC_i]=WPC_LSpring;
+        WPC_L_CurrentSupplyTestLinked[WPC_i]=WPC_LSupply;
+        WPC_L_CurrentUpthrustLinked[WPC_i]=WPC_LUT;
+        WPC_L_CurrentSOSLinked[WPC_i]=WPC_LSOS;
+        WPC_L_CurrentLPSLinked[WPC_i]=WPC_LLPS;
+        WPC_L_CurrentSOWLinked[WPC_i]=WPC_LSOW;
+        WPC_L_CurrentLPSYLinked[WPC_i]=WPC_LLPSY;
+
+        if (WPC_LSOS) { WPC_LSOSCount++; WPC_LBullEvidence=1; }
+        if (WPC_LLPS) { WPC_LLPSCount++; WPC_LBullEvidence=1; }
+        if (WPC_LSOW) { WPC_LSOWCount++; WPC_LBearEvidence=1; }
+        if (WPC_LLPSY) { WPC_LLPSYCount++; WPC_LBearEvidence=1; }
+        if (WPC_LSpring OR WPC_LSupply) WPC_LBullEvidence=1;
+        if (WPC_LUT) WPC_LBearEvidence=1;
+
+        // D10/D39 VSA background contract. A lower stopping sequence itself is
+        // strength background; weakness needs an actual weakness route.
+        WPC_LStrengthBackground = 1;
+        WPC_LWeaknessBackground = WPC_LBearEvidence OR WPC_LSOWCount>0 OR WPC_LLPSYCount>0;
+        WPC_LNSNow = WPCIF_NoSupplyConfirmed[WPC_i]
+            AND WPC_LStrengthBackground
+            AND WPC_Finite(WPCIF_NoSupplyCandidateBI[WPC_i])
+            AND WPCIF_NoSupplyCandidateBI[WPC_i]>WPC_LKnownBI;
+        WPC_LNDNow = WPCIF_NoDemandConfirmed[WPC_i]
+            AND WPC_LWeaknessBackground
+            AND WPC_Finite(WPCIF_NoDemandCandidateBI[WPC_i])
+            AND WPCIF_NoDemandCandidateBI[WPC_i]>WPC_LKnownBI;
+        if (WPC_LNSNow) { WPC_LNSCount++; WPC_LBullEvidence=1; }
+        if (WPC_LNDNow) { WPC_LNDCount++; WPC_LBearEvidence=1; }
+        WPC_L_CurrentNoSupplyAfterStrength[WPC_i]=WPC_LNSNow;
+        WPC_L_CurrentNoDemandAfterWeakness[WPC_i]=WPC_LNDNow;
+
+        // D29 absorption is directional context only after response.
+        WPC_LBullAbsNow = WPCIF_BullishAbsorptionResponse[WPC_i]
+            AND WPCIF_PriorAbsorptionBI[WPC_i]>WPC_LKnownBI;
+        WPC_LBearAbsNow = WPCIF_BearishAbsorptionResponse[WPC_i]
+            AND WPCIF_PriorAbsorptionBI[WPC_i]>WPC_LKnownBI;
+        if (WPC_LBullAbsNow) { WPC_LBullAbsCount++; WPC_LBullEvidence=1; }
+        if (WPC_LBearAbsNow) { WPC_LBearAbsCount++; WPC_LBearEvidence=1; }
+        WPC_L_CurrentBullishAbsorptionResponse[WPC_i]=WPC_LBullAbsNow;
+        WPC_L_CurrentBearishAbsorptionResponse[WPC_i]=WPC_LBearAbsNow;
+
+        // D12/D14 Phase-C candidates. A later opposite candidate is allowed to
+        // reopen Phase C before Phase E; historical states remain unchanged.
+        WPC_LBullCand = WPC_LSpring OR WPC_LSupply;
+        WPC_LBearCand = WPC_LUT OR WPC_LLPSY;
+        WPC_LNewCandDir = IIf(WPC_LBullCand AND WPC_LBearCand,3,IIf(WPC_LBullCand,1,IIf(WPC_LBearCand,2,0)));
+        if (WPC_LNewCandDir>0 AND WPC_LPhase<6)
+        {
+            WPC_LAllowCand = (WPC_LPhase<=3) OR (WPC_LCdir>0 AND WPC_LNewCandDir!=WPC_LCdir);
+            if (WPC_LAllowCand)
+            {
+                WPC_LCdir=WPC_LNewCandDir;
+                if (WPC_LNewCandDir==1)
+                {
+                    WPC_LCsource=IIf(WPC_LSpring,1,2);
+                    WPC_LCOriginBI=IIf(WPC_LSpring,WPCIF_SpringOriginBI[WPC_i],WPCIF_SupplyTestOriginBI[WPC_i]);
+                    WPC_LCOriginDT=IIf(WPC_LSpring,WPCIF_SpringOriginDT[WPC_i],WPCIF_SupplyTestOriginDT[WPC_i]);
+                }
+                else if (WPC_LNewCandDir==2)
+                {
+                    WPC_LCsource=IIf(WPC_LUT,3,4);
+                    WPC_LCOriginBI=IIf(WPC_LUT,WPCIF_UpthrustOriginBI[WPC_i],WE_SW_L_LPSYExtremeBarIndex[WPC_i]);
+                    WPC_LCOriginDT=IIf(WPC_LUT,WPCIF_UpthrustOriginDT[WPC_i],WE_SW_L_LPSYExtremeDateTime[WPC_i]);
+                }
+                else
+                {
+                    WPC_LCsource=9; WPC_LCOriginBI=WPC_SourceBI[WPC_i]; WPC_LCOriginDT=WPC_SourceDT[WPC_i];
+                }
+                WPC_LPhase=3; WPC_LPhaseOriginBI=WPC_LCOriginBI; WPC_LPhaseOriginDT=WPC_LCOriginDT;
+                WPC_LPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_LPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_LPhaseReason=10+WPC_LCsource;
+            }
+        }
+
+        // Confirmed structural progress beyond frozen range can act as the
+        // alternative change-of-character path in D13/D14.
+        WPC_LBullStructuralResponse = SL_PivotHighEventCode[WPC_i]==2
+            AND SL_PivotHighExtremeBarIndex[WPC_i]>WPC_LCOriginBI
+            AND SL_PivotHighEventPrice[WPC_i]>WPC_LHigh;
+        WPC_LBearStructuralResponse = SL_PivotLowEventCode[WPC_i]==2
+            AND SL_PivotLowExtremeBarIndex[WPC_i]>WPC_LCOriginBI
+            AND SL_PivotLowEventPrice[WPC_i]<WPC_LLow;
+
+        if (WPC_LPhase==3)
+        {
+            WPC_LPromoteBull = (WPC_LCdir==1 OR WPC_LCdir==3) AND (WPC_LSOS OR WPC_LBullStructuralResponse);
+            WPC_LPromoteBear = (WPC_LCdir==2 OR WPC_LCdir==3) AND (WPC_LSOW OR WPC_LBearStructuralResponse);
+            if (WPC_LPromoteBull AND NOT WPC_LPromoteBear)
+            {
+                WPC_LCdir=1; WPC_LPhase=4; WPC_LCKnownBI=WPC_SourceBI[WPC_i];
+                WPC_LPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_LPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_LPhaseReason=21;
+                WPC_LNewFamily=IIf(WPC_LTrend==2,3,IIf(WPC_LTrend==1,6,1));
+                if (WPC_LFamily!=WPC_LNewFamily)
+                {
+                    WPC_LRevisionNow=IIf(WPC_LFamily==1,1,IIf(WPC_LFamily==4 OR WPC_LFamily==5,4,0));
+                    WPC_LFamily=WPC_LNewFamily; WPC_LHypKnownBI=WPC_SourceBI[WPC_i];
+                }
+            }
+            else if (WPC_LPromoteBear AND NOT WPC_LPromoteBull)
+            {
+                WPC_LCdir=2; WPC_LPhase=4; WPC_LCKnownBI=WPC_SourceBI[WPC_i];
+                WPC_LPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_LPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_LPhaseReason=22;
+                WPC_LNewFamily=IIf(WPC_LTrend==2,4,IIf(WPC_LTrend==1,5,1));
+                if (WPC_LFamily!=WPC_LNewFamily)
+                {
+                    WPC_LRevisionNow=IIf(WPC_LFamily==1,2,IIf(WPC_LFamily==3 OR WPC_LFamily==6,3,0));
+                    WPC_LFamily=WPC_LNewFamily; WPC_LHypKnownBI=WPC_SourceBI[WPC_i];
+                }
+            }
+            else if (WPC_LPromoteBull AND WPC_LPromoteBear)
+            {
+                WPC_LCdir=3; WPC_LFamily=7; WPC_LHypKnownBI=WPC_SourceBI[WPC_i]; WPC_LRevisionNow=5;
+            }
+        }
+
+        // D15/D16 contextual promotion flags are only known after follow-through.
+        WPC_LSpringContext = WPC_LPhase>=4 AND WPC_LCdir==1 AND WPC_LCsource==1;
+        WPC_LUTADContext = WPC_LPhase>=4 AND WPC_LCdir==2 AND WPC_LCsource==3;
+
+        // D17/D18 Phase D requires a later dominance/reaction event after C-like.
+        if (WPC_LPhase==4 AND WPC_LCKnownBI>=0 AND WPC_SourceBI[WPC_i]>WPC_LCKnownBI)
+        {
+            if (WPC_LCdir==1 AND (WPC_LLPS OR WPC_LSOS))
+            {
+                WPC_LPhase=5; WPC_LDKnownBI=WPC_SourceBI[WPC_i];
+                WPC_LPhaseOriginBI=IIf(WPC_LLPS,WPCIF_LPSOriginBI[WPC_i],WPCIF_SOSBI[WPC_i]);
+                WPC_LPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_LPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_LPhaseReason=31;
+            }
+            else if (WPC_LCdir==2 AND (WPC_LLPSY OR WPC_LSOW))
+            {
+                WPC_LPhase=5; WPC_LDKnownBI=WPC_SourceBI[WPC_i];
+                WPC_LPhaseOriginBI=IIf(WPC_LLPSY,WE_SW_L_LPSYExtremeBarIndex[WPC_i],WE_SW_L_SOWBarIndex[WPC_i]);
+                WPC_LPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_LPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_LPhaseReason=32;
+            }
+        }
+
+        // D21 bullish Phase-E path: range-high SOS -> backup/LPS holds above
+        // range-high -> later confirmed higher structural progress.
+        if (WPC_LPhase>=4 AND WPC_LPhase<6 AND WPC_LSOS AND WPCIF_SOSClose[WPC_i]>WPC_LHigh)
+        {
+            WPC_LBullBreakState=1; WPC_LBullBreakSOSBI=WPCIF_SOSBI[WPC_i];
+            WPC_LBullBreakSOSHigh=WPCIF_SOSHigh[WPC_i]; WPC_LBullBackupKnownBI=-1;
+        }
+        if (WPC_LBullBreakState==1 AND WPC_LLPS
+            AND WPCIF_LPSAnchorSOSBI[WPC_i]==WPC_LBullBreakSOSBI
+            AND WPCIF_LPSOriginLow[WPC_i]>=WPC_LHigh)
+        {
+            WPC_LBullBreakState=2; WPC_LBullBackupKnownBI=WPC_SourceBI[WPC_i];
+        }
+        if (WPC_LBullBreakState==2 AND SL_PivotHighEventCode[WPC_i]==2
+            AND WPC_SourceBI[WPC_i]>WPC_LBullBackupKnownBI
+            AND SL_PivotHighExtremeBarIndex[WPC_i]>WPC_LBullBackupKnownBI
+            AND SL_PivotHighEventPrice[WPC_i]>WPC_LBullBreakSOSHigh)
+        {
+            WPC_LBullBreakState=3; WPC_LPhase=6; WPC_LEKnownBI=WPC_SourceBI[WPC_i];
+            WPC_LCdir=1; WPC_LPhaseOriginBI=SL_PivotHighExtremeBarIndex[WPC_i];
+            WPC_LPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_LPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_LPhaseReason=41;
+            WPC_LNewFamily=IIf(WPC_LTrend==2,3,IIf(WPC_LTrend==1,6,WPC_LFamily));
+            if (WPC_LNewFamily!=WPC_LFamily) { WPC_LFamily=WPC_LNewFamily; WPC_LHypKnownBI=WPC_SourceBI[WPC_i]; WPC_LRevisionNow=4; }
+        }
+
+        // D22 bearish Phase-E path: accepted SOW breakdown -> LPSY failed retest
+        // below old support -> later confirmed lower structural progress.
+        if (WPC_LPhase>=4 AND WPC_LPhase<6 AND WPC_LSOW
+            AND WE_SW_L_AcceptedBreakdownFlag[WPC_i]==1)
+        {
+            WPC_LBearBreakState=1; WPC_LBearBreakSOWBI=WE_SW_L_SOWBarIndex[WPC_i];
+            WPC_LBearBreakSOWLow=WE_SW_L_SOWLow[WPC_i]; WPC_LBearRetestKnownBI=-1;
+        }
+        if (WPC_LBearBreakState==1 AND WPC_LLPSY
+            AND WE_SW_L_LPSYAnchorSOWBarIndex[WPC_i]==WPC_LBearBreakSOWBI
+            AND WE_SW_L_LPSYPivotHigh[WPC_i]<WPC_LLow)
+        {
+            WPC_LBearBreakState=2; WPC_LBearRetestKnownBI=WPC_SourceBI[WPC_i];
+        }
+        if (WPC_LBearBreakState==2 AND SL_PivotLowEventCode[WPC_i]==2
+            AND WPC_SourceBI[WPC_i]>WPC_LBearRetestKnownBI
+            AND SL_PivotLowExtremeBarIndex[WPC_i]>WPC_LBearRetestKnownBI
+            AND SL_PivotLowEventPrice[WPC_i]<WPC_LBearBreakSOWLow)
+        {
+            WPC_LBearBreakState=3; WPC_LPhase=6; WPC_LEKnownBI=WPC_SourceBI[WPC_i];
+            WPC_LCdir=2; WPC_LPhaseOriginBI=SL_PivotLowExtremeBarIndex[WPC_i];
+            WPC_LPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_LPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_LPhaseReason=42;
+            WPC_LNewFamily=IIf(WPC_LTrend==2,4,IIf(WPC_LTrend==1,5,WPC_LFamily));
+            if (WPC_LNewFamily!=WPC_LFamily) { WPC_LFamily=WPC_LNewFamily; WPC_LHypKnownBI=WPC_SourceBI[WPC_i]; WPC_LRevisionNow=3; }
+        }
+
+        // Publish lower snapshot at current known-at time.
+        WPC_L_ContextPresent[WPC_i]=1;
+        WPC_L_RangeContextID[WPC_i]=WPC_LID;
+        WPC_L_RangeAnchorSequenceID[WPC_i]=WPC_LSeq;
+        WPC_L_RangeAnchorSideCode[WPC_i]=1;
+        WPC_L_PrimaryRangeLow[WPC_i]=WPC_LLow; WPC_L_PrimaryRangeHigh[WPC_i]=WPC_LHigh; WPC_L_PrimaryRangeWidth[WPC_i]=WPC_LWidth;
+        WPC_L_RangeKnownAtBarIndex[WPC_i]=WPC_LKnownBI; WPC_L_RangeKnownAtDateTime[WPC_i]=WPC_LKnownDT;
+        WPC_L_RangeAgeBars[WPC_i]=WPC_i-WPC_LKnownOff;
+        WPC_L_RangeActive[WPC_i]=WPC_LPhase>=1 AND WPC_LPhase<=5;
+        WPC_L_RangeTerminal[WPC_i]=WPC_LPhase==6;
+        if (WPCIF_CurrentPriceValid[WPC_i] AND WPC_LWidth>0)
+        {
+            WPC_L_RangePositionValid[WPC_i]=1;
+            WPC_L_RangePosition[WPC_i]=(Close[WPC_i]-WPC_LLow)/WPC_LWidth;
+        }
+
+        WPC_L_PriorTrendContextCode[WPC_i]=WPC_LTrend;
+        if (WPC_LTrend>=0)
+        {
+            WPC_L_PriorHigh1Price[WPC_i]=IIf(WPC_LH1BI>=0,WPC_LH1,Null); WPC_L_PriorHigh1BarIndex[WPC_i]=IIf(WPC_LH1BI>=0,WPC_LH1BI,Null);
+            WPC_L_PriorHigh2Price[WPC_i]=IIf(WPC_LH2BI>=0,WPC_LH2,Null); WPC_L_PriorHigh2BarIndex[WPC_i]=IIf(WPC_LH2BI>=0,WPC_LH2BI,Null);
+            WPC_L_PriorLow1Price[WPC_i]=IIf(WPC_LL1BI>=0,WPC_LL1,Null); WPC_L_PriorLow1BarIndex[WPC_i]=IIf(WPC_LL1BI>=0,WPC_LL1BI,Null);
+            WPC_L_PriorLow2Price[WPC_i]=IIf(WPC_LL2BI>=0,WPC_LL2,Null); WPC_L_PriorLow2BarIndex[WPC_i]=IIf(WPC_LL2BI>=0,WPC_LL2BI,Null);
+        }
+        WPC_L_PhaseStateCode[WPC_i]=WPC_LPhase; WPC_L_PhaseOriginBarIndex[WPC_i]=WPC_LPhaseOriginBI;
+        WPC_L_PhaseKnownAtBarIndex[WPC_i]=WPC_LPhaseKnownBI; WPC_L_PhaseKnownAtDateTime[WPC_i]=WPC_LPhaseKnownDT;
+        WPC_L_PhaseTransitionReasonCode[WPC_i]=WPC_LPhaseReason;
+        WPC_L_PhaseCDirectionCode[WPC_i]=WPC_LCdir; WPC_L_PhaseCSourceCode[WPC_i]=WPC_LCsource;
+        WPC_L_PhaseCOriginBarIndex[WPC_i]=IIf(WPC_LCOriginBI>=0,WPC_LCOriginBI,Null);
+        WPC_L_PhaseCKnownAtBarIndex[WPC_i]=IIf(WPC_LCKnownBI>=0,WPC_LCKnownBI,Null);
+        WPC_L_PhaseDKnownAtBarIndex[WPC_i]=IIf(WPC_LDKnownBI>=0,WPC_LDKnownBI,Null);
+        WPC_L_PhaseEKnownAtBarIndex[WPC_i]=IIf(WPC_LEKnownBI>=0,WPC_LEKnownBI,Null);
+        WPC_L_SpringLikeContextFlag[WPC_i]=WPC_LSpringContext;
+        WPC_L_UTADLikeContextFlag[WPC_i]=WPC_LUTADContext;
+        WPC_L_FamilyHypothesisCode[WPC_i]=WPC_LFamily; WPC_L_HypothesisKnownAtBarIndex[WPC_i]=WPC_LHypKnownBI;
+        WPC_L_HypothesisRevisionCode[WPC_i]=WPC_LRevisionNow;
+        WPC_L_BullishEvidenceState[WPC_i]=WPC_LBullEvidence; WPC_L_BearishEvidenceState[WPC_i]=WPC_LBearEvidence;
+        WPC_L_EvidenceBalanceCode[WPC_i]=IIf(WPC_LBullEvidence AND WPC_LBearEvidence,3,IIf(WPC_LBullEvidence,1,IIf(WPC_LBearEvidence,2,0)));
+        WPC_L_SOSLinkedCount[WPC_i]=WPC_LSOSCount; WPC_L_LPSLinkedCount[WPC_i]=WPC_LLPSCount;
+        WPC_L_SOWLinkedCount[WPC_i]=WPC_LSOWCount; WPC_L_LPSYLinkedCount[WPC_i]=WPC_LLPSYCount;
+        WPC_L_NoSupplyAfterStrengthCount[WPC_i]=WPC_LNSCount; WPC_L_NoDemandAfterWeaknessCount[WPC_i]=WPC_LNDCount;
+        WPC_L_SupportInteractionCount[WPC_i]=WPC_LSupInt; WPC_L_ResistanceInteractionCount[WPC_i]=WPC_LResInt;
+        WPC_L_FalseBreakReclaimCount[WPC_i]=WPC_LFalseBreak; WPC_L_HigherLowCount[WPC_i]=WPC_LHLCount; WPC_L_LowerHighCount[WPC_i]=WPC_LLHighCount;
+        WPC_L_BullishAbsorptionResponseCount[WPC_i]=WPC_LBullAbsCount; WPC_L_BearishAbsorptionResponseCount[WPC_i]=WPC_LBearAbsCount;
+        WPC_L_BullishBreakoutStateCode[WPC_i]=WPC_LBullBreakState; WPC_L_BearishBreakdownStateCode[WPC_i]=WPC_LBearBreakState;
+        WPC_L_BullishBreakoutSOSBarIndex[WPC_i]=IIf(WPC_LBullBreakSOSBI>=0,WPC_LBullBreakSOSBI,Null);
+        WPC_L_BearishBreakdownSOWBarIndex[WPC_i]=IIf(WPC_LBearBreakSOWBI>=0,WPC_LBearBreakSOWBI,Null);
+    }
+
+    // =============================================================
+    // UPPER-DERIVED RANGE CONTEXT — symmetric state machine
+    // =============================================================
+    WPC_UCreated = 0;
+    WPC_URevisionNow = 0;
+
+    if (WPC_UCtx AND WPCIF_U_RangeSnapshotValid[WPC_i])
+    {
+        WPC_UKeyChanged = WSS_UpperActiveSequenceOrdinal[WPC_i] != WPC_USeq
+            OR WSS_UpperActiveBCOriginBI[WPC_i] != WPC_UClimaxBI
+            OR WSS_UpperActiveReactionExtremeBI[WPC_i] != WPC_UAutoBI;
+        if (WPC_UKeyChanged)
+        {
+            WPC_U_SupersessionOccurred[WPC_i]=1;
+            WPC_U_SupersededRangeContextID[WPC_i]=WPC_UID;
+            WPC_UCtx=0;
+        }
+    }
+
+    if (WPCIF_U_PhaseAReady[WPC_i])
+    {
+        WPC_UNeedNew = (NOT WPC_UCtx)
+            OR WSS_UpperActiveSequenceOrdinal[WPC_i] != WPC_USeq
+            OR WSS_UpperActiveBCOriginBI[WPC_i] != WPC_UClimaxBI
+            OR WSS_UpperActiveReactionExtremeBI[WPC_i] != WPC_UAutoBI;
+        if (WPC_UNeedNew)
+        {
+            WPC_UCreated=1; WPC_UCtx=1;
+            WPC_USeq=WSS_UpperActiveSequenceOrdinal[WPC_i];
+            WPC_UClimaxBI=WSS_UpperActiveBCOriginBI[WPC_i];
+            WPC_UAutoBI=WSS_UpperActiveReactionExtremeBI[WPC_i];
+            WPC_ULow=WSS_UpperActiveRangeLower[WPC_i]; WPC_UHigh=WSS_UpperActiveRangeUpper[WPC_i]; WPC_UWidth=WSS_UpperActiveRangeWidth[WPC_i];
+            WPC_UID=2000000000+WPC_USeq; WPC_UKnownOff=WPC_i; WPC_UKnownBI=WPC_SourceBI[WPC_i]; WPC_UKnownDT=WPC_SourceDT[WPC_i];
+
+            WPC_hCount=0; WPC_hPrev=0; WPC_hPrevBI=-1; WPC_hLast=0; WPC_hLastBI=-1;
+            WPC_lCount=0; WPC_lPrev=0; WPC_lPrevBI=-1; WPC_lLast=0; WPC_lLastBI=-1;
+            for (WPC_j=0; WPC_j<=WPC_i; WPC_j++)
+            {
+                if (SL_PivotHighEventCode[WPC_j]==2 AND WPC_Finite(SL_PivotHighExtremeBarIndex[WPC_j]) AND SL_PivotHighExtremeBarIndex[WPC_j]<WPC_UClimaxBI)
+                { WPC_hPrev=WPC_hLast; WPC_hPrevBI=WPC_hLastBI; WPC_hLast=SL_PivotHighEventPrice[WPC_j]; WPC_hLastBI=SL_PivotHighExtremeBarIndex[WPC_j]; WPC_hCount++; }
+                if (SL_PivotLowEventCode[WPC_j]==2 AND WPC_Finite(SL_PivotLowExtremeBarIndex[WPC_j]) AND SL_PivotLowExtremeBarIndex[WPC_j]<WPC_UClimaxBI)
+                { WPC_lPrev=WPC_lLast; WPC_lPrevBI=WPC_lLastBI; WPC_lLast=SL_PivotLowEventPrice[WPC_j]; WPC_lLastBI=SL_PivotLowExtremeBarIndex[WPC_j]; WPC_lCount++; }
+            }
+            WPC_UH1=WPC_hPrev; WPC_UH1BI=WPC_hPrevBI; WPC_UH2=WPC_hLast; WPC_UH2BI=WPC_hLastBI;
+            WPC_UL1=WPC_lPrev; WPC_UL1BI=WPC_lPrevBI; WPC_UL2=WPC_lLast; WPC_UL2BI=WPC_lLastBI;
+            if (WPC_hCount<2 OR WPC_lCount<2) WPC_UTrend=0;
+            else if (WPC_UH2>WPC_UH1 AND WPC_UL2>WPC_UL1) WPC_UTrend=1;
+            else if (WPC_UH2<WPC_UH1 AND WPC_UL2<WPC_UL1) WPC_UTrend=2;
+            else WPC_UTrend=3;
+
+            WPC_UPhase=1; WPC_UPhaseOriginBI=WPC_UClimaxBI; WPC_UPhaseOriginDT=0;
+            WPC_UPhaseKnownBI=WPC_UKnownBI; WPC_UPhaseKnownDT=WPC_UKnownDT; WPC_UPhaseReason=1;
+            WPC_UCdir=0; WPC_UCsource=0; WPC_UCOriginBI=-1; WPC_UCOriginDT=0; WPC_UCKnownBI=-1;
+            WPC_UDKnownBI=-1; WPC_UEKnownBI=-1; WPC_UFamily=2; WPC_UHypKnownBI=WPC_UKnownBI;
+            WPC_UBullEvidence=0; WPC_UBearEvidence=0;
+            WPC_USOSCount=0; WPC_ULPSCount=0; WPC_USOWCount=0; WPC_ULPSYCount=0;
+            WPC_UNSCount=0; WPC_UNDCount=0; WPC_USupInt=0; WPC_UResInt=0; WPC_UFalseBreak=0;
+            WPC_UHLCount=0; WPC_ULHighCount=0; WPC_UBullAbsCount=0; WPC_UBearAbsCount=0;
+            WPC_ULastPivotLowValid=0; WPC_ULastPivotHighValid=0;
+            WPC_UBullBreakState=0; WPC_UBullBreakSOSBI=-1; WPC_UBullBreakSOSHigh=0; WPC_UBullBackupKnownBI=-1;
+            WPC_UBearBreakState=0; WPC_UBearBreakSOWBI=-1; WPC_UBearBreakSOWLow=0; WPC_UBearRetestKnownBI=-1;
+        }
+    }
+
+    if (WPC_UCtx)
+    {
+        if ((NOT WPC_UCreated) AND WPC_UPhase==1)
+        { WPC_UPhase=2; WPC_UPhaseOriginBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_UPhaseReason=2; }
+
+        if (WPCIF_CurrentPriceValid[WPC_i])
+        {
+            if (Low[WPC_i]<=WPC_ULow AND High[WPC_i]>=WPC_ULow) WPC_USupInt++;
+            if (High[WPC_i]>=WPC_UHigh AND Low[WPC_i]<=WPC_UHigh) WPC_UResInt++;
+            if ((Low[WPC_i]<WPC_ULow AND Close[WPC_i]>=WPC_ULow) OR (High[WPC_i]>WPC_UHigh AND Close[WPC_i]<=WPC_UHigh)) WPC_UFalseBreak++;
+        }
+        if (SL_PivotLowEventCode[WPC_i]==2 AND SL_PivotLowExtremeBarIndex[WPC_i]>WPC_UKnownBI)
+        { if (WPC_ULastPivotLowValid AND SL_PivotLowEventPrice[WPC_i]>WPC_ULastPivotLow) WPC_UHLCount++; WPC_ULastPivotLow=SL_PivotLowEventPrice[WPC_i]; WPC_ULastPivotLowValid=1; }
+        if (SL_PivotHighEventCode[WPC_i]==2 AND SL_PivotHighExtremeBarIndex[WPC_i]>WPC_UKnownBI)
+        { if (WPC_ULastPivotHighValid AND SL_PivotHighEventPrice[WPC_i]<WPC_ULastPivotHigh) WPC_ULHighCount++; WPC_ULastPivotHigh=SL_PivotHighEventPrice[WPC_i]; WPC_ULastPivotHighValid=1; }
+
+        WPC_UMid=(WPC_ULow+WPC_UHigh)/2;
+        WPC_USpring = WPCIF_SpringConfirmed[WPC_i] AND WPC_Finite(WPCIF_SpringOriginBI[WPC_i]) AND WPCIF_SpringOriginBI[WPC_i]>WPC_UKnownBI
+            AND WPCIF_SpringOriginLow[WPC_i]<WPC_ULow AND WPCIF_SpringOriginClose[WPC_i]>=WPC_ULow;
+        WPC_USupply = WPCIF_SupplyTestConfirmed[WPC_i] AND WPC_Finite(WPCIF_SupplyTestOriginBI[WPC_i]) AND WPCIF_SupplyTestOriginBI[WPC_i]>WPC_UKnownBI
+            AND WPCIF_SupplyTestSupport[WPC_i]>=WPC_ULow AND WPCIF_SupplyTestSupport[WPC_i]<=WPC_UMid;
+        WPC_UUT = WPCIF_UpthrustConfirmed[WPC_i] AND WPC_Finite(WPCIF_UpthrustOriginBI[WPC_i]) AND WPCIF_UpthrustOriginBI[WPC_i]>WPC_UKnownBI
+            AND WPCIF_UpthrustOriginHigh[WPC_i]>WPC_UHigh AND WPCIF_UpthrustOriginClose[WPC_i]<=WPC_UHigh;
+        WPC_USOS = WPCIF_SOSEvent[WPC_i] AND WPCIF_SOSBI[WPC_i]>WPC_UKnownBI
+            AND WPCIF_SOSBreakoutLevel[WPC_i]>=WPC_ULow AND WPCIF_SOSBreakoutLevel[WPC_i]<=WPC_UHigh;
+        WPC_ULPS = WPCIF_LPSConfirmed[WPC_i] AND WPCIF_LPSOriginBI[WPC_i]>WPC_UKnownBI
+            AND WPCIF_LPSBreakoutLevel[WPC_i]>=WPC_ULow AND WPCIF_LPSBreakoutLevel[WPC_i]<=WPC_UHigh;
+        WPC_USOW = WPCIF_U_SOWEvent[WPC_i] AND WE_SW_U_SOWSequenceOrdinal[WPC_i]==WPC_USeq AND WE_SW_U_SOWBarIndex[WPC_i]>WPC_UKnownBI;
+        WPC_ULPSY = WPCIF_U_LPSYEvent[WPC_i] AND WE_SW_U_LPSYSequenceOrdinal[WPC_i]==WPC_USeq AND WE_SW_U_LPSYKnownAtBarIndex[WPC_i]>WPC_UKnownBI;
+
+        WPC_U_CurrentSpringLinked[WPC_i]=WPC_USpring; WPC_U_CurrentSupplyTestLinked[WPC_i]=WPC_USupply; WPC_U_CurrentUpthrustLinked[WPC_i]=WPC_UUT;
+        WPC_U_CurrentSOSLinked[WPC_i]=WPC_USOS; WPC_U_CurrentLPSLinked[WPC_i]=WPC_ULPS; WPC_U_CurrentSOWLinked[WPC_i]=WPC_USOW; WPC_U_CurrentLPSYLinked[WPC_i]=WPC_ULPSY;
+        if (WPC_USOS) { WPC_USOSCount++; WPC_UBullEvidence=1; }
+        if (WPC_ULPS) { WPC_ULPSCount++; WPC_UBullEvidence=1; }
+        if (WPC_USOW) { WPC_USOWCount++; WPC_UBearEvidence=1; }
+        if (WPC_ULPSY) { WPC_ULPSYCount++; WPC_UBearEvidence=1; }
+        if (WPC_USpring OR WPC_USupply) WPC_UBullEvidence=1;
+        if (WPC_UUT) WPC_UBearEvidence=1;
+
+        // Upper stopping sequence itself is weakness background.
+        WPC_UStrengthBackground = WPC_UBullEvidence OR WPC_USOSCount>0 OR WPC_ULPSCount>0;
+        WPC_UWeaknessBackground = 1;
+        WPC_UNSNow = WPCIF_NoSupplyConfirmed[WPC_i] AND WPC_UStrengthBackground
+            AND WPC_Finite(WPCIF_NoSupplyCandidateBI[WPC_i]) AND WPCIF_NoSupplyCandidateBI[WPC_i]>WPC_UKnownBI;
+        WPC_UNDNow = WPCIF_NoDemandConfirmed[WPC_i] AND WPC_UWeaknessBackground
+            AND WPC_Finite(WPCIF_NoDemandCandidateBI[WPC_i]) AND WPCIF_NoDemandCandidateBI[WPC_i]>WPC_UKnownBI;
+        if (WPC_UNSNow) { WPC_UNSCount++; WPC_UBullEvidence=1; }
+        if (WPC_UNDNow) { WPC_UNDCount++; WPC_UBearEvidence=1; }
+        WPC_U_CurrentNoSupplyAfterStrength[WPC_i]=WPC_UNSNow; WPC_U_CurrentNoDemandAfterWeakness[WPC_i]=WPC_UNDNow;
+
+        WPC_UBullAbsNow=WPCIF_BullishAbsorptionResponse[WPC_i] AND WPCIF_PriorAbsorptionBI[WPC_i]>WPC_UKnownBI;
+        WPC_UBearAbsNow=WPCIF_BearishAbsorptionResponse[WPC_i] AND WPCIF_PriorAbsorptionBI[WPC_i]>WPC_UKnownBI;
+        if (WPC_UBullAbsNow) { WPC_UBullAbsCount++; WPC_UBullEvidence=1; }
+        if (WPC_UBearAbsNow) { WPC_UBearAbsCount++; WPC_UBearEvidence=1; }
+        WPC_U_CurrentBullishAbsorptionResponse[WPC_i]=WPC_UBullAbsNow; WPC_U_CurrentBearishAbsorptionResponse[WPC_i]=WPC_UBearAbsNow;
+
+        WPC_UBullCand=WPC_USpring OR WPC_USupply; WPC_UBearCand=WPC_UUT OR WPC_ULPSY;
+        WPC_UNewCandDir=IIf(WPC_UBullCand AND WPC_UBearCand,3,IIf(WPC_UBullCand,1,IIf(WPC_UBearCand,2,0)));
+        if (WPC_UNewCandDir>0 AND WPC_UPhase<6)
+        {
+            WPC_UAllowCand=(WPC_UPhase<=3) OR (WPC_UCdir>0 AND WPC_UNewCandDir!=WPC_UCdir);
+            if (WPC_UAllowCand)
+            {
+                WPC_UCdir=WPC_UNewCandDir;
+                if (WPC_UNewCandDir==1)
+                { WPC_UCsource=IIf(WPC_USpring,1,2); WPC_UCOriginBI=IIf(WPC_USpring,WPCIF_SpringOriginBI[WPC_i],WPCIF_SupplyTestOriginBI[WPC_i]); WPC_UCOriginDT=IIf(WPC_USpring,WPCIF_SpringOriginDT[WPC_i],WPCIF_SupplyTestOriginDT[WPC_i]); }
+                else if (WPC_UNewCandDir==2)
+                { WPC_UCsource=IIf(WPC_UUT,3,4); WPC_UCOriginBI=IIf(WPC_UUT,WPCIF_UpthrustOriginBI[WPC_i],WE_SW_U_LPSYExtremeBarIndex[WPC_i]); WPC_UCOriginDT=IIf(WPC_UUT,WPCIF_UpthrustOriginDT[WPC_i],WE_SW_U_LPSYExtremeDateTime[WPC_i]); }
+                else { WPC_UCsource=9; WPC_UCOriginBI=WPC_SourceBI[WPC_i]; WPC_UCOriginDT=WPC_SourceDT[WPC_i]; }
+                WPC_UPhase=3; WPC_UPhaseOriginBI=WPC_UCOriginBI; WPC_UPhaseOriginDT=WPC_UCOriginDT;
+                WPC_UPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_UPhaseReason=10+WPC_UCsource;
+            }
+        }
+
+        WPC_UBullStructuralResponse=SL_PivotHighEventCode[WPC_i]==2 AND SL_PivotHighExtremeBarIndex[WPC_i]>WPC_UCOriginBI AND SL_PivotHighEventPrice[WPC_i]>WPC_UHigh;
+        WPC_UBearStructuralResponse=SL_PivotLowEventCode[WPC_i]==2 AND SL_PivotLowExtremeBarIndex[WPC_i]>WPC_UCOriginBI AND SL_PivotLowEventPrice[WPC_i]<WPC_ULow;
+        if (WPC_UPhase==3)
+        {
+            WPC_UPromoteBull=(WPC_UCdir==1 OR WPC_UCdir==3) AND (WPC_USOS OR WPC_UBullStructuralResponse);
+            WPC_UPromoteBear=(WPC_UCdir==2 OR WPC_UCdir==3) AND (WPC_USOW OR WPC_UBearStructuralResponse);
+            if (WPC_UPromoteBull AND NOT WPC_UPromoteBear)
+            {
+                WPC_UCdir=1; WPC_UPhase=4; WPC_UCKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_UPhaseReason=21;
+                WPC_UNewFamily=IIf(WPC_UTrend==2,3,IIf(WPC_UTrend==1,6,2));
+                if (WPC_UFamily!=WPC_UNewFamily) { WPC_URevisionNow=IIf(WPC_UFamily==2,1,IIf(WPC_UFamily==4 OR WPC_UFamily==5,4,0)); WPC_UFamily=WPC_UNewFamily; WPC_UHypKnownBI=WPC_SourceBI[WPC_i]; }
+            }
+            else if (WPC_UPromoteBear AND NOT WPC_UPromoteBull)
+            {
+                WPC_UCdir=2; WPC_UPhase=4; WPC_UCKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_UPhaseReason=22;
+                WPC_UNewFamily=IIf(WPC_UTrend==2,4,IIf(WPC_UTrend==1,5,2));
+                if (WPC_UFamily!=WPC_UNewFamily) { WPC_URevisionNow=IIf(WPC_UFamily==2,2,IIf(WPC_UFamily==3 OR WPC_UFamily==6,3,0)); WPC_UFamily=WPC_UNewFamily; WPC_UHypKnownBI=WPC_SourceBI[WPC_i]; }
+            }
+            else if (WPC_UPromoteBull AND WPC_UPromoteBear)
+            { WPC_UCdir=3; WPC_UFamily=7; WPC_UHypKnownBI=WPC_SourceBI[WPC_i]; WPC_URevisionNow=5; }
+        }
+
+        WPC_USpringContext=WPC_UPhase>=4 AND WPC_UCdir==1 AND WPC_UCsource==1;
+        // D15: only upper-derived range promotes Upthrust to UTAD-like context.
+        WPC_UUTADContext=WPC_UPhase>=4 AND WPC_UCdir==2 AND WPC_UCsource==3;
+
+        if (WPC_UPhase==4 AND WPC_UCKnownBI>=0 AND WPC_SourceBI[WPC_i]>WPC_UCKnownBI)
+        {
+            if (WPC_UCdir==1 AND (WPC_ULPS OR WPC_USOS))
+            { WPC_UPhase=5; WPC_UDKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseOriginBI=IIf(WPC_ULPS,WPCIF_LPSOriginBI[WPC_i],WPCIF_SOSBI[WPC_i]); WPC_UPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_UPhaseReason=31; }
+            else if (WPC_UCdir==2 AND (WPC_ULPSY OR WPC_USOW))
+            { WPC_UPhase=5; WPC_UDKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseOriginBI=IIf(WPC_ULPSY,WE_SW_U_LPSYExtremeBarIndex[WPC_i],WE_SW_U_SOWBarIndex[WPC_i]); WPC_UPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_UPhaseReason=32; }
+        }
+
+        if (WPC_UPhase>=4 AND WPC_UPhase<6 AND WPC_USOS AND WPCIF_SOSClose[WPC_i]>WPC_UHigh)
+        { WPC_UBullBreakState=1; WPC_UBullBreakSOSBI=WPCIF_SOSBI[WPC_i]; WPC_UBullBreakSOSHigh=WPCIF_SOSHigh[WPC_i]; WPC_UBullBackupKnownBI=-1; }
+        if (WPC_UBullBreakState==1 AND WPC_ULPS AND WPCIF_LPSAnchorSOSBI[WPC_i]==WPC_UBullBreakSOSBI AND WPCIF_LPSOriginLow[WPC_i]>=WPC_UHigh)
+        { WPC_UBullBreakState=2; WPC_UBullBackupKnownBI=WPC_SourceBI[WPC_i]; }
+        if (WPC_UBullBreakState==2 AND SL_PivotHighEventCode[WPC_i]==2 AND WPC_SourceBI[WPC_i]>WPC_UBullBackupKnownBI
+            AND SL_PivotHighExtremeBarIndex[WPC_i]>WPC_UBullBackupKnownBI AND SL_PivotHighEventPrice[WPC_i]>WPC_UBullBreakSOSHigh)
+        {
+            WPC_UBullBreakState=3; WPC_UPhase=6; WPC_UEKnownBI=WPC_SourceBI[WPC_i]; WPC_UCdir=1;
+            WPC_UPhaseOriginBI=SL_PivotHighExtremeBarIndex[WPC_i]; WPC_UPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_UPhaseReason=41;
+            WPC_UNewFamily=IIf(WPC_UTrend==2,3,IIf(WPC_UTrend==1,6,WPC_UFamily));
+            if (WPC_UNewFamily!=WPC_UFamily) { WPC_UFamily=WPC_UNewFamily; WPC_UHypKnownBI=WPC_SourceBI[WPC_i]; WPC_URevisionNow=4; }
+        }
+
+        if (WPC_UPhase>=4 AND WPC_UPhase<6 AND WPC_USOW AND WE_SW_U_AcceptedBreakdownFlag[WPC_i]==1)
+        { WPC_UBearBreakState=1; WPC_UBearBreakSOWBI=WE_SW_U_SOWBarIndex[WPC_i]; WPC_UBearBreakSOWLow=WE_SW_U_SOWLow[WPC_i]; WPC_UBearRetestKnownBI=-1; }
+        if (WPC_UBearBreakState==1 AND WPC_ULPSY AND WE_SW_U_LPSYAnchorSOWBarIndex[WPC_i]==WPC_UBearBreakSOWBI AND WE_SW_U_LPSYPivotHigh[WPC_i]<WPC_ULow)
+        { WPC_UBearBreakState=2; WPC_UBearRetestKnownBI=WPC_SourceBI[WPC_i]; }
+        if (WPC_UBearBreakState==2 AND SL_PivotLowEventCode[WPC_i]==2 AND WPC_SourceBI[WPC_i]>WPC_UBearRetestKnownBI
+            AND SL_PivotLowExtremeBarIndex[WPC_i]>WPC_UBearRetestKnownBI AND SL_PivotLowEventPrice[WPC_i]<WPC_UBearBreakSOWLow)
+        {
+            WPC_UBearBreakState=3; WPC_UPhase=6; WPC_UEKnownBI=WPC_SourceBI[WPC_i]; WPC_UCdir=2;
+            WPC_UPhaseOriginBI=SL_PivotLowExtremeBarIndex[WPC_i]; WPC_UPhaseKnownBI=WPC_SourceBI[WPC_i]; WPC_UPhaseKnownDT=WPC_SourceDT[WPC_i]; WPC_UPhaseReason=42;
+            WPC_UNewFamily=IIf(WPC_UTrend==2,4,IIf(WPC_UTrend==1,5,WPC_UFamily));
+            if (WPC_UNewFamily!=WPC_UFamily) { WPC_UFamily=WPC_UNewFamily; WPC_UHypKnownBI=WPC_SourceBI[WPC_i]; WPC_URevisionNow=3; }
+        }
+
+        WPC_U_ContextPresent[WPC_i]=1; WPC_U_RangeContextID[WPC_i]=WPC_UID; WPC_U_RangeAnchorSequenceID[WPC_i]=WPC_USeq; WPC_U_RangeAnchorSideCode[WPC_i]=2;
+        WPC_U_PrimaryRangeLow[WPC_i]=WPC_ULow; WPC_U_PrimaryRangeHigh[WPC_i]=WPC_UHigh; WPC_U_PrimaryRangeWidth[WPC_i]=WPC_UWidth;
+        WPC_U_RangeKnownAtBarIndex[WPC_i]=WPC_UKnownBI; WPC_U_RangeKnownAtDateTime[WPC_i]=WPC_UKnownDT; WPC_U_RangeAgeBars[WPC_i]=WPC_i-WPC_UKnownOff;
+        WPC_U_RangeActive[WPC_i]=WPC_UPhase>=1 AND WPC_UPhase<=5; WPC_U_RangeTerminal[WPC_i]=WPC_UPhase==6;
+        if (WPCIF_CurrentPriceValid[WPC_i] AND WPC_UWidth>0) { WPC_U_RangePositionValid[WPC_i]=1; WPC_U_RangePosition[WPC_i]=(Close[WPC_i]-WPC_ULow)/WPC_UWidth; }
+        WPC_U_PriorTrendContextCode[WPC_i]=WPC_UTrend;
+        WPC_U_PriorHigh1Price[WPC_i]=IIf(WPC_UH1BI>=0,WPC_UH1,Null); WPC_U_PriorHigh1BarIndex[WPC_i]=IIf(WPC_UH1BI>=0,WPC_UH1BI,Null);
+        WPC_U_PriorHigh2Price[WPC_i]=IIf(WPC_UH2BI>=0,WPC_UH2,Null); WPC_U_PriorHigh2BarIndex[WPC_i]=IIf(WPC_UH2BI>=0,WPC_UH2BI,Null);
+        WPC_U_PriorLow1Price[WPC_i]=IIf(WPC_UL1BI>=0,WPC_UL1,Null); WPC_U_PriorLow1BarIndex[WPC_i]=IIf(WPC_UL1BI>=0,WPC_UL1BI,Null);
+        WPC_U_PriorLow2Price[WPC_i]=IIf(WPC_UL2BI>=0,WPC_UL2,Null); WPC_U_PriorLow2BarIndex[WPC_i]=IIf(WPC_UL2BI>=0,WPC_UL2BI,Null);
+        WPC_U_PhaseStateCode[WPC_i]=WPC_UPhase; WPC_U_PhaseOriginBarIndex[WPC_i]=WPC_UPhaseOriginBI; WPC_U_PhaseKnownAtBarIndex[WPC_i]=WPC_UPhaseKnownBI; WPC_U_PhaseKnownAtDateTime[WPC_i]=WPC_UPhaseKnownDT;
+        WPC_U_PhaseTransitionReasonCode[WPC_i]=WPC_UPhaseReason; WPC_U_PhaseCDirectionCode[WPC_i]=WPC_UCdir; WPC_U_PhaseCSourceCode[WPC_i]=WPC_UCsource;
+        WPC_U_PhaseCOriginBarIndex[WPC_i]=IIf(WPC_UCOriginBI>=0,WPC_UCOriginBI,Null); WPC_U_PhaseCKnownAtBarIndex[WPC_i]=IIf(WPC_UCKnownBI>=0,WPC_UCKnownBI,Null);
+        WPC_U_PhaseDKnownAtBarIndex[WPC_i]=IIf(WPC_UDKnownBI>=0,WPC_UDKnownBI,Null); WPC_U_PhaseEKnownAtBarIndex[WPC_i]=IIf(WPC_UEKnownBI>=0,WPC_UEKnownBI,Null);
+        WPC_U_SpringLikeContextFlag[WPC_i]=WPC_USpringContext; WPC_U_UTADLikeContextFlag[WPC_i]=WPC_UUTADContext;
+        WPC_U_FamilyHypothesisCode[WPC_i]=WPC_UFamily; WPC_U_HypothesisKnownAtBarIndex[WPC_i]=WPC_UHypKnownBI; WPC_U_HypothesisRevisionCode[WPC_i]=WPC_URevisionNow;
+        WPC_U_BullishEvidenceState[WPC_i]=WPC_UBullEvidence; WPC_U_BearishEvidenceState[WPC_i]=WPC_UBearEvidence;
+        WPC_U_EvidenceBalanceCode[WPC_i]=IIf(WPC_UBullEvidence AND WPC_UBearEvidence,3,IIf(WPC_UBullEvidence,1,IIf(WPC_UBearEvidence,2,0)));
+        WPC_U_SOSLinkedCount[WPC_i]=WPC_USOSCount; WPC_U_LPSLinkedCount[WPC_i]=WPC_ULPSCount; WPC_U_SOWLinkedCount[WPC_i]=WPC_USOWCount; WPC_U_LPSYLinkedCount[WPC_i]=WPC_ULPSYCount;
+        WPC_U_NoSupplyAfterStrengthCount[WPC_i]=WPC_UNSCount; WPC_U_NoDemandAfterWeaknessCount[WPC_i]=WPC_UNDCount;
+        WPC_U_SupportInteractionCount[WPC_i]=WPC_USupInt; WPC_U_ResistanceInteractionCount[WPC_i]=WPC_UResInt; WPC_U_FalseBreakReclaimCount[WPC_i]=WPC_UFalseBreak;
+        WPC_U_HigherLowCount[WPC_i]=WPC_UHLCount; WPC_U_LowerHighCount[WPC_i]=WPC_ULHighCount; WPC_U_BullishAbsorptionResponseCount[WPC_i]=WPC_UBullAbsCount; WPC_U_BearishAbsorptionResponseCount[WPC_i]=WPC_UBearAbsCount;
+        WPC_U_BullishBreakoutStateCode[WPC_i]=WPC_UBullBreakState; WPC_U_BearishBreakdownStateCode[WPC_i]=WPC_UBearBreakState;
+        WPC_U_BullishBreakoutSOSBarIndex[WPC_i]=IIf(WPC_UBullBreakSOSBI>=0,WPC_UBullBreakSOSBI,Null); WPC_U_BearishBreakdownSOWBarIndex[WPC_i]=IIf(WPC_UBearBreakSOWBI>=0,WPC_UBearBreakSOWBI,Null);
+    }
+}
+_SECTION_END();
+
+_SECTION_BEGIN("73. Combined facade and Exploration");
+// D31 permits multiple simultaneous RangeContexts. A singular facade is only
+// published when exactly one channel exists; otherwise consumers must inspect
+// both channels rather than accepting an arbitrary winner.
+WPC_CurrentRangeContextCount = WPC_L_ContextPresent + WPC_U_ContextPresent;
+WPC_CurrentRangeContextID = IIf(WPC_CurrentRangeContextCount==1,
+    IIf(WPC_L_ContextPresent,WPC_L_RangeContextID,WPC_U_RangeContextID),Null);
+WPC_CurrentRangeAnchorSideCode = IIf(WPC_CurrentRangeContextCount==1,
+    IIf(WPC_L_ContextPresent,1,2),IIf(WPC_CurrentRangeContextCount>1,3,0));
+WPC_CurrentPhaseStateCode = IIf(WPC_CurrentRangeContextCount==1,
+    IIf(WPC_L_ContextPresent,WPC_L_PhaseStateCode,WPC_U_PhaseStateCode),0);
+WPC_CurrentFamilyHypothesisCode = IIf(WPC_CurrentRangeContextCount==1,
+    IIf(WPC_L_ContextPresent,WPC_L_FamilyHypothesisCode,WPC_U_FamilyHypothesisCode),
+    IIf(WPC_CurrentRangeContextCount>1,7,0));
+WPC_CurrentMixedRangeContexts = IIf(WPC_CurrentRangeContextCount>1,1,0);
+
+AddColumn(WPC_SourceBI,"WPC_SourceBI",1.0);
+AddColumn(WPC_SourceDT,"WPC_SourceDT",formatDateTime);
+AddColumn(WPC_CurrentRangeContextCount,"WPC_CurrentRangeContextCount",1.0);
+AddColumn(WPC_CurrentRangeContextID,"WPC_CurrentRangeContextID",1.0);
+AddColumn(WPC_CurrentRangeAnchorSideCode,"WPC_CurrentRangeAnchorSideCode",1.0);
+AddColumn(WPC_CurrentPhaseStateCode,"WPC_CurrentPhaseStateCode",1.0);
+AddMultiTextColumn(WPC_CurrentPhaseStateCode,WPC_PhaseText,"WPC_CurrentPhaseState");
+AddColumn(WPC_CurrentFamilyHypothesisCode,"WPC_CurrentFamilyHypothesisCode",1.0);
+AddMultiTextColumn(WPC_CurrentFamilyHypothesisCode,WPC_FamilyText,"WPC_CurrentFamilyHypothesis");
+AddColumn(WPC_CurrentMixedRangeContexts,"WPC_CurrentMixedRangeContexts",1.0);
+
+// Lower channel minimum D42 public contract.
+AddColumn(WPC_L_ContextPresent,"WPC_L_ContextPresent",1.0);
+AddColumn(WPC_L_RangeContextID,"WPC_L_RangeContextID",1.0);
+AddColumn(WPC_L_RangeAnchorSequenceID,"WPC_L_RangeAnchorSequenceID",1.0);
+AddColumn(WPC_L_PrimaryRangeLow,"WPC_L_PrimaryRangeLow",1.12);
+AddColumn(WPC_L_PrimaryRangeHigh,"WPC_L_PrimaryRangeHigh",1.12);
+AddColumn(WPC_L_PrimaryRangeWidth,"WPC_L_PrimaryRangeWidth",1.12);
+AddColumn(WPC_L_RangeKnownAtBarIndex,"WPC_L_RangeKnownAtBarIndex",1.0);
+AddColumn(WPC_L_RangeAgeBars,"WPC_L_RangeAgeBars",1.0);
+AddColumn(WPC_L_RangeActive,"WPC_L_RangeActive",1.0);
+AddColumn(WPC_L_RangeTerminal,"WPC_L_RangeTerminal",1.0);
+AddColumn(WPC_L_RangePosition,"WPC_L_RangePosition",1.4);
+AddColumn(WPC_L_PriorTrendContextCode,"WPC_L_PriorTrendContextCode",1.0);
+AddMultiTextColumn(WPC_L_PriorTrendContextCode,WPC_PriorTrendText,"WPC_L_PriorTrendContext");
+AddColumn(WPC_L_PhaseStateCode,"WPC_L_PhaseStateCode",1.0);
+AddMultiTextColumn(WPC_L_PhaseStateCode,WPC_PhaseText,"WPC_L_PhaseState");
+AddColumn(WPC_L_PhaseOriginBarIndex,"WPC_L_PhaseOriginBarIndex",1.0);
+AddColumn(WPC_L_PhaseKnownAtBarIndex,"WPC_L_PhaseKnownAtBarIndex",1.0);
+AddColumn(WPC_L_PhaseTransitionReasonCode,"WPC_L_PhaseTransitionReasonCode",1.0);
+AddColumn(WPC_L_PhaseCDirectionCode,"WPC_L_PhaseCDirectionCode",1.0);
+AddMultiTextColumn(WPC_L_PhaseCDirectionCode,WPC_PhaseCDirectionText,"WPC_L_PhaseCDirection");
+AddColumn(WPC_L_PhaseCSourceCode,"WPC_L_PhaseCSourceCode",1.0);
+AddColumn(WPC_L_PhaseCOriginBarIndex,"WPC_L_PhaseCOriginBarIndex",1.0);
+AddColumn(WPC_L_PhaseCKnownAtBarIndex,"WPC_L_PhaseCKnownAtBarIndex",1.0);
+AddColumn(WPC_L_PhaseDKnownAtBarIndex,"WPC_L_PhaseDKnownAtBarIndex",1.0);
+AddColumn(WPC_L_PhaseEKnownAtBarIndex,"WPC_L_PhaseEKnownAtBarIndex",1.0);
+AddColumn(WPC_L_FamilyHypothesisCode,"WPC_L_FamilyHypothesisCode",1.0);
+AddMultiTextColumn(WPC_L_FamilyHypothesisCode,WPC_FamilyText,"WPC_L_FamilyHypothesis");
+AddColumn(WPC_L_HypothesisKnownAtBarIndex,"WPC_L_HypothesisKnownAtBarIndex",1.0);
+AddColumn(WPC_L_HypothesisRevisionCode,"WPC_L_HypothesisRevisionCode",1.0);
+AddColumn(WPC_L_EvidenceBalanceCode,"WPC_L_EvidenceBalanceCode",1.0);
+AddMultiTextColumn(WPC_L_EvidenceBalanceCode,WPC_EvidenceText,"WPC_L_EvidenceBalance");
+AddColumn(WPC_L_SpringLikeContextFlag,"WPC_L_SpringLikeContextFlag",1.0);
+AddColumn(WPC_L_UTADLikeContextFlag,"WPC_L_UTADLikeContextFlag",1.0);
+AddColumn(WPC_L_SOSLinkedCount,"WPC_L_SOSLinkedCount",1.0);
+AddColumn(WPC_L_LPSLinkedCount,"WPC_L_LPSLinkedCount",1.0);
+AddColumn(WPC_L_SOWLinkedCount,"WPC_L_SOWLinkedCount",1.0);
+AddColumn(WPC_L_LPSYLinkedCount,"WPC_L_LPSYLinkedCount",1.0);
+AddColumn(WPC_L_NoSupplyAfterStrengthCount,"WPC_L_NoSupplyAfterStrengthCount",1.0);
+AddColumn(WPC_L_NoDemandAfterWeaknessCount,"WPC_L_NoDemandAfterWeaknessCount",1.0);
+AddColumn(WPC_L_SupportInteractionCount,"WPC_L_SupportInteractionCount",1.0);
+AddColumn(WPC_L_ResistanceInteractionCount,"WPC_L_ResistanceInteractionCount",1.0);
+AddColumn(WPC_L_FalseBreakReclaimCount,"WPC_L_FalseBreakReclaimCount",1.0);
+AddColumn(WPC_L_HigherLowCount,"WPC_L_HigherLowCount",1.0);
+AddColumn(WPC_L_LowerHighCount,"WPC_L_LowerHighCount",1.0);
+AddColumn(WPC_L_BullishAbsorptionResponseCount,"WPC_L_BullishAbsorptionResponseCount",1.0);
+AddColumn(WPC_L_BearishAbsorptionResponseCount,"WPC_L_BearishAbsorptionResponseCount",1.0);
+AddColumn(WPC_L_BullishBreakoutStateCode,"WPC_L_BullishBreakoutStateCode",1.0);
+AddColumn(WPC_L_BearishBreakdownStateCode,"WPC_L_BearishBreakdownStateCode",1.0);
+AddColumn(WPC_L_SupersessionOccurred,"WPC_L_SupersessionOccurred",1.0);
+AddColumn(WPC_L_SupersededRangeContextID,"WPC_L_SupersededRangeContextID",1.0);
+
+// Upper channel minimum D42 public contract.
+AddColumn(WPC_U_ContextPresent,"WPC_U_ContextPresent",1.0);
+AddColumn(WPC_U_RangeContextID,"WPC_U_RangeContextID",1.0);
+AddColumn(WPC_U_RangeAnchorSequenceID,"WPC_U_RangeAnchorSequenceID",1.0);
+AddColumn(WPC_U_PrimaryRangeLow,"WPC_U_PrimaryRangeLow",1.12);
+AddColumn(WPC_U_PrimaryRangeHigh,"WPC_U_PrimaryRangeHigh",1.12);
+AddColumn(WPC_U_PrimaryRangeWidth,"WPC_U_PrimaryRangeWidth",1.12);
+AddColumn(WPC_U_RangeKnownAtBarIndex,"WPC_U_RangeKnownAtBarIndex",1.0);
+AddColumn(WPC_U_RangeAgeBars,"WPC_U_RangeAgeBars",1.0);
+AddColumn(WPC_U_RangeActive,"WPC_U_RangeActive",1.0);
+AddColumn(WPC_U_RangeTerminal,"WPC_U_RangeTerminal",1.0);
+AddColumn(WPC_U_RangePosition,"WPC_U_RangePosition",1.4);
+AddColumn(WPC_U_PriorTrendContextCode,"WPC_U_PriorTrendContextCode",1.0);
+AddMultiTextColumn(WPC_U_PriorTrendContextCode,WPC_PriorTrendText,"WPC_U_PriorTrendContext");
+AddColumn(WPC_U_PhaseStateCode,"WPC_U_PhaseStateCode",1.0);
+AddMultiTextColumn(WPC_U_PhaseStateCode,WPC_PhaseText,"WPC_U_PhaseState");
+AddColumn(WPC_U_PhaseOriginBarIndex,"WPC_U_PhaseOriginBarIndex",1.0);
+AddColumn(WPC_U_PhaseKnownAtBarIndex,"WPC_U_PhaseKnownAtBarIndex",1.0);
+AddColumn(WPC_U_PhaseTransitionReasonCode,"WPC_U_PhaseTransitionReasonCode",1.0);
+AddColumn(WPC_U_PhaseCDirectionCode,"WPC_U_PhaseCDirectionCode",1.0);
+AddMultiTextColumn(WPC_U_PhaseCDirectionCode,WPC_PhaseCDirectionText,"WPC_U_PhaseCDirection");
+AddColumn(WPC_U_PhaseCSourceCode,"WPC_U_PhaseCSourceCode",1.0);
+AddColumn(WPC_U_PhaseCOriginBarIndex,"WPC_U_PhaseCOriginBarIndex",1.0);
+AddColumn(WPC_U_PhaseCKnownAtBarIndex,"WPC_U_PhaseCKnownAtBarIndex",1.0);
+AddColumn(WPC_U_PhaseDKnownAtBarIndex,"WPC_U_PhaseDKnownAtBarIndex",1.0);
+AddColumn(WPC_U_PhaseEKnownAtBarIndex,"WPC_U_PhaseEKnownAtBarIndex",1.0);
+AddColumn(WPC_U_FamilyHypothesisCode,"WPC_U_FamilyHypothesisCode",1.0);
+AddMultiTextColumn(WPC_U_FamilyHypothesisCode,WPC_FamilyText,"WPC_U_FamilyHypothesis");
+AddColumn(WPC_U_HypothesisKnownAtBarIndex,"WPC_U_HypothesisKnownAtBarIndex",1.0);
+AddColumn(WPC_U_HypothesisRevisionCode,"WPC_U_HypothesisRevisionCode",1.0);
+AddColumn(WPC_U_EvidenceBalanceCode,"WPC_U_EvidenceBalanceCode",1.0);
+AddMultiTextColumn(WPC_U_EvidenceBalanceCode,WPC_EvidenceText,"WPC_U_EvidenceBalance");
+AddColumn(WPC_U_SpringLikeContextFlag,"WPC_U_SpringLikeContextFlag",1.0);
+AddColumn(WPC_U_UTADLikeContextFlag,"WPC_U_UTADLikeContextFlag",1.0);
+AddColumn(WPC_U_SOSLinkedCount,"WPC_U_SOSLinkedCount",1.0);
+AddColumn(WPC_U_LPSLinkedCount,"WPC_U_LPSLinkedCount",1.0);
+AddColumn(WPC_U_SOWLinkedCount,"WPC_U_SOWLinkedCount",1.0);
+AddColumn(WPC_U_LPSYLinkedCount,"WPC_U_LPSYLinkedCount",1.0);
+AddColumn(WPC_U_NoSupplyAfterStrengthCount,"WPC_U_NoSupplyAfterStrengthCount",1.0);
+AddColumn(WPC_U_NoDemandAfterWeaknessCount,"WPC_U_NoDemandAfterWeaknessCount",1.0);
+AddColumn(WPC_U_SupportInteractionCount,"WPC_U_SupportInteractionCount",1.0);
+AddColumn(WPC_U_ResistanceInteractionCount,"WPC_U_ResistanceInteractionCount",1.0);
+AddColumn(WPC_U_FalseBreakReclaimCount,"WPC_U_FalseBreakReclaimCount",1.0);
+AddColumn(WPC_U_HigherLowCount,"WPC_U_HigherLowCount",1.0);
+AddColumn(WPC_U_LowerHighCount,"WPC_U_LowerHighCount",1.0);
+AddColumn(WPC_U_BullishAbsorptionResponseCount,"WPC_U_BullishAbsorptionResponseCount",1.0);
+AddColumn(WPC_U_BearishAbsorptionResponseCount,"WPC_U_BearishAbsorptionResponseCount",1.0);
+AddColumn(WPC_U_BullishBreakoutStateCode,"WPC_U_BullishBreakoutStateCode",1.0);
+AddColumn(WPC_U_BearishBreakdownStateCode,"WPC_U_BearishBreakdownStateCode",1.0);
+AddColumn(WPC_U_SupersessionOccurred,"WPC_U_SupersessionOccurred",1.0);
+AddColumn(WPC_U_SupersededRangeContextID,"WPC_U_SupersededRangeContextID",1.0);
+
+// D40: official acceptance remains completed-bar only. This code intentionally
+// does not infer exchange session closure from BarCount or the last loaded bar.
+// The last/forming bar must be treated as provisional by the runtime caller.
+_SECTION_END();
