@@ -1,0 +1,90 @@
+/* Wyckoff VSA Market Scanner v0.1 — Exploration-first interface */
+#include_once <WyckoffVSA_MarketScanner_v0.1.afl>
+
+_SECTION_BEGIN("126. Market Scanner Exploration");
+WSCN_FilterModeCode = Param("Scanner Filter Mode: 0=Qualified 1=Developing+Qualified 2=Watch+Developing+Qualified 3=Review/Audit 4=All Eligible",3,0,4,1);
+WSCN_IsLastBar = Status("lastbarinrange");
+WSCN_FilterQualified = WSCN_QualifiedCandidateFlag==1;
+WSCN_FilterDeveloping = WSCN_DevelopingCandidateFlag==1 OR WSCN_QualifiedCandidateFlag==1;
+WSCN_FilterWatch = WSCN_WatchFlag==1 OR WSCN_DevelopingCandidateFlag==1 OR WSCN_QualifiedCandidateFlag==1;
+WSCN_FilterReviewAudit = WSCN_ReviewFlag==1 OR WSCN_DataEligibilityCode==0 OR WSCN_MethodBlockReasonMask>0;
+WSCN_FilterAllEligible = WSCN_DataEligibilityCode==1;
+Filter = WSCN_IsLastBar AND IIf(WSCN_FilterModeCode==0,WSCN_FilterQualified,
+         IIf(WSCN_FilterModeCode==1,WSCN_FilterDeveloping,
+         IIf(WSCN_FilterModeCode==2,WSCN_FilterWatch,
+         IIf(WSCN_FilterModeCode==3,WSCN_FilterReviewAudit,WSCN_FilterAllEligible))));
+
+WSCN_RSStructureText = "INSUFFICIENT\nRISING\nFALLING\nMIXED";
+WSCN_LeadershipText = "INSUFFICIENT / NOT REQUESTED\nNESTED RELATIVE LEADERSHIP\nNESTED RELATIVE WEAKNESS\nGROUP WEAK / STOCK STRONG VS GROUP\nGROUP STRONG / STOCK WEAK VS GROUP\nMIXED LEADERSHIP CHAIN";
+WSCN_PriceRSRelationshipText = "INSUFFICIENT\nPRICE + RS RISING IN GEAR\nPRICE RISING / RS NON-CONFIRMING\nPRICE FALLING / RS NON-CONFIRMING\nPRICE + RS FALLING IN GEAR\nMIXED / COMPLEX PRICE-RS";
+
+// Provenance / data health.
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"Scan DateTime",formatDateTime);
+AddColumn(WSCN_StockBusinessDateKey,"Stock BusinessDateKey",1.0);
+AddTextColumn(WXS_RequestedMarketSymbol,"Market benchmark");
+AddTextColumn(WXS_RequestedGroupSymbol,"Group benchmark");
+AddTextColumn(WRS_MarketBenchmarkSymbol,"RS Market benchmark");
+AddTextColumn(WRS_GroupBenchmarkSymbol,"RS Group benchmark");
+AddColumn(WSCN_MarketBenchmarkConfigMatch,"Market benchmark config match",1.0);
+AddColumn(WSCN_GroupBenchmarkConfigMatch,"Group benchmark config match",1.0);
+AddColumn(WCI_ProvisionalFlag,"Daily provisional",1.0);
+AddColumn(WSCN_DataEligibilityCode,"DataEligibilityCode",1.0);
+AddMultiTextColumn(WSCN_DataEligibilityCode,WSCN_DataEligibilityText,"DataEligibility");
+AddColumn(WSCN_ExclusionReasonMask,"ExclusionReasonMask",1.0);
+AddColumn(WSCN_MarketSnapshotStatusCode,"Market snapshot status",1.0);
+AddMultiTextColumn(WSCN_MarketSnapshotStatusCode,WXS_ConsumerStatusText,"Market snapshot");
+AddColumn(WSCN_GroupSnapshotStatusCode,"Group snapshot status",1.0);
+AddMultiTextColumn(WSCN_GroupSnapshotStatusCode,WXS_ConsumerStatusText,"Group snapshot");
+AddColumn(WSCN_RSContextStatusCode,"RS context status",1.0);
+AddColumn(WSCN_AdjustmentBasisStatusCode,"Adjustment basis status",1.0);
+AddColumn(WSCN_FullTopDownDataEligible,"Full Top-Down data eligible",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_SourceBusinessDateKey"),"Market SourceBusinessDateKey",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_SourceBusinessDateKey"),"Group SourceBusinessDateKey",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_GenerationB"),"Market snapshot generation",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSG_GenerationB"),"Group snapshot generation",1.0);
+
+// Top-down context.
+AddColumn(WSCN_MarketSelectionContextCode,"MarketSelectionContextCode",1.0);
+AddMultiTextColumn(WSCN_MarketSelectionContextCode,WSCN_SelectionContextText,"Market Selection Context");
+AddColumn(WSCN_GroupSelectionContextCode,"GroupSelectionContextCode",1.0);
+AddMultiTextColumn(WSCN_GroupSelectionContextCode,WSCN_SelectionContextText,"Group Selection Context");
+AddColumn(WSCN_StockDirectionalContextCode,"Stock DirectionalContextCode",1.0);
+AddMultiTextColumn(WSCN_StockDirectionalContextCode,WCI_DirectionalContextText,"Stock Directional Context");
+AddColumn(WSCN_StockPhaseStateCode,"Stock PhaseStateCode",1.0);
+AddMultiTextColumn(WSCN_StockPhaseStateCode,WPC_PhaseText,"Stock Phase");
+AddColumn(WSCN_CandidateStageCode,"CandidateStageCode",1.0);
+AddMultiTextColumn(WSCN_CandidateStageCode,WSCN_CandidateStageText,"Candidate Stage");
+AddColumn(WSCN_StockFamilyHypothesisCode,"Stock FamilyHypothesisCode",1.0);
+AddMultiTextColumn(WSCN_StockFamilyHypothesisCode,WPC_FamilyText,"Stock Family Hypothesis");
+AddColumn(WSCN_StockEvidenceBalanceCode,"Stock EvidenceBalanceCode",1.0);
+AddMultiTextColumn(WSCN_StockEvidenceBalanceCode,WCI_EvidenceBalanceText,"Stock Evidence Balance");
+AddColumn(WSCN_StockHypothesisAlignmentCode,"Stock HypothesisAlignmentCode",1.0);
+AddMultiTextColumn(WSCN_StockHypothesisAlignmentCode,WCI_HypothesisAlignmentText,"Stock Hypothesis Alignment");
+AddColumn(WSCN_StockMTFDirectionalAlignmentCode,"Stock MTF AlignmentCode",1.0);
+AddMultiTextColumn(WSCN_StockMTFDirectionalAlignmentCode,WMTF_DirectionalAlignmentText,"Stock D/W/M Alignment");
+AddColumn(WSCN_StockVsMarketRSStructureCode,"Stock-vs-Market RS StructureCode",1.0);
+AddMultiTextColumn(WSCN_StockVsMarketRSStructureCode,WSCN_RSStructureText,"Stock-vs-Market RS");
+AddColumn(WSCN_StockVsGroupRSStructureCode,"Stock-vs-Group RS StructureCode",1.0);
+AddMultiTextColumn(WSCN_StockVsGroupRSStructureCode,WSCN_RSStructureText,"Stock-vs-Group RS");
+AddColumn(WSCN_GroupVsMarketRSStructureCode,"Group-vs-Market RS StructureCode",1.0);
+AddMultiTextColumn(WSCN_GroupVsMarketRSStructureCode,WSCN_RSStructureText,"Group-vs-Market RS");
+AddColumn(WSCN_LeadershipChainCode,"LeadershipChainCode",1.0);
+AddMultiTextColumn(WSCN_LeadershipChainCode,WSCN_LeadershipText,"Leadership Chain");
+AddColumn(WSCN_PriceRSRelationshipCode,"PriceRSRelationshipCode",1.0);
+AddMultiTextColumn(WSCN_PriceRSRelationshipCode,WSCN_PriceRSRelationshipText,"Price / RS Relationship");
+AddColumn(WSCN_CurrentEventMask,"CurrentEventMask",1.0);
+
+// Decision audit. CandidateClass enum is categorical, not quality rank.
+AddColumn(WSCN_CandidateClassCode,"CandidateClassCode",1.0);
+AddMultiTextColumn(WSCN_CandidateClassCode,WSCN_CandidateClassText,"Candidate Class");
+AddColumn(WSCN_CandidateSideCode,"CandidateSideCode",1.0);
+AddMultiTextColumn(WSCN_CandidateSideCode,WSCN_CandidateSideText,"Candidate Side");
+AddColumn(WSCN_QualifiedCandidateFlag,"QualifiedCandidateFlag",1.0);
+AddColumn(WSCN_DevelopingCandidateFlag,"DevelopingCandidateFlag",1.0);
+AddColumn(WSCN_WatchFlag,"WatchFlag",1.0);
+AddColumn(WSCN_ReviewFlag,"ReviewFlag",1.0);
+AddColumn(WSCN_MethodBlockReasonMask,"MethodBlockReasonMask",1.0);
+AddColumn(WSCN_SelectionCompletenessCode,"SelectionCompletenessCode",1.0);
+AddMultiTextColumn(WSCN_SelectionCompletenessCode,WSCN_SelectionCompletenessText,"Selection Completeness");
+_SECTION_END();
