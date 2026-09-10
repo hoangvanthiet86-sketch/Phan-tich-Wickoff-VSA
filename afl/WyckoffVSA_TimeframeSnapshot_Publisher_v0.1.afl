@@ -1,0 +1,194 @@
+/*
+    Wyckoff VSA Timeframe Snapshot Publisher v0.1
+
+    Approved contract: PR #29, S01-S32.
+    Approval merge commit: a098a253cb139c6e2fc226a9aba8b051f3b5fa59
+
+    Serialization layer only. Runs on native Weekly or Monthly interval and
+    publishes the previous calendar-completed higher-period Composite state
+    into persistent scalar StaticVars.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    No trading signal. No MTF alignment logic.
+*/
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>
+
+_SECTION_BEGIN("90. Timeframe Snapshot Publisher contract");
+WTS_SchemaMajor = 1;
+WTS_SchemaMinor = 0;
+WTS_CompositeVersion = "0.1";
+WTS_ContractVersion = "0.1";
+WTS_CompletionBasisCode = 1; // CALENDAR PERIOD ROLLED OVER
+WTS_ClockBasisCode = 1;      // LOCAL SYSTEM
+WTS_Now = Now(5);
+WTS_WeekEpoch = _DT("2000-01-03 00:00:00"); // Monday epoch
+
+WTS_CurrentWeeklyOrdinal = Floor(DateTimeDiff(WTS_Now,WTS_WeekEpoch)/604800);
+WTS_CurrentMonthlyOrdinal = Now(8)*12 + Now(7);
+
+WTS_IsWeekly = Interval()==inWeekly;
+WTS_IsMonthly = Interval()==inMonthly;
+WTS_IntervalValid = WTS_IsWeekly OR WTS_IsMonthly;
+WTS_TFCode = "";
+WTS_CurrentPeriodOrdinal = Null;
+WTS_ExpectedCompletedOrdinal = Null;
+
+if (WTS_IsWeekly)
+{
+    WTS_TFCode = "W";
+    WTS_CurrentPeriodOrdinal = WTS_CurrentWeeklyOrdinal;
+    WTS_ExpectedCompletedOrdinal = WTS_CurrentWeeklyOrdinal - 1;
+}
+else
+if (WTS_IsMonthly)
+{
+    WTS_TFCode = "M";
+    WTS_CurrentPeriodOrdinal = WTS_CurrentMonthlyOrdinal;
+    WTS_ExpectedCompletedOrdinal = WTS_CurrentMonthlyOrdinal - 1;
+}
+
+WTS_SourceDateTimeArray = DateTime();
+WTS_SourceWeeklyOrdinalArray = Floor(DateTimeDiff(WTS_SourceDateTimeArray,WTS_WeekEpoch)/604800);
+WTS_SourceMonthlyOrdinalArray = Year()*12 + Month();
+WTS_SelectedIndex = -1;
+WTS_SelectedSourceOrdinal = Null;
+WTS_SelectedSourceDateTime = Null;
+
+// Publisher status:
+// 0 NOT RUN / INSUFFICIENT
+// 1 COMMITTED
+// 2 INVALID INTERVAL
+// 3 EXPECTED PERIOD NOT FOUND
+// 4 INVALID SOURCE PAYLOAD
+// 5 COMMIT MARKER VERIFY FAILED
+WTS_PublisherStatus = 0;
+
+if (NOT WTS_IntervalValid)
+{
+    WTS_PublisherStatus = 2;
+}
+else
+{
+    for (WTS_i=BarCount-1; WTS_i>=0; WTS_i--)
+    {
+        WTS_CandidateOrdinal = IIf(WTS_IsWeekly,
+            WTS_SourceWeeklyOrdinalArray[WTS_i],
+            WTS_SourceMonthlyOrdinalArray[WTS_i]);
+
+        WTS_CandidateCompositeValid =
+            NOT IsNull(WCI_ContextMultiplicityCode[WTS_i]) AND
+            NOT IsNull(WCI_CurrentEventMask[WTS_i]) AND
+            WCI_ProvisionalFlag[WTS_i]==0;
+
+        if (WTS_SelectedIndex<0 AND
+            WTS_CandidateOrdinal==WTS_ExpectedCompletedOrdinal AND
+            WTS_CandidateCompositeValid)
+        {
+            WTS_SelectedIndex = WTS_i;
+            WTS_SelectedSourceOrdinal = WTS_CandidateOrdinal;
+            WTS_SelectedSourceDateTime = WTS_SourceDateTimeArray[WTS_i];
+        }
+    }
+
+    if (WTS_SelectedIndex<0)
+    {
+        WTS_PublisherStatus = 3;
+    }
+    else
+    {
+        WTS_Symbol = Name();
+        WTS_Prefix = "WVSA_MTF_v01_" + WTS_Symbol + "_" + WTS_TFCode + "_";
+        WTS_PreviousGeneration = Nz(StaticVarGet(WTS_Prefix+"CommittedGenerationID"),0);
+        WTS_NewGeneration = WTS_PreviousGeneration + 1;
+
+        // S14: Ready must go low before any payload/provenance writes.
+        StaticVarSet(WTS_Prefix+"Ready",0,True);
+
+        // S10/S11/S26 provenance and schema.
+        StaticVarSet(WTS_Prefix+"SchemaMajor",WTS_SchemaMajor,True);
+        StaticVarSet(WTS_Prefix+"SchemaMinor",WTS_SchemaMinor,True);
+        StaticVarSetText(WTS_Prefix+"Symbol",WTS_Symbol,True);
+        StaticVarSetText(WTS_Prefix+"TimeframeCode",WTS_TFCode,True);
+        StaticVarSetText(WTS_Prefix+"ProducerCompositeVersion",WTS_CompositeVersion,True);
+        StaticVarSetText(WTS_Prefix+"ProducerContractVersion",WTS_ContractVersion,True);
+        StaticVarSet(WTS_Prefix+"SourcePeriodOrdinal",WTS_SelectedSourceOrdinal,True);
+        StaticVarSet(WTS_Prefix+"SourceBarDateTime",WTS_SelectedSourceDateTime,True);
+        StaticVarSet(WTS_Prefix+"PublishedAtDateTime",WTS_Now,True);
+        StaticVarSet(WTS_Prefix+"CompletionBasisCode",WTS_CompletionBasisCode,True);
+        StaticVarSet(WTS_Prefix+"ClockBasisCode",WTS_ClockBasisCode,True);
+        StaticVarSet(WTS_Prefix+"PublisherCurrentPeriodOrdinal",WTS_CurrentPeriodOrdinal,True);
+        StaticVarSet(WTS_Prefix+"PublisherExpectedCompletedOrdinal",WTS_ExpectedCompletedOrdinal,True);
+
+        // S17 singleton Composite payload.
+        StaticVarSet(WTS_Prefix+"ContextMultiplicityCode",WCI_ContextMultiplicityCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"ContextAmbiguous",WCI_ContextAmbiguous[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"CurrentRangeContextID",WCI_CurrentRangeContextID[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"RangeStatusCode",WCI_RangeStatusCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"PrimaryRangeLow",WCI_PrimaryRangeLow[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"PrimaryRangeHigh",WCI_PrimaryRangeHigh[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"PrimaryRangeWidth",WCI_PrimaryRangeWidth[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"RangeAgeBars",WCI_RangeAgeBars[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"PhaseStateCode",WCI_PhaseStateCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"StructuralDevelopmentCode",WCI_StructuralDevelopmentCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"FamilyHypothesisCode",WCI_FamilyHypothesisCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"DirectionalContextCode",WCI_DirectionalContextCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"EvidenceBalanceCode",WCI_EvidenceBalanceCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"HypothesisAlignmentCode",WCI_HypothesisAlignmentCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"HypothesisRevisionCode",WCI_HypothesisRevisionCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"CurrentEventMask",WCI_CurrentEventMask[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"ProvisionalFlag",WCI_ProvisionalFlag[WTS_SelectedIndex],True);
+
+        // S18 lower-derived RangeContext diagnostics.
+        StaticVarSet(WTS_Prefix+"L_ContextPresent",WCI_L_ContextPresent[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_RangeContextID",WCI_L_RangeContextID[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_RangeStatusCode",WCI_L_RangeStatusCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_PhaseStateCode",WCI_L_PhaseStateCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_FamilyHypothesisCode",WCI_L_FamilyHypothesisCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_EvidenceBalanceCode",WCI_L_EvidenceBalanceCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_MixedEvidenceReasonCode",WCI_L_MixedEvidenceReasonCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_PrimaryRangeLow",WCI_L_PrimaryRangeLow[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_PrimaryRangeHigh",WCI_L_PrimaryRangeHigh[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_RangeAgeBars",WCI_L_RangeAgeBars[WTS_SelectedIndex],True);
+
+        // S18 upper-derived RangeContext diagnostics.
+        StaticVarSet(WTS_Prefix+"U_ContextPresent",WCI_U_ContextPresent[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_RangeContextID",WCI_U_RangeContextID[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_RangeStatusCode",WCI_U_RangeStatusCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_PhaseStateCode",WCI_U_PhaseStateCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_FamilyHypothesisCode",WCI_U_FamilyHypothesisCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_EvidenceBalanceCode",WCI_U_EvidenceBalanceCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_MixedEvidenceReasonCode",WCI_U_MixedEvidenceReasonCode[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_PrimaryRangeLow",WCI_U_PrimaryRangeLow[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_PrimaryRangeHigh",WCI_U_PrimaryRangeHigh[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_RangeAgeBars",WCI_U_RangeAgeBars[WTS_SelectedIndex],True);
+
+        // S14 commit marker then Ready last.
+        StaticVarSet(WTS_Prefix+"CommittedGenerationID",WTS_NewGeneration,True);
+        StaticVarSet(WTS_Prefix+"Ready",1,True);
+
+        WTS_VerifyGeneration = StaticVarGet(WTS_Prefix+"CommittedGenerationID");
+        WTS_VerifyReady = StaticVarGet(WTS_Prefix+"Ready");
+        WTS_PublisherStatus = IIf(
+            WTS_VerifyReady==1 AND WTS_VerifyGeneration==WTS_NewGeneration,
+            1,5);
+    }
+}
+
+WTS_PublisherStatusText = "NOT RUN / INSUFFICIENT\nCOMMITTED\nINVALID INTERVAL\nEXPECTED PERIOD NOT FOUND\nINVALID SOURCE PAYLOAD\nCOMMIT MARKER VERIFY FAILED";
+WTS_PublisherStatusArray = 0*BarIndex()+WTS_PublisherStatus;
+WTS_CurrentPeriodOrdinalArray = 0*BarIndex()+WTS_CurrentPeriodOrdinal;
+WTS_ExpectedCompletedOrdinalArray = 0*BarIndex()+WTS_ExpectedCompletedOrdinal;
+WTS_SelectedSourceOrdinalArray = 0*BarIndex()+WTS_SelectedSourceOrdinal;
+WTS_SelectedSourceDateTimeArray = 0*BarIndex()+WTS_SelectedSourceDateTime;
+
+AddTextColumn(Name(),"WTS_Symbol");
+AddColumn(Interval(),"WTS_NativeInterval",1.0);
+AddColumn(WTS_PublisherStatusArray,"WTS_PublisherStatusCode",1.0);
+AddMultiTextColumn(WTS_PublisherStatusArray,WTS_PublisherStatusText,"WTS_PublisherStatus");
+AddColumn(WTS_CurrentPeriodOrdinalArray,"WTS_CurrentCalendarPeriodOrdinal",1.0);
+AddColumn(WTS_ExpectedCompletedOrdinalArray,"WTS_ExpectedCompletedOrdinal",1.0);
+AddColumn(WTS_SelectedSourceOrdinalArray,"WTS_SelectedSourceOrdinal",1.0);
+AddColumn(WTS_SelectedSourceDateTimeArray,"WTS_SelectedSourceDateTime",formatDateTime);
+AddColumn(0*BarIndex()+WTS_ClockBasisCode,"WTS_ClockBasisCode",1.0);
+AddColumn(0*BarIndex()+WTS_CompletionBasisCode,"WTS_CompletionBasisCode",1.0);
+_SECTION_END();
