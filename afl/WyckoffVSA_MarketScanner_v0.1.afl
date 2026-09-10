@@ -1,0 +1,336 @@
+/*
+    Wyckoff VSA Market Scanner v0.1
+
+    Approved specification: PR #36, MS01-MS40.
+    Specification merge: b70cae9c8714cbb2b17082d155e57b50110aa13f
+    Cross-Symbol contract: PR #37, XS01-XS38.
+    Cross-Symbol implementation parent: PR #38 development stack.
+
+    Research-candidate filter only.
+    FILTER FIRST; NO NUMERIC RANKING.
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+
+    No Buy/Sell/Short/Cover, no PositionScore, no P&F target and no claim that
+    Wyckoff Five-Step or Nine Tests are complete.
+*/
+#include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>
+#include_once <WyckoffVSA_RelativeStrengthContext_v0.1.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>
+
+_SECTION_BEGIN("120. Market Scanner configuration and helpers");
+function WSCN_FiniteScalar(x)
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+function WSCN_SelectionContext(valid,multiplicity,directional,evidence,hypAlign,mtfAlign)
+{
+    local mixed, bullish, bearish;
+    mixed = multiplicity==2 OR directional==4 OR evidence==3 OR hypAlign==3 OR
+            mtfAlign==4 OR mtfAlign==5 OR mtfAlign==6;
+    bullish = directional==2 AND mtfAlign==2 AND evidence!=2 AND evidence!=3 AND hypAlign!=3;
+    bearish = directional==3 AND mtfAlign==3 AND evidence!=1 AND evidence!=3 AND hypAlign!=3;
+    return IIf(NOT valid,0,IIf(mixed,4,IIf(bullish,2,IIf(bearish,3,1))));
+}
+
+function WSCN_StageFromPhase(phaseCode)
+{
+    return IIf(phaseCode==1 OR phaseCode==2,1,
+           IIf(phaseCode==3 OR phaseCode==4,2,
+           IIf(phaseCode==5,3,
+           IIf(phaseCode==6,4,
+           IIf(phaseCode==7,5,0)))));
+}
+
+WSCN_Zero = 0 * BarIndex();
+WSCN_SourceDateTime = DateTime();
+WSCN_SourceBarIndex = BarIndex();
+WSCN_SchemaMajor = 1;
+WSCN_SchemaMinor = 0;
+
+// Deployment choice only. It does not change Wyckoff logic. When enabled,
+// invalid/missing Group context becomes a hard data exclusion for this run.
+WSCN_RequireFullTopDown = ParamToggle("Scanner: require Full Top-Down profile","No|Yes",0);
+
+WSCN_CandidateClassText = "DATA GATED / INSUFFICIENT\nNOT A CURRENT CANDIDATE\nWATCH\nDEVELOPING BULLISH\nQUALIFIED BULLISH - MARKET ALIGNED\nQUALIFIED BULLISH - FULL TOP-DOWN\nDEVELOPING BEARISH\nQUALIFIED BEARISH - MARKET ALIGNED\nQUALIFIED BEARISH - FULL TOP-DOWN\nREVIEW - CONFLICT / AMBIGUITY";
+WSCN_CandidateSideText = "NONE / UNRESOLVED\nBULLISH\nBEARISH";
+WSCN_CandidateStageText = "NONE / INSUFFICIENT\nWATCH - RANGE FORMATION / DEVELOPMENT\nDEVELOPING - FINAL TEST\nDIRECTIONAL DEVELOPMENT\nTREND EXPANSION\nTERMINAL / SUPERSEDED";
+WSCN_SelectionContextText = "INSUFFICIENT\nUNRESOLVED / NEUTRAL\nBULLISH SUPPORTIVE\nBEARISH SUPPORTIVE\nMIXED / CONFLICTING";
+WSCN_DataEligibilityText = "DATA GATED / INSUFFICIENT\nDATA ELIGIBLE";
+WSCN_SelectionCompletenessText = "INSUFFICIENT / NOT EVALUATED\nPARTIAL WYCKOFF SELECTION - P&F CAUSE / PRICE OBJECTIVE / TRADE RISK NOT EVALUATED";
+_SECTION_END();
+
+_SECTION_BEGIN("121. Current stock and benchmark snapshots");
+// Stock-side current state. Scanner v0.1 is current-state EOD only.
+WSCN_StockIntervalValidS = Interval()==inDaily;
+WSCN_StockProvisionalS = LastValue(WCI_ProvisionalFlag);
+WSCN_StockMultiplicityS = LastValue(WCI_ContextMultiplicityCode);
+WSCN_StockDirectionalS = LastValue(WCI_DirectionalContextCode);
+WSCN_StockPhaseS = LastValue(WCI_PhaseStateCode);
+WSCN_StockStructuralDevelopmentS = LastValue(WCI_StructuralDevelopmentCode);
+WSCN_StockFamilyS = LastValue(WCI_FamilyHypothesisCode);
+WSCN_StockEvidenceS = LastValue(WCI_EvidenceBalanceCode);
+WSCN_StockHypothesisAlignmentS = LastValue(WCI_HypothesisAlignmentCode);
+WSCN_StockEventMaskS = LastValue(WCI_CurrentEventMask);
+WSCN_StockMTFValidS = LastValue(WMTF_SnapshotContractValid)==1;
+WSCN_StockMTFAlignmentS = LastValue(WMTF_DirectionalAlignmentCode);
+WSCN_StockMTFEvidenceAlignmentS = LastValue(WMTF_EvidenceAlignmentCode);
+WSCN_StockMTFConflictReasonS = LastValue(WMTF_ConflictReasonCode);
+WSCN_StockRSContextValidS = LastValue(WRS_ContextValid)==1;
+WSCN_StockRSContextStatusS = LastValue(WRS_ContextStatusCode);
+WSCN_StockVsMarketRSStructureS = LastValue(WRS_StockVsMarketRSStructureCode);
+WSCN_StockVsGroupRSStructureS = LastValue(WRS_StockVsGroupRSStructureCode);
+WSCN_GroupVsMarketRSStructureS = LastValue(WRS_GroupVsMarketRSStructureCode);
+WSCN_PriceRSRelationshipS = LastValue(WRS_PriceRSRelationshipCode);
+WSCN_LeadershipChainS = LastValue(WRS_LeadershipChainCode);
+WSCN_RSMarketBenchmarkStatusS = LastValue(WRS_MarketBenchmarkStatusCode);
+WSCN_RSGroupBenchmarkStatusS = LastValue(WRS_GroupBenchmarkStatusCode);
+WSCN_AdjustmentBasisStatusS = WRS_AdjustmentBasisStatusScalar;
+WSCN_StockCloseS = LastValue(Close);
+WSCN_StockSourceDateTimeS = LastValue(WCI_SourceDateTime);
+WSCN_StockBusinessDateKeyS = LastValue(Year()*10000 + Month()*100 + Day());
+
+// Cross-symbol benchmark context is read by PR #38 consumer. No full benchmark
+// Phase/Composite/MTF engine is executed inside a stock Scanner thread.
+WSCN_MarketSnapshotValidS = WXS_MarketValidScalar;
+WSCN_GroupSnapshotValidS = WXS_GroupValidScalar;
+WSCN_MarketSnapshotStatusS = WXS_MarketStatusCodeScalar;
+WSCN_GroupSnapshotStatusS = WXS_GroupStatusCodeScalar;
+WSCN_GroupRequestedS = WXS_GroupRequested;
+WSCN_MarketRequestedS = WXS_MarketRequested;
+WSCN_RoleConfigConflictS = WXS_RoleConfigConflict;
+
+WSCN_MarketMultiplicityS = VarGet("WXSM_ContextMultiplicityCode");
+WSCN_MarketDirectionalS = VarGet("WXSM_DirectionalContextCode");
+WSCN_MarketEvidenceS = VarGet("WXSM_EvidenceBalanceCode");
+WSCN_MarketHypothesisAlignmentS = VarGet("WXSM_HypothesisAlignmentCode");
+WSCN_MarketPhaseS = VarGet("WXSM_PhaseStateCode");
+WSCN_MarketStructuralDevelopmentS = VarGet("WXSM_StructuralDevelopmentCode");
+WSCN_MarketMTFAlignmentS = VarGet("WXSM_MTF_DirectionalAlignmentCode");
+WSCN_MarketMTFEvidenceS = VarGet("WXSM_MTF_EvidenceAlignmentCode");
+WSCN_MarketMTFConflictS = VarGet("WXSM_MTF_ConflictReasonCode");
+
+WSCN_GroupMultiplicityS = VarGet("WXSG_ContextMultiplicityCode");
+WSCN_GroupDirectionalS = VarGet("WXSG_DirectionalContextCode");
+WSCN_GroupEvidenceS = VarGet("WXSG_EvidenceBalanceCode");
+WSCN_GroupHypothesisAlignmentS = VarGet("WXSG_HypothesisAlignmentCode");
+WSCN_GroupPhaseS = VarGet("WXSG_PhaseStateCode");
+WSCN_GroupStructuralDevelopmentS = VarGet("WXSG_StructuralDevelopmentCode");
+WSCN_GroupMTFAlignmentS = VarGet("WXSG_MTF_DirectionalAlignmentCode");
+WSCN_GroupMTFEvidenceS = VarGet("WXSG_MTF_EvidenceAlignmentCode");
+WSCN_GroupMTFConflictS = VarGet("WXSG_MTF_ConflictReasonCode");
+
+// MS07 / XS33: official stock RS benchmark and cross-symbol benchmark must
+// identify the same explicit symbol. Group consistency is required only for
+// the Full Top-Down profile.
+WSCN_MarketBenchmarkConfigMatchS = WSCN_MarketRequestedS AND WRS_MarketConfigured AND
+                                   WXS_RequestedMarketSymbol==WRS_MarketBenchmarkSymbol;
+WSCN_GroupBenchmarkConfigMatchS = IIf(NOT WSCN_GroupRequestedS,1,
+    WRS_GroupConfigured AND WXS_RequestedGroupSymbol==WRS_GroupBenchmarkSymbol);
+
+WSCN_MarketSelectionContextS = WSCN_SelectionContext(
+    WSCN_MarketSnapshotValidS,WSCN_MarketMultiplicityS,WSCN_MarketDirectionalS,
+    WSCN_MarketEvidenceS,WSCN_MarketHypothesisAlignmentS,WSCN_MarketMTFAlignmentS);
+
+WSCN_GroupSelectionContextS = IIf(NOT WSCN_GroupRequestedS,0,
+    WSCN_SelectionContext(WSCN_GroupSnapshotValidS,WSCN_GroupMultiplicityS,WSCN_GroupDirectionalS,
+        WSCN_GroupEvidenceS,WSCN_GroupHypothesisAlignmentS,WSCN_GroupMTFAlignmentS));
+
+WSCN_CandidateStageS = WSCN_StageFromPhase(WSCN_StockPhaseS);
+_SECTION_END();
+
+_SECTION_BEGIN("122. Data eligibility and diagnostic exclusions");
+WSCN_StockRequiredFiniteS =
+    WSCN_FiniteScalar(WSCN_StockCloseS) AND WSCN_StockCloseS>0 AND
+    WSCN_FiniteScalar(WSCN_StockSourceDateTimeS) AND
+    WSCN_FiniteScalar(WSCN_StockMultiplicityS) AND
+    WSCN_FiniteScalar(WSCN_StockDirectionalS) AND
+    WSCN_FiniteScalar(WSCN_StockPhaseS) AND
+    WSCN_FiniteScalar(WSCN_StockEvidenceS) AND
+    WSCN_FiniteScalar(WSCN_StockHypothesisAlignmentS) AND
+    WSCN_FiniteScalar(WSCN_StockMTFAlignmentS) AND
+    WSCN_FiniteScalar(WSCN_StockVsMarketRSStructureS);
+
+WSCN_StockSchemaValidS = WCI_PublicSchemaMajor==1 AND WCI_PublicSchemaMinor==0 AND
+                         LastValue(WRS_SchemaVersion)==1;
+WSCN_MarketRSReadyS = WSCN_RSMarketBenchmarkStatusS==3 AND WSCN_StockRSContextValidS;
+WSCN_GroupProfileDataReadyS = WSCN_GroupRequestedS AND WSCN_GroupSnapshotValidS AND
+                               WSCN_GroupBenchmarkConfigMatchS AND
+                               WSCN_RSGroupBenchmarkStatusS==3 AND
+                               LastValue(WRS_StockVsGroupRatioValid)==1 AND
+                               LastValue(WRS_GroupVsMarketRatioValid)==1;
+
+// Hard-data mask; diagnostic bits, never a score.
+// 1 provisional; 2 upstream schema; 4 market benchmark/RS; 8 adjustment basis;
+// 16 stock MTF; 32 market snapshot; 64 required Group profile;
+// 128 required non-finite; 256 non-Daily interval; 512 Market config mismatch;
+// 1024 Market/Group role config conflict.
+WSCN_ExclusionReasonMaskS =
+      IIf(WSCN_StockProvisionalS==1 OR LastValue(WRS_CurrentDescriptorProvisional)==1,1,0)
+    + IIf(NOT WSCN_StockSchemaValidS,2,0)
+    + IIf(NOT WSCN_MarketRSReadyS,4,0)
+    + IIf(WSCN_AdjustmentBasisStatusS!=1,8,0)
+    + IIf(NOT WSCN_StockMTFValidS,16,0)
+    + IIf(NOT WSCN_MarketSnapshotValidS,32,0)
+    + IIf(WSCN_RequireFullTopDown AND NOT WSCN_GroupProfileDataReadyS,64,0)
+    + IIf(NOT WSCN_StockRequiredFiniteS,128,0)
+    + IIf(NOT WSCN_StockIntervalValidS,256,0)
+    + IIf(NOT WSCN_MarketBenchmarkConfigMatchS,512,0)
+    + IIf(WSCN_RoleConfigConflictS,1024,0);
+
+WSCN_DataEligibilityS = WSCN_ExclusionReasonMaskS==0;
+WSCN_FullTopDownDataEligibleS = WSCN_DataEligibilityS AND WSCN_GroupProfileDataReadyS;
+_SECTION_END();
+
+_SECTION_BEGIN("123. Method eligibility, conflicts and review state");
+WSCN_PriceRSNonConfirmationS = WSCN_PriceRSRelationshipS==2 OR WSCN_PriceRSRelationshipS==3;
+WSCN_StockVSAMixedOrConflictS = WSCN_StockEvidenceS==3 OR WSCN_StockHypothesisAlignmentS==3;
+WSCN_StockMTFConflictS = WSCN_StockMTFAlignmentS==4 OR WSCN_StockMTFAlignmentS==5 OR WSCN_StockMTFAlignmentS==6;
+WSCN_RSMixedS = WSCN_StockVsMarketRSStructureS==3;
+WSCN_MultipleRangeContextsS = WSCN_StockMultiplicityS==2;
+WSCN_MarketStockDirectionalConflictS =
+    (WSCN_MarketSelectionContextS==2 AND WSCN_StockDirectionalS==3) OR
+    (WSCN_MarketSelectionContextS==3 AND WSCN_StockDirectionalS==2);
+WSCN_GroupDirectionalConflictS = WSCN_GroupRequestedS AND WSCN_GroupSnapshotValidS AND
+    ((WSCN_GroupSelectionContextS==2 AND WSCN_StockDirectionalS==3) OR
+     (WSCN_GroupSelectionContextS==3 AND WSCN_StockDirectionalS==2) OR
+     (WSCN_MarketSelectionContextS==2 AND WSCN_GroupSelectionContextS==3) OR
+     (WSCN_MarketSelectionContextS==3 AND WSCN_GroupSelectionContextS==2));
+
+WSCN_ReviewFlagS = WSCN_DataEligibilityS AND (
+    WSCN_MultipleRangeContextsS OR WSCN_PriceRSNonConfirmationS OR
+    WSCN_StockVSAMixedOrConflictS OR WSCN_StockMTFConflictS OR WSCN_RSMixedS OR
+    WSCN_MarketStockDirectionalConflictS OR WSCN_GroupDirectionalConflictS OR
+    WSCN_RoleConfigConflictS);
+
+// Method block mask; diagnostic bits, never a score.
+// 1 market opposite/unresolved; 2 phase too early; 4 stock hypothesis unresolved/opposite;
+// 8 MTF counter/conflict; 16 RS opposite/mixed; 32 VSA conflicting/mixed;
+// 64 Price/RS non-confirmation; 128 Group leadership conflict; 256 multiple ranges;
+// 512 Market/Group role/config conflict.
+WSCN_BullishMarketBlockS = WSCN_MarketSelectionContextS!=2;
+WSCN_BearishMarketBlockS = WSCN_MarketSelectionContextS!=3;
+WSCN_PhaseTooEarlyS = WSCN_CandidateStageS==0 OR WSCN_CandidateStageS==1;
+WSCN_StockDirectionalUnresolvedS = WSCN_StockDirectionalS!=2 AND WSCN_StockDirectionalS!=3;
+WSCN_MTFMethodConflictS = WSCN_StockMTFAlignmentS==4 OR WSCN_StockMTFAlignmentS==5 OR WSCN_StockMTFAlignmentS==6;
+WSCN_RSMethodConflictS = WSCN_StockVsMarketRSStructureS==0 OR WSCN_StockVsMarketRSStructureS==3;
+WSCN_GroupLeadershipConflictS = WSCN_GroupRequestedS AND (
+    NOT WSCN_GroupProfileDataReadyS OR
+    WSCN_LeadershipChainS==3 OR WSCN_LeadershipChainS==4 OR WSCN_LeadershipChainS==5 OR
+    WSCN_GroupSelectionContextS==4);
+
+WSCN_MethodBlockReasonMaskS =
+      IIf(WSCN_MarketSelectionContextS==0 OR WSCN_MarketSelectionContextS==1 OR WSCN_MarketSelectionContextS==4,1,0)
+    + IIf(WSCN_PhaseTooEarlyS,2,0)
+    + IIf(WSCN_StockDirectionalUnresolvedS,4,0)
+    + IIf(WSCN_MTFMethodConflictS,8,0)
+    + IIf(WSCN_RSMethodConflictS,16,0)
+    + IIf(WSCN_StockVSAMixedOrConflictS,32,0)
+    + IIf(WSCN_PriceRSNonConfirmationS,64,0)
+    + IIf(WSCN_GroupLeadershipConflictS,128,0)
+    + IIf(WSCN_MultipleRangeContextsS,256,0)
+    + IIf(WSCN_RoleConfigConflictS OR NOT WSCN_MarketBenchmarkConfigMatchS OR
+          (WSCN_GroupRequestedS AND NOT WSCN_GroupBenchmarkConfigMatchS),512,0);
+_SECTION_END();
+
+_SECTION_BEGIN("124. Candidate classification");
+WSCN_BullishEvidenceAcceptableS = WSCN_StockEvidenceS!=2 AND WSCN_StockEvidenceS!=3 AND WSCN_StockHypothesisAlignmentS!=3;
+WSCN_BearishEvidenceAcceptableS = WSCN_StockEvidenceS!=1 AND WSCN_StockEvidenceS!=3 AND WSCN_StockHypothesisAlignmentS!=3;
+
+WSCN_BullishQualifiedMarketS = WSCN_DataEligibilityS AND NOT WSCN_ReviewFlagS AND
+    WSCN_MarketSelectionContextS==2 AND WSCN_StockDirectionalS==2 AND
+    (WSCN_CandidateStageS==3 OR WSCN_CandidateStageS==4) AND
+    WSCN_StockMTFAlignmentS==2 AND WSCN_StockVsMarketRSStructureS==1 AND
+    WSCN_BullishEvidenceAcceptableS AND NOT WSCN_PriceRSNonConfirmationS AND
+    WSCN_StockMultiplicityS==1;
+
+WSCN_BearishQualifiedMarketS = WSCN_DataEligibilityS AND NOT WSCN_ReviewFlagS AND
+    WSCN_MarketSelectionContextS==3 AND WSCN_StockDirectionalS==3 AND
+    (WSCN_CandidateStageS==3 OR WSCN_CandidateStageS==4) AND
+    WSCN_StockMTFAlignmentS==3 AND WSCN_StockVsMarketRSStructureS==2 AND
+    WSCN_BearishEvidenceAcceptableS AND NOT WSCN_PriceRSNonConfirmationS AND
+    WSCN_StockMultiplicityS==1;
+
+WSCN_BullishFullTopDownS = WSCN_BullishQualifiedMarketS AND WSCN_GroupProfileDataReadyS AND
+    WSCN_GroupSelectionContextS==2 AND WSCN_GroupVsMarketRSStructureS==1 AND
+    WSCN_StockVsGroupRSStructureS==1 AND WSCN_LeadershipChainS==1;
+WSCN_BearishFullTopDownS = WSCN_BearishQualifiedMarketS AND WSCN_GroupProfileDataReadyS AND
+    WSCN_GroupSelectionContextS==3 AND WSCN_GroupVsMarketRSStructureS==2 AND
+    WSCN_StockVsGroupRSStructureS==2 AND WSCN_LeadershipChainS==2;
+
+// Phase C is developing. MTF may be fully aligned or unresolved/non-directional,
+// but opposite/counter/conflicting states are not allowed.
+WSCN_BullishDevelopingS = WSCN_DataEligibilityS AND NOT WSCN_ReviewFlagS AND
+    WSCN_CandidateStageS==2 AND WSCN_MarketSelectionContextS==2 AND
+    WSCN_StockDirectionalS==2 AND WSCN_StockVsMarketRSStructureS==1 AND
+    WSCN_BullishEvidenceAcceptableS AND
+    (WSCN_StockMTFAlignmentS==1 OR WSCN_StockMTFAlignmentS==2);
+WSCN_BearishDevelopingS = WSCN_DataEligibilityS AND NOT WSCN_ReviewFlagS AND
+    WSCN_CandidateStageS==2 AND WSCN_MarketSelectionContextS==3 AND
+    WSCN_StockDirectionalS==3 AND WSCN_StockVsMarketRSStructureS==2 AND
+    WSCN_BearishEvidenceAcceptableS AND
+    (WSCN_StockMTFAlignmentS==1 OR WSCN_StockMTFAlignmentS==3);
+
+// A/B = Watch only. Direction is descriptive and does not create qualification.
+WSCN_WatchS = WSCN_DataEligibilityS AND NOT WSCN_ReviewFlagS AND
+    WSCN_CandidateStageS==1 AND
+    (WSCN_StockVsMarketRSStructureS==1 OR WSCN_StockVsMarketRSStructureS==2);
+
+WSCN_CandidateClassS = IIf(NOT WSCN_DataEligibilityS,0,
+    IIf(WSCN_ReviewFlagS,9,
+    IIf(WSCN_BullishFullTopDownS,5,
+    IIf(WSCN_BullishQualifiedMarketS,4,
+    IIf(WSCN_BearishFullTopDownS,8,
+    IIf(WSCN_BearishQualifiedMarketS,7,
+    IIf(WSCN_BullishDevelopingS,3,
+    IIf(WSCN_BearishDevelopingS,6,
+    IIf(WSCN_WatchS,2,1)))))))));
+
+WSCN_CandidateSideS = IIf(WSCN_CandidateClassS==3 OR WSCN_CandidateClassS==4 OR WSCN_CandidateClassS==5,1,
+    IIf(WSCN_CandidateClassS==6 OR WSCN_CandidateClassS==7 OR WSCN_CandidateClassS==8,2,
+    IIf(WSCN_CandidateClassS==2 AND WSCN_StockDirectionalS==2 AND WSCN_StockVsMarketRSStructureS==1,1,
+    IIf(WSCN_CandidateClassS==2 AND WSCN_StockDirectionalS==3 AND WSCN_StockVsMarketRSStructureS==2,2,0))));
+
+WSCN_QualifiedCandidateS = WSCN_CandidateClassS==4 OR WSCN_CandidateClassS==5 OR
+                           WSCN_CandidateClassS==7 OR WSCN_CandidateClassS==8;
+WSCN_DevelopingCandidateS = WSCN_CandidateClassS==3 OR WSCN_CandidateClassS==6;
+WSCN_WatchFlagS = WSCN_CandidateClassS==2;
+WSCN_SelectionCompletenessS = IIf(WSCN_DataEligibilityS,1,0);
+_SECTION_END();
+
+_SECTION_BEGIN("125. Market Scanner public interface");
+WSCN_DataEligibilityCode = WSCN_Zero + WSCN_DataEligibilityS;
+WSCN_CandidateClassCode = WSCN_Zero + WSCN_CandidateClassS;
+WSCN_CandidateSideCode = WSCN_Zero + WSCN_CandidateSideS;
+WSCN_CandidateStageCode = WSCN_Zero + WSCN_CandidateStageS;
+WSCN_QualifiedCandidateFlag = WSCN_Zero + WSCN_QualifiedCandidateS;
+WSCN_DevelopingCandidateFlag = WSCN_Zero + WSCN_DevelopingCandidateS;
+WSCN_WatchFlag = WSCN_Zero + WSCN_WatchFlagS;
+WSCN_ReviewFlag = WSCN_Zero + WSCN_ReviewFlagS;
+WSCN_MarketSelectionContextCode = WSCN_Zero + WSCN_MarketSelectionContextS;
+WSCN_GroupSelectionContextCode = WSCN_Zero + WSCN_GroupSelectionContextS;
+WSCN_ExclusionReasonMask = WSCN_Zero + WSCN_ExclusionReasonMaskS;
+WSCN_MethodBlockReasonMask = WSCN_Zero + WSCN_MethodBlockReasonMaskS;
+WSCN_SelectionCompletenessCode = WSCN_Zero + WSCN_SelectionCompletenessS;
+WSCN_FullTopDownDataEligible = WSCN_Zero + WSCN_FullTopDownDataEligibleS;
+
+WSCN_StockDirectionalContextCode = WSCN_Zero + WSCN_StockDirectionalS;
+WSCN_StockPhaseStateCode = WSCN_Zero + WSCN_StockPhaseS;
+WSCN_StockFamilyHypothesisCode = WSCN_Zero + WSCN_StockFamilyS;
+WSCN_StockEvidenceBalanceCode = WSCN_Zero + WSCN_StockEvidenceS;
+WSCN_StockHypothesisAlignmentCode = WSCN_Zero + WSCN_StockHypothesisAlignmentS;
+WSCN_StockMTFDirectionalAlignmentCode = WSCN_Zero + WSCN_StockMTFAlignmentS;
+WSCN_StockVsMarketRSStructureCode = WSCN_Zero + WSCN_StockVsMarketRSStructureS;
+WSCN_StockVsGroupRSStructureCode = WSCN_Zero + WSCN_StockVsGroupRSStructureS;
+WSCN_GroupVsMarketRSStructureCode = WSCN_Zero + WSCN_GroupVsMarketRSStructureS;
+WSCN_LeadershipChainCode = WSCN_Zero + WSCN_LeadershipChainS;
+WSCN_PriceRSRelationshipCode = WSCN_Zero + WSCN_PriceRSRelationshipS;
+WSCN_CurrentEventMask = WSCN_Zero + WSCN_StockEventMaskS;
+WSCN_MarketSnapshotStatusCode = WSCN_Zero + WSCN_MarketSnapshotStatusS;
+WSCN_GroupSnapshotStatusCode = WSCN_Zero + WSCN_GroupSnapshotStatusS;
+WSCN_RSContextStatusCode = WSCN_Zero + WSCN_StockRSContextStatusS;
+WSCN_AdjustmentBasisStatusCode = WSCN_Zero + WSCN_AdjustmentBasisStatusS;
+WSCN_MarketBenchmarkConfigMatch = WSCN_Zero + WSCN_MarketBenchmarkConfigMatchS;
+WSCN_GroupBenchmarkConfigMatch = WSCN_Zero + WSCN_GroupBenchmarkConfigMatchS;
+WSCN_StockBusinessDateKey = WSCN_Zero + WSCN_StockBusinessDateKeyS;
+_SECTION_END();
