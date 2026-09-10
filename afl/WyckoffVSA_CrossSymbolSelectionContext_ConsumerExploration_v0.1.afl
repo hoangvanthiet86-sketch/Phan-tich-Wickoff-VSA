@@ -1,5 +1,5 @@
 /* Cross-Symbol Selection Context Consumer Exploration v0.1 */
-#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>
 
 _SECTION_BEGIN("113. Cross-Symbol Consumer Exploration");
 Filter = Status("lastbarinrange");
@@ -11,6 +11,10 @@ AddTextColumn(VarGetText("WXSM_RequestedSymbol"),"Market RequestedSymbol");
 AddTextColumn(VarGetText("WXSM_SnapshotSourceSymbol"),"Market SnapshotSourceSymbol");
 AddColumn(WXS_MarketStatusCode,"Market StatusCode",1.0);
 AddMultiTextColumn(WXS_MarketStatusCode,WXS_ConsumerStatusText,"Market Status");
+AddTextColumn(VarGetText("WXSM_ProducerContractVersion"),"Market ContractVersion");
+AddTextColumn(VarGetText("WXSM_ProducerCompositeVersion"),"Market CompositeVersion");
+AddTextColumn(VarGetText("WXSM_ProducerMTFVersion"),"Market MTFVersion");
+AddColumn(0*BarIndex()+VarGet("WXSM_ProducerVersionCompatible"),"Market VersionCompatible",1.0);
 AddColumn(0*BarIndex()+VarGet("WXSM_SourceBusinessDateKey"),"Market SourceBusinessDateKey",1.0);
 AddColumn(0*BarIndex()+VarGet("WXSM_SourceBarDateTime"),"Market SourceBarDateTime",formatDateTime);
 AddColumn(0*BarIndex()+VarGet("WXSM_GenerationA"),"Market GenerationA",1.0);
@@ -29,6 +33,10 @@ AddTextColumn(VarGetText("WXSG_RequestedSymbol"),"Group RequestedSymbol");
 AddTextColumn(VarGetText("WXSG_SnapshotSourceSymbol"),"Group SnapshotSourceSymbol");
 AddColumn(WXS_GroupStatusCode,"Group StatusCode",1.0);
 AddMultiTextColumn(WXS_GroupStatusCode,WXS_ConsumerStatusText,"Group Status");
+AddTextColumn(VarGetText("WXSG_ProducerContractVersion"),"Group ContractVersion");
+AddTextColumn(VarGetText("WXSG_ProducerCompositeVersion"),"Group CompositeVersion");
+AddTextColumn(VarGetText("WXSG_ProducerMTFVersion"),"Group MTFVersion");
+AddColumn(0*BarIndex()+VarGet("WXSG_ProducerVersionCompatible"),"Group VersionCompatible",1.0);
 AddColumn(0*BarIndex()+VarGet("WXSG_SourceBusinessDateKey"),"Group SourceBusinessDateKey",1.0);
 AddColumn(0*BarIndex()+VarGet("WXSG_SourceBarDateTime"),"Group SourceBarDateTime",formatDateTime);
 AddColumn(0*BarIndex()+VarGet("WXSG_GenerationA"),"Group GenerationA",1.0);
