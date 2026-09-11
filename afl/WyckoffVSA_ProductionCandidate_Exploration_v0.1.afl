@@ -1,4 +1,11 @@
-/* Wyckoff VSA Production Candidate v0.1 — practical scan/audit surface */
+/*
+    Wyckoff VSA Production Candidate v0.1 — practical scan/audit surface
+
+    AmiBroker 6.20 integration note:
+    Exploration text lists are declared locally in this entrypoint instead of
+    borrowing string variables from nested include modules. Numeric/categorical
+    codes remain canonical; this is presentation-only compatibility hardening.
+*/
 #pragma nocache
 #include_once <WyckoffVSA_ProductionCandidate_v0.1.afl>
 
@@ -19,17 +26,29 @@ Filter = WPROD_IsLastBar AND IIf(WPROD_FilterModeCode==0,WPROD_FilterQualified,
          IIf(WPROD_FilterModeCode==3,WPROD_FilterReview,
          IIf(WPROD_FilterModeCode==4,WPROD_FilterAllEligible,WPROD_FilterPnFReview)))));
 
+// Local presentation enums. These duplicate display text only, never method logic.
+WPRODX_CandidateClassText = "DATA GATED / INSUFFICIENT\nNOT A CURRENT CANDIDATE\nWATCH\nDEVELOPING BULLISH\nQUALIFIED BULLISH - MARKET ALIGNED\nQUALIFIED BULLISH - FULL TOP-DOWN\nDEVELOPING BEARISH\nQUALIFIED BEARISH - MARKET ALIGNED\nQUALIFIED BEARISH - FULL TOP-DOWN\nREVIEW - CONFLICT / AMBIGUITY";
+WPRODX_CandidateSideText = "NONE / UNRESOLVED\nBULLISH\nBEARISH";
+WPRODX_CandidateStageText = "NONE / INSUFFICIENT\nWATCH - RANGE FORMATION / DEVELOPMENT\nDEVELOPING - FINAL TEST\nDIRECTIONAL DEVELOPMENT\nTREND EXPANSION\nTERMINAL / SUPERSEDED";
+WPRODX_DirectionalContextText = "INSUFFICIENT\nUNRESOLVED\nBULLISH HYPOTHESIS\nBEARISH HYPOTHESIS\nMIXED / CONFLICTING";
+WPRODX_PhaseText = "INSUFFICIENT CONTEXT\nPHASE-A-LIKE\nPHASE-B-LIKE\nPHASE-C-CANDIDATE\nPHASE-C-LIKE\nPHASE-D-LIKE\nPHASE-E-LIKE\nRANGE INVALIDATED / SUPERSEDED";
+WPRODX_FamilyText = "INSUFFICIENT\nUNRESOLVED LOWER RANGE\nUNRESOLVED UPPER RANGE\nACCUMULATION-HYPOTHESIS\nREDISTRIBUTION-HYPOTHESIS\nDISTRIBUTION-HYPOTHESIS\nREACCUMULATION-HYPOTHESIS\nMIXED / CONFLICTING EVIDENCE";
+WPRODX_PnFDirectionText = "UNRESOLVED / NO OFFICIAL OBJECTIVE\nBULLISH\nBEARISH";
+WPRODX_PnFLifecycleText = "INSUFFICIENT\nCAUSE BUILDING\nCOUNT SEGMENT MEASURABLE - PRELIMINARY\nCOUNT SEGMENT CONFIRMED / READY FOR PROJECTION\nOBJECTIVE ACTIVE AFTER DIRECTIONAL RANGE EXIT\nOBJECTIVE ZONE APPROACHED / REACHED\nOBJECTIVE EXCEEDED - MONITOR CHARACTER\nSOURCE RANGE SUPERSEDED / INVALIDATED";
+WPRODX_PnFHarmonyText = "P&F HARMONY NOT EVALUATED\nCANDIDATE SIDE + P&F OBJECTIVE ALIGNED\nCANDIDATE SIDE + P&F OBJECTIVE CONFLICT\nMULTIPLE P&F OBJECTIVES / AMBIGUOUS";
+WPRODX_SelectionCompletenessText = "INSUFFICIENT / DATA INELIGIBLE\nPARTIAL WYCKOFF SELECTION - P&F CAUSE/OBJECTIVE NOT AVAILABLE\nPARTIAL WYCKOFF SELECTION + P&F CAUSE/OBJECTIVE - TRADE RISK/R:R NOT EVALUATED";
+
 AddTextColumn(Name(),"Symbol");
 AddColumn(DateTime(),"DateTime",formatDateTime);
 
 // Scanner decision surface — unchanged semantics.
 AddColumn(WPROD_DataEligibilityCode,"Data Eligible",1.0);
 AddColumn(WPROD_CandidateClassCode,"Candidate Class Code",1.0);
-AddMultiTextColumn(WPROD_CandidateClassCode,WSCN_CandidateClassText,"Candidate Class");
+AddMultiTextColumn(WPROD_CandidateClassCode,WPRODX_CandidateClassText,"Candidate Class");
 AddColumn(WPROD_CandidateSideCode,"Candidate Side Code",1.0);
-AddMultiTextColumn(WPROD_CandidateSideCode,WSCN_CandidateSideText,"Candidate Side");
+AddMultiTextColumn(WPROD_CandidateSideCode,WPRODX_CandidateSideText,"Candidate Side");
 AddColumn(WPROD_CandidateStageCode,"Candidate Stage Code",1.0);
-AddMultiTextColumn(WPROD_CandidateStageCode,WSCN_CandidateStageText,"Candidate Stage");
+AddMultiTextColumn(WPROD_CandidateStageCode,WPRODX_CandidateStageText,"Candidate Stage");
 AddColumn(WPROD_QualifiedCandidateFlag,"Qualified",1.0);
 AddColumn(WPROD_DevelopingCandidateFlag,"Developing",1.0);
 AddColumn(WPROD_WatchFlag,"Watch",1.0);
@@ -39,11 +58,11 @@ AddColumn(WPROD_ScannerMethodBlockReasonMask,"Scanner Method Block Mask",1.0);
 
 // Canonical stock context.
 AddColumn(WSCN_StockDirectionalContextCode,"Stock Direction",1.0);
-AddMultiTextColumn(WSCN_StockDirectionalContextCode,WCI_DirectionalContextText,"Stock Direction Text");
+AddMultiTextColumn(WSCN_StockDirectionalContextCode,WPRODX_DirectionalContextText,"Stock Direction Text");
 AddColumn(WSCN_StockPhaseStateCode,"Stock Phase",1.0);
-AddMultiTextColumn(WSCN_StockPhaseStateCode,WPC_PhaseText,"Stock Phase Text");
+AddMultiTextColumn(WSCN_StockPhaseStateCode,WPRODX_PhaseText,"Stock Phase Text");
 AddColumn(WSCN_StockFamilyHypothesisCode,"Stock Family",1.0);
-AddMultiTextColumn(WSCN_StockFamilyHypothesisCode,WPC_FamilyText,"Stock Family Text");
+AddMultiTextColumn(WSCN_StockFamilyHypothesisCode,WPRODX_FamilyText,"Stock Family Text");
 AddColumn(WSCN_StockEvidenceBalanceCode,"Evidence Balance",1.0);
 AddColumn(WSCN_StockMTFDirectionalAlignmentCode,"D/W/M Alignment",1.0);
 AddColumn(WSCN_StockVsMarketRSStructureCode,"Stock vs Market RS",1.0);
@@ -59,9 +78,9 @@ AddColumn(WPROD_PnFObjectiveCount,"P&F Objective Count",1.0);
 AddColumn(WPROD_PnFObjectiveAmbiguous,"P&F Ambiguous",1.0);
 AddColumn(WPROD_PnFObjectiveAvailable,"P&F Objective Available",1.0);
 AddColumn(WPROD_PnFObjectiveDirectionCode,"P&F Direction",1.0);
-AddMultiTextColumn(WPROD_PnFObjectiveDirectionCode,WPF_DirectionText,"P&F Direction Text");
+AddMultiTextColumn(WPROD_PnFObjectiveDirectionCode,WPRODX_PnFDirectionText,"P&F Direction Text");
 AddColumn(WPROD_PnFCountLifecycleCode,"P&F Lifecycle",1.0);
-AddMultiTextColumn(WPROD_PnFCountLifecycleCode,WPF_CountLifecycleText,"P&F Lifecycle Text");
+AddMultiTextColumn(WPROD_PnFCountLifecycleCode,WPRODX_PnFLifecycleText,"P&F Lifecycle Text");
 AddColumn(WPF_CurrentCountGenerationID,"P&F Generation",1.0);
 AddColumn(WPROD_PnFProjectedMove,"P&F Projected Move",1.6);
 AddColumn(WPF_CurrentConservativeObjective,"P&F Conservative Objective",1.6);
@@ -71,13 +90,13 @@ AddColumn(WPROD_PnFObjectiveZoneHigh,"P&F Objective High",1.6);
 AddColumn(WPROD_PnFObjectiveReachedFlag,"P&F Reached",1.0);
 AddColumn(WPROD_PnFObjectiveExceededFlag,"P&F Exceeded",1.0);
 AddColumn(WPROD_PnFHarmonyCode,"Candidate / P&F Harmony",1.0);
-AddMultiTextColumn(WPROD_PnFHarmonyCode,WPROD_PnFHarmonyText,"Candidate / P&F Harmony Text");
+AddMultiTextColumn(WPROD_PnFHarmonyCode,WPRODX_PnFHarmonyText,"Candidate / P&F Harmony Text");
 AddColumn(WPROD_PnFReviewFlag,"P&F Review",1.0);
 AddColumn(WPF_SteppingStoneRelationshipCode,"P&F Stepping-stone",1.0);
 
 // Final completeness — categorical, not a quality score.
 AddColumn(WPROD_SelectionCompletenessCode,"Selection Completeness",1.0);
-AddMultiTextColumn(WPROD_SelectionCompletenessCode,WPROD_SelectionCompletenessText,"Selection Completeness Text");
+AddMultiTextColumn(WPROD_SelectionCompletenessCode,WPRODX_SelectionCompletenessText,"Selection Completeness Text");
 AddColumn(WPROD_IntegratedReviewFlag,"Integrated Review",1.0);
 
 // Preserve lower/upper ambiguity rather than collapsing it.
