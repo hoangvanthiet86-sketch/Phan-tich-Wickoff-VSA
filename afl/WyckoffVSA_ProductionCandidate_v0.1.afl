@@ -8,6 +8,21 @@
 
     INTEGRATED DEVELOPMENT / NATIVE ACCEPTANCE PENDING.
 */
+#pragma nocache
+
+// AmiBroker 6.20 native compatibility bridge.
+// Some deeply nested include chains trigger Error 29 on Phase/Context evidence
+// arrays even though the canonical PhaseContext module initializes them before
+// downstream semantic use. Pre-initialize only these public interface arrays so
+// the parser has a deterministic numeric type before the nested include stack is
+// expanded. The canonical PhaseContext module later reinitializes and computes
+// the same arrays, so this bridge does not alter Wyckoff logic or final values.
+WPROD_CompatZero = 0 * BarIndex();
+WPC_L_BullishEvidenceState = WPROD_CompatZero;
+WPC_L_BearishEvidenceState = WPROD_CompatZero;
+WPC_U_BullishEvidenceState = WPROD_CompatZero;
+WPC_U_BearishEvidenceState = WPROD_CompatZero;
+
 #include_once <WyckoffVSA_MarketScanner_v0.1.afl>
 #include_once <WyckoffVSA_PnFCausePriceObjective_v0.1.afl>
 
