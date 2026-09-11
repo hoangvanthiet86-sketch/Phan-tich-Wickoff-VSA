@@ -1,4 +1,5 @@
 /* Wyckoff VSA Production Candidate v0.1 — practical scan/audit surface */
+#pragma nocache
 #include_once <WyckoffVSA_ProductionCandidate_v0.1.afl>
 
 _SECTION_BEGIN("132. Production Candidate Exploration");
