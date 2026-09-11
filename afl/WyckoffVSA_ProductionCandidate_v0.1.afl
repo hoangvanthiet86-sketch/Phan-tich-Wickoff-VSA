@@ -1,0 +1,70 @@
+/*
+    Wyckoff VSA Production Candidate v0.1 — unified current-state interface
+
+    This is the integration facade for final native acceptance. Existing Market
+    Scanner candidate-class semantics remain unchanged. P&F Cause/Objectives add
+    completeness and harmony diagnostics only; they do not create Buy/Sell or a
+    hidden hard gate.
+
+    INTEGRATED DEVELOPMENT / NATIVE ACCEPTANCE PENDING.
+*/
+#include_once <WyckoffVSA_MarketScanner_v0.1.afl>
+#include_once <WyckoffVSA_PnFCausePriceObjective_v0.1.afl>
+
+_SECTION_BEGIN("131. Production Candidate integration facade");
+WPROD_Zero = 0 * BarIndex();
+WPROD_SchemaMajor = WPROD_Zero + 1;
+WPROD_SchemaMinor = WPROD_Zero;
+
+// Preserve Scanner classifications verbatim.
+WPROD_DataEligibilityCode = WSCN_DataEligibilityCode;
+WPROD_CandidateClassCode = WSCN_CandidateClassCode;
+WPROD_CandidateSideCode = WSCN_CandidateSideCode;
+WPROD_CandidateStageCode = WSCN_CandidateStageCode;
+WPROD_QualifiedCandidateFlag = WSCN_QualifiedCandidateFlag;
+WPROD_DevelopingCandidateFlag = WSCN_DevelopingCandidateFlag;
+WPROD_WatchFlag = WSCN_WatchFlag;
+WPROD_ScannerReviewFlag = WSCN_ReviewFlag;
+WPROD_ScannerExclusionReasonMask = WSCN_ExclusionReasonMask;
+WPROD_ScannerMethodBlockReasonMask = WSCN_MethodBlockReasonMask;
+
+// P&F projection diagnostics. 0 insufficient, 1 aligned, 2 opposing, 3 multiple
+// official objective contexts / ambiguous.
+WPROD_PnFObjectiveAvailable = WPF_CurrentOfficialObjectiveAvailable;
+WPROD_PnFObjectiveCount = WPF_CurrentObjectiveCount;
+WPROD_PnFObjectiveAmbiguous = WPF_CurrentObjectiveAmbiguous;
+WPROD_PnFObjectiveDirectionCode = WPF_CurrentObjectiveDirectionCode;
+WPROD_PnFCountLifecycleCode = WPF_CurrentCountLifecycleCode;
+WPROD_PnFProjectedMove = WPF_CurrentProjectedMove;
+WPROD_PnFObjectiveZoneLow = WPF_CurrentObjectiveZoneLow;
+WPROD_PnFObjectiveZoneHigh = WPF_CurrentObjectiveZoneHigh;
+WPROD_PnFObjectiveReachedFlag = WPF_CurrentObjectiveReachedFlag;
+WPROD_PnFObjectiveExceededFlag = WPF_CurrentObjectiveExceededFlag;
+
+WPROD_PnFHarmonyCode = IIf(
+    WPROD_PnFObjectiveAmbiguous==1,3,
+    IIf(WPROD_CandidateSideCode==0 OR WPROD_PnFObjectiveAvailable==0,0,
+    IIf(WPROD_CandidateSideCode==WPROD_PnFObjectiveDirectionCode,1,2)));
+WPROD_PnFReviewFlag = IIf(WPROD_PnFHarmonyCode==2 OR WPROD_PnFHarmonyCode==3,1,0);
+
+// Completeness only; not a rank/quality score.
+// 0 insufficient; 1 partial selection without official P&F objective;
+// 2 partial selection + P&F Cause/Objective available; Trade Risk/R:R absent.
+WPROD_SelectionCompletenessCode = IIf(
+    WPROD_DataEligibilityCode==0,0,
+    IIf(WPROD_PnFObjectiveAvailable==1,2,1));
+
+WPROD_SelectionCompletenessText =
+    "INSUFFICIENT / DATA INELIGIBLE\n"
+    "PARTIAL WYCKOFF SELECTION - P&F CAUSE/OBJECTIVE NOT AVAILABLE\n"
+    "PARTIAL WYCKOFF SELECTION + P&F CAUSE/OBJECTIVE - TRADE RISK/R:R NOT EVALUATED";
+WPROD_PnFHarmonyText =
+    "P&F HARMONY NOT EVALUATED\n"
+    "CANDIDATE SIDE + P&F OBJECTIVE ALIGNED\n"
+    "CANDIDATE SIDE + P&F OBJECTIVE CONFLICT\n"
+    "MULTIPLE P&F OBJECTIVES / AMBIGUOUS";
+
+// Current integrated review is a diagnostic union. It does not rewrite the
+// Scanner's CandidateClass or QualifiedCandidateFlag.
+WPROD_IntegratedReviewFlag = IIf(WPROD_ScannerReviewFlag OR WPROD_PnFReviewFlag,1,0);
+_SECTION_END();
