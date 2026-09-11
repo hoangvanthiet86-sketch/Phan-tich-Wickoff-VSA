@@ -5,7 +5,14 @@
     Timeframe Snapshot Publisher/Consumer contract. No new Wyckoff/VSA
     interpretation is introduced here.
 
-    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    AmiBroker 6.20 production-integration note:
+    this facade is intentionally HEADLESS. It publishes variables only and
+    does not emit Exploration columns. Presentation belongs in dedicated
+    Exploration entrypoints. This removes a brittle cross-file string lookup
+    through deeply nested #include_once chains while preserving all numeric
+    public outputs and methodology.
+
+    INTEGRATED DEVELOPMENT / NATIVE ACCEPTANCE PENDING.
 */
 #include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
 
@@ -24,11 +31,4 @@ WCI_U_EvidenceBalanceCode = IIf(
     WPC_U_BullishEvidenceState AND WPC_U_BearishEvidenceState,3,
     IIf(WPC_U_BullishEvidenceState,1,
     IIf(WPC_U_BearishEvidenceState,2,0)));
-
-AddColumn(WCI_PublicSchemaMajor,"WCI_PublicSchemaMajor",1.0);
-AddColumn(WCI_PublicSchemaMinor,"WCI_PublicSchemaMinor",1.0);
-AddColumn(WCI_L_EvidenceBalanceCode,"WCI_L_EvidenceBalanceCode",1.0);
-AddMultiTextColumn(WCI_L_EvidenceBalanceCode,WCI_EvidenceBalanceText,"WCI_L_EvidenceBalance");
-AddColumn(WCI_U_EvidenceBalanceCode,"WCI_U_EvidenceBalanceCode",1.0);
-AddMultiTextColumn(WCI_U_EvidenceBalanceCode,WCI_EvidenceBalanceText,"WCI_U_EvidenceBalance");
 _SECTION_END();
