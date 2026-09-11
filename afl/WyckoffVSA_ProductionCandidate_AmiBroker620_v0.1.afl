@@ -1,0 +1,167 @@
+/*
+    Wyckoff VSA Production Candidate v0.1
+    AmiBroker 6.20 explicit-order integration entrypoint
+
+    Purpose:
+    - preload every engine/facade in deterministic topological order;
+    - avoid relying on deep nested #include_once discovery for public variables;
+    - keep the existing Wyckoff/VSA method logic unchanged;
+    - provide one practical Exploration entrypoint for native acceptance.
+
+    IMPORTANT:
+    This file does NOT add a new analytical module. It only controls compilation
+    order and exposes the already-designed Production Candidate interface.
+
+    INTEGRATED DEVELOPMENT / NATIVE ACCEPTANCE PENDING.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_Core_v1.0.afl>
+#include_once <WyckoffVSA_Candidate_v1.0.afl>
+#include_once <WyckoffVSA_StructureLocation_v1.0.afl>
+#include_once <WyckoffVSA_Confirmation_v1.0.afl>
+
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_v0.1.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_v1.0.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_v0.1.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_v0.1.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_v0.1.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_v0.1.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_v0.1.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_v0.1.afl>
+
+#include_once <WyckoffVSA_PhaseContext_InputFacade_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_v0.1.afl>
+#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>
+
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+#include_once <WyckoffVSA_RelativeStrengthContext_v0.1.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>
+#include_once <WyckoffVSA_MarketScanner_v0.1.afl>
+
+#include_once <WyckoffVSA_PnFConstructionKernel_v0.1.afl>
+#include_once <WyckoffVSA_PnFCauseInputFacade_v0.1.afl>
+#include_once <WyckoffVSA_PnFCausePriceObjective_v0.1.afl>
+
+_SECTION_BEGIN("131. Production Candidate integration facade");
+WPROD_Zero = 0 * BarIndex();
+WPROD_SchemaMajor = WPROD_Zero + 1;
+WPROD_SchemaMinor = WPROD_Zero;
+WPROD_DataEligibilityCode = WSCN_DataEligibilityCode;
+WPROD_CandidateClassCode = WSCN_CandidateClassCode;
+WPROD_CandidateSideCode = WSCN_CandidateSideCode;
+WPROD_CandidateStageCode = WSCN_CandidateStageCode;
+WPROD_QualifiedCandidateFlag = WSCN_QualifiedCandidateFlag;
+WPROD_DevelopingCandidateFlag = WSCN_DevelopingCandidateFlag;
+WPROD_WatchFlag = WSCN_WatchFlag;
+WPROD_ScannerReviewFlag = WSCN_ReviewFlag;
+WPROD_ScannerExclusionReasonMask = WSCN_ExclusionReasonMask;
+WPROD_ScannerMethodBlockReasonMask = WSCN_MethodBlockReasonMask;
+WPROD_PnFObjectiveAvailable = WPF_CurrentOfficialObjectiveAvailable;
+WPROD_PnFObjectiveCount = WPF_CurrentObjectiveCount;
+WPROD_PnFObjectiveAmbiguous = WPF_CurrentObjectiveAmbiguous;
+WPROD_PnFObjectiveDirectionCode = WPF_CurrentObjectiveDirectionCode;
+WPROD_PnFCountLifecycleCode = WPF_CurrentCountLifecycleCode;
+WPROD_PnFProjectedMove = WPF_CurrentProjectedMove;
+WPROD_PnFObjectiveZoneLow = WPF_CurrentObjectiveZoneLow;
+WPROD_PnFObjectiveZoneHigh = WPF_CurrentObjectiveZoneHigh;
+WPROD_PnFObjectiveReachedFlag = WPF_CurrentObjectiveReachedFlag;
+WPROD_PnFObjectiveExceededFlag = WPF_CurrentObjectiveExceededFlag;
+WPROD_PnFHarmonyCode = IIf(WPROD_PnFObjectiveAmbiguous==1,3,IIf(WPROD_CandidateSideCode==0 OR WPROD_PnFObjectiveAvailable==0,0,IIf(WPROD_CandidateSideCode==WPROD_PnFObjectiveDirectionCode,1,2)));
+WPROD_PnFReviewFlag = IIf(WPROD_PnFHarmonyCode==2 OR WPROD_PnFHarmonyCode==3,1,0);
+WPROD_SelectionCompletenessCode = IIf(WPROD_DataEligibilityCode==0,0,IIf(WPROD_PnFObjectiveAvailable==1,2,1));
+WPROD_IntegratedReviewFlag = IIf(WPROD_ScannerReviewFlag OR WPROD_PnFReviewFlag,1,0);
+_SECTION_END();
+
+_SECTION_BEGIN("132. Production Candidate AmiBroker 6.20 Exploration");
+WPROD_FilterModeCode = Param("Production Filter: 0=Qualified 1=Developing+Qualified 2=Watch+ 3=Review 4=All Eligible 5=P&F Review",3,0,5,1);
+WPROD_IsLastBar = Status("lastbarinrange");
+WPROD_FilterQualified = WPROD_QualifiedCandidateFlag==1;
+WPROD_FilterDeveloping = WPROD_DevelopingCandidateFlag==1 OR WPROD_QualifiedCandidateFlag==1;
+WPROD_FilterWatch = WPROD_WatchFlag==1 OR WPROD_DevelopingCandidateFlag==1 OR WPROD_QualifiedCandidateFlag==1;
+WPROD_FilterReview = WPROD_IntegratedReviewFlag==1 OR WPROD_DataEligibilityCode==0;
+WPROD_FilterAllEligible = WPROD_DataEligibilityCode==1;
+WPROD_FilterPnFReview = WPROD_PnFReviewFlag==1 OR (WPROD_DataEligibilityCode==1 AND WPROD_PnFObjectiveAvailable==0);
+Filter = WPROD_IsLastBar AND IIf(WPROD_FilterModeCode==0,WPROD_FilterQualified,IIf(WPROD_FilterModeCode==1,WPROD_FilterDeveloping,IIf(WPROD_FilterModeCode==2,WPROD_FilterWatch,IIf(WPROD_FilterModeCode==3,WPROD_FilterReview,IIf(WPROD_FilterModeCode==4,WPROD_FilterAllEligible,WPROD_FilterPnFReview)))));
+
+WPRODX_CandidateClassText = "DATA GATED / INSUFFICIENT\nNOT A CURRENT CANDIDATE\nWATCH\nDEVELOPING BULLISH\nQUALIFIED BULLISH - MARKET ALIGNED\nQUALIFIED BULLISH - FULL TOP-DOWN\nDEVELOPING BEARISH\nQUALIFIED BEARISH - MARKET ALIGNED\nQUALIFIED BEARISH - FULL TOP-DOWN\nREVIEW - CONFLICT / AMBIGUITY";
+WPRODX_CandidateSideText = "NONE / UNRESOLVED\nBULLISH\nBEARISH";
+WPRODX_CandidateStageText = "NONE / INSUFFICIENT\nWATCH - RANGE FORMATION / DEVELOPMENT\nDEVELOPING - FINAL TEST\nDIRECTIONAL DEVELOPMENT\nTREND EXPANSION\nTERMINAL / SUPERSEDED";
+WPRODX_DirectionalContextText = "INSUFFICIENT\nUNRESOLVED\nBULLISH HYPOTHESIS\nBEARISH HYPOTHESIS\nMIXED / CONFLICTING";
+WPRODX_PhaseText = "INSUFFICIENT CONTEXT\nPHASE-A-LIKE\nPHASE-B-LIKE\nPHASE-C-CANDIDATE\nPHASE-C-LIKE\nPHASE-D-LIKE\nPHASE-E-LIKE\nRANGE INVALIDATED / SUPERSEDED";
+WPRODX_FamilyText = "INSUFFICIENT\nUNRESOLVED LOWER RANGE\nUNRESOLVED UPPER RANGE\nACCUMULATION-HYPOTHESIS\nREDISTRIBUTION-HYPOTHESIS\nDISTRIBUTION-HYPOTHESIS\nREACCUMULATION-HYPOTHESIS\nMIXED / CONFLICTING EVIDENCE";
+WPRODX_PnFDirectionText = "UNRESOLVED / NO OFFICIAL OBJECTIVE\nBULLISH\nBEARISH";
+WPRODX_PnFLifecycleText = "INSUFFICIENT\nCAUSE BUILDING\nCOUNT SEGMENT MEASURABLE - PRELIMINARY\nCOUNT SEGMENT CONFIRMED / READY FOR PROJECTION\nOBJECTIVE ACTIVE AFTER DIRECTIONAL RANGE EXIT\nOBJECTIVE ZONE APPROACHED / REACHED\nOBJECTIVE EXCEEDED - MONITOR CHARACTER\nSOURCE RANGE SUPERSEDED / INVALIDATED";
+WPRODX_PnFHarmonyText = "P&F HARMONY NOT EVALUATED\nCANDIDATE SIDE + P&F OBJECTIVE ALIGNED\nCANDIDATE SIDE + P&F OBJECTIVE CONFLICT\nMULTIPLE P&F OBJECTIVES / AMBIGUOUS";
+WPRODX_SelectionCompletenessText = "INSUFFICIENT / DATA INELIGIBLE\nPARTIAL WYCKOFF SELECTION - P&F CAUSE/OBJECTIVE NOT AVAILABLE\nPARTIAL WYCKOFF SELECTION + P&F CAUSE/OBJECTIVE - TRADE RISK/R:R NOT EVALUATED";
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"DateTime",formatDateTime);
+AddColumn(WPROD_DataEligibilityCode,"Data Eligible",1.0);
+AddColumn(WPROD_CandidateClassCode,"Candidate Class Code",1.0);
+AddMultiTextColumn(WPROD_CandidateClassCode,WPRODX_CandidateClassText,"Candidate Class");
+AddColumn(WPROD_CandidateSideCode,"Candidate Side Code",1.0);
+AddMultiTextColumn(WPROD_CandidateSideCode,WPRODX_CandidateSideText,"Candidate Side");
+AddColumn(WPROD_CandidateStageCode,"Candidate Stage Code",1.0);
+AddMultiTextColumn(WPROD_CandidateStageCode,WPRODX_CandidateStageText,"Candidate Stage");
+AddColumn(WPROD_QualifiedCandidateFlag,"Qualified",1.0);
+AddColumn(WPROD_DevelopingCandidateFlag,"Developing",1.0);
+AddColumn(WPROD_WatchFlag,"Watch",1.0);
+AddColumn(WPROD_ScannerReviewFlag,"Scanner Review",1.0);
+AddColumn(WPROD_ScannerExclusionReasonMask,"Scanner Exclusion Mask",1.0);
+AddColumn(WPROD_ScannerMethodBlockReasonMask,"Scanner Method Block Mask",1.0);
+AddColumn(WSCN_StockDirectionalContextCode,"Stock Direction",1.0);
+AddMultiTextColumn(WSCN_StockDirectionalContextCode,WPRODX_DirectionalContextText,"Stock Direction Text");
+AddColumn(WSCN_StockPhaseStateCode,"Stock Phase",1.0);
+AddMultiTextColumn(WSCN_StockPhaseStateCode,WPRODX_PhaseText,"Stock Phase Text");
+AddColumn(WSCN_StockFamilyHypothesisCode,"Stock Family",1.0);
+AddMultiTextColumn(WSCN_StockFamilyHypothesisCode,WPRODX_FamilyText,"Stock Family Text");
+AddColumn(WSCN_StockEvidenceBalanceCode,"Evidence Balance",1.0);
+AddColumn(WSCN_StockMTFDirectionalAlignmentCode,"D/W/M Alignment",1.0);
+AddColumn(WSCN_StockVsMarketRSStructureCode,"Stock vs Market RS",1.0);
+AddColumn(WSCN_LeadershipChainCode,"Leadership Chain",1.0);
+AddColumn(WSCN_PriceRSRelationshipCode,"Price / RS",1.0);
+AddColumn(WSCN_CurrentEventMask,"Current Event Mask",1.0);
+AddColumn(WPFK_ConfigValid,"P&F Config Valid",1.0);
+AddColumn(WPFK_ConstructionMatureFlag,"P&F Mature",1.0);
+AddColumn(WPF_AdjustmentBasisStatusCode,"P&F Adj Basis",1.0);
+AddColumn(WPROD_PnFObjectiveCount,"P&F Objective Count",1.0);
+AddColumn(WPROD_PnFObjectiveAmbiguous,"P&F Ambiguous",1.0);
+AddColumn(WPROD_PnFObjectiveAvailable,"P&F Objective Available",1.0);
+AddColumn(WPROD_PnFObjectiveDirectionCode,"P&F Direction",1.0);
+AddMultiTextColumn(WPROD_PnFObjectiveDirectionCode,WPRODX_PnFDirectionText,"P&F Direction Text");
+AddColumn(WPROD_PnFCountLifecycleCode,"P&F Lifecycle",1.0);
+AddMultiTextColumn(WPROD_PnFCountLifecycleCode,WPRODX_PnFLifecycleText,"P&F Lifecycle Text");
+AddColumn(WPF_CurrentCountGenerationID,"P&F Generation",1.0);
+AddColumn(WPROD_PnFProjectedMove,"P&F Projected Move",1.6);
+AddColumn(WPF_CurrentConservativeObjective,"P&F Conservative Objective",1.6);
+AddColumn(WPF_CurrentCountLineObjective,"P&F Count-line Objective",1.6);
+AddColumn(WPROD_PnFObjectiveZoneLow,"P&F Objective Low",1.6);
+AddColumn(WPROD_PnFObjectiveZoneHigh,"P&F Objective High",1.6);
+AddColumn(WPROD_PnFObjectiveReachedFlag,"P&F Reached",1.0);
+AddColumn(WPROD_PnFObjectiveExceededFlag,"P&F Exceeded",1.0);
+AddColumn(WPROD_PnFHarmonyCode,"Candidate / P&F Harmony",1.0);
+AddMultiTextColumn(WPROD_PnFHarmonyCode,WPRODX_PnFHarmonyText,"Candidate / P&F Harmony Text");
+AddColumn(WPROD_PnFReviewFlag,"P&F Review",1.0);
+AddColumn(WPF_SteppingStoneRelationshipCode,"P&F Stepping-stone",1.0);
+AddColumn(WPROD_SelectionCompletenessCode,"Selection Completeness",1.0);
+AddMultiTextColumn(WPROD_SelectionCompletenessCode,WPRODX_SelectionCompletenessText,"Selection Completeness Text");
+AddColumn(WPROD_IntegratedReviewFlag,"Integrated Review",1.0);
+AddColumn(WPF_L_RangeContextID,"P&F L Range ID",1.0);
+AddColumn(WPF_L_OfficialObjectiveAvailable,"P&F L Objective",1.0);
+AddColumn(WPF_L_ConservativeInclusiveColumnCount,"P&F L Count Columns",1.0);
+AddColumn(WPF_L_ConservativeObjectiveZoneLow,"P&F L Zone Low",1.6);
+AddColumn(WPF_L_ConservativeObjectiveZoneHigh,"P&F L Zone High",1.6);
+AddColumn(WPF_U_RangeContextID,"P&F U Range ID",1.0);
+AddColumn(WPF_U_OfficialObjectiveAvailable,"P&F U Objective",1.0);
+AddColumn(WPF_U_ConservativeInclusiveColumnCount,"P&F U Count Columns",1.0);
+AddColumn(WPF_U_ConservativeObjectiveZoneLow,"P&F U Zone Low",1.6);
+AddColumn(WPF_U_ConservativeObjectiveZoneHigh,"P&F U Zone High",1.6);
+_SECTION_END();
