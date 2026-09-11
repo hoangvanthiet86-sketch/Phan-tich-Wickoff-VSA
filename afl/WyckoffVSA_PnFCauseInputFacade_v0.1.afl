@@ -1,0 +1,125 @@
+/*
+    Wyckoff VSA P&F Cause Input Facade v0.1
+
+    Integration-only normalization layer for PFO01-PFO48.
+    It consumes canonical Phase/Context + linked Event outputs and exposes
+    range-specific anchors to the P&F Cause / Price Objective Engine.
+
+    No new Event/Phase interpretation. No trading signal.
+    INTEGRATED DEVELOPMENT / NATIVE ACCEPTANCE PENDING.
+*/
+#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
+
+_SECTION_BEGIN("127. P&F Cause input facade");
+WPFI_BI = BarIndex();
+WPFI_DT = DateTime();
+WPFI_Zero = 0 * WPFI_BI;
+WPFI_Null = Null + WPFI_Zero;
+
+// Family enum inherited from Phase/Context:
+// 3 accumulation, 4 redistribution, 5 distribution, 6 reaccumulation.
+WPFI_L_RangePresent = WPC_L_ContextPresent;
+WPFI_L_RangeContextID = WPC_L_RangeContextID;
+WPFI_L_RangeSideCode = WPC_L_RangeAnchorSideCode;
+WPFI_L_RangeLow = WPC_L_PrimaryRangeLow;
+WPFI_L_RangeHigh = WPC_L_PrimaryRangeHigh;
+WPFI_L_RangeKnownAtBI = WPC_L_RangeKnownAtBarIndex;
+WPFI_L_RangeKnownAtDT = WPC_L_RangeKnownAtDateTime;
+WPFI_L_RangeStatusCode = WPCP_L_RangeStatusCode;
+WPFI_L_PhaseStateCode = WPCP_L_PublicPhaseStateCode;
+WPFI_L_FamilyCode = WPCF_L_FamilyHypothesisCode;
+WPFI_L_RangeSupersededFlag = WPC_L_SupersessionOccurred;
+
+WPFI_U_RangePresent = WPC_U_ContextPresent;
+WPFI_U_RangeContextID = WPC_U_RangeContextID;
+WPFI_U_RangeSideCode = WPC_U_RangeAnchorSideCode;
+WPFI_U_RangeLow = WPC_U_PrimaryRangeLow;
+WPFI_U_RangeHigh = WPC_U_PrimaryRangeHigh;
+WPFI_U_RangeKnownAtBI = WPC_U_RangeKnownAtBarIndex;
+WPFI_U_RangeKnownAtDT = WPC_U_RangeKnownAtDateTime;
+WPFI_U_RangeStatusCode = WPCP_U_RangeStatusCode;
+WPFI_U_PhaseStateCode = WPCP_U_PublicPhaseStateCode;
+WPFI_U_FamilyCode = WPCF_U_FamilyHypothesisCode;
+WPFI_U_RangeSupersededFlag = WPC_U_SupersessionOccurred;
+
+// Structural full-range left boundary. Economic origin is retained separately
+// from Range KnownAt. The sequence-id equality prevents accidental reuse of a
+// structural snapshot belonging to another RangeContext generation.
+WPFI_L_FullLeftBoundaryValid = IIf(
+    WPFI_L_RangePresent==1
+    AND WSS_LowerActiveSequenceOrdinal==WPC_L_RangeAnchorSequenceID
+    AND NOT IsNull(WSS_LowerActiveSCOriginBI),1,0);
+WPFI_L_FullLeftOriginBI = IIf(WPFI_L_FullLeftBoundaryValid,WSS_LowerActiveSCOriginBI,Null);
+WPFI_L_FullLeftKnownAtBI = IIf(WPFI_L_FullLeftBoundaryValid,WPFI_L_RangeKnownAtBI,Null);
+WPFI_L_FullLeftTypeCode = IIf(WPFI_L_FullLeftBoundaryValid,4,0); // 4 structural/range origin
+
+WPFI_U_FullLeftBoundaryValid = IIf(
+    WPFI_U_RangePresent==1
+    AND WSS_UpperActiveSequenceOrdinal==WPC_U_RangeAnchorSequenceID
+    AND NOT IsNull(WSS_UpperActiveBCOriginBI),1,0);
+WPFI_U_FullLeftOriginBI = IIf(WPFI_U_FullLeftBoundaryValid,WSS_UpperActiveBCOriginBI,Null);
+WPFI_U_FullLeftKnownAtBI = IIf(WPFI_U_FullLeftBoundaryValid,WPFI_U_RangeKnownAtBI,Null);
+WPFI_U_FullLeftTypeCode = IIf(WPFI_U_FullLeftBoundaryValid,4,0);
+
+// Current range-linked bullish anchors. Phase/Context performs the range-key
+// linkage; this facade only carries coordinates and economic anchor prices.
+WPFI_L_LPSLinked = WPC_L_CurrentLPSLinked;
+WPFI_L_LPSOriginBI = IIf(WPFI_L_LPSLinked,WPCIF_LPSOriginBI,Null);
+WPFI_L_LPSKnownAtBI = IIf(WPFI_L_LPSLinked,WPCIF_LPSKnownBI,Null);
+WPFI_L_LPSRawPrice = IIf(WPFI_L_LPSLinked,WPCIF_LPSOriginLow,Null);
+
+WPFI_U_LPSLinked = WPC_U_CurrentLPSLinked;
+WPFI_U_LPSOriginBI = IIf(WPFI_U_LPSLinked,WPCIF_LPSOriginBI,Null);
+WPFI_U_LPSKnownAtBI = IIf(WPFI_U_LPSLinked,WPCIF_LPSKnownBI,Null);
+WPFI_U_LPSRawPrice = IIf(WPFI_U_LPSLinked,WPCIF_LPSOriginLow,Null);
+
+WPFI_L_SpringLinked = WPC_L_CurrentSpringLinked;
+WPFI_L_SpringOriginBI = IIf(WPFI_L_SpringLinked,WPCIF_SpringOriginBI,Null);
+WPFI_L_SpringKnownAtBI = IIf(WPFI_L_SpringLinked,WPCIF_SpringKnownBI,Null);
+WPFI_L_SpringRawPrice = IIf(WPFI_L_SpringLinked,WPCIF_SpringOriginLow,Null);
+
+WPFI_U_SpringLinked = WPC_U_CurrentSpringLinked;
+WPFI_U_SpringOriginBI = IIf(WPFI_U_SpringLinked,WPCIF_SpringOriginBI,Null);
+WPFI_U_SpringKnownAtBI = IIf(WPFI_U_SpringLinked,WPCIF_SpringKnownBI,Null);
+WPFI_U_SpringRawPrice = IIf(WPFI_U_SpringLinked,WPCIF_SpringOriginLow,Null);
+
+WPFI_L_SupplyTestLinked = WPC_L_CurrentSupplyTestLinked;
+WPFI_L_SupplyTestOriginBI = IIf(WPFI_L_SupplyTestLinked,WPCIF_SupplyTestOriginBI,Null);
+WPFI_L_SupplyTestKnownAtBI = IIf(WPFI_L_SupplyTestLinked,WPCIF_SupplyTestKnownBI,Null);
+WPFI_L_SupplyTestRawPrice = IIf(WPFI_L_SupplyTestLinked,WPCIF_SupplyTestSupport,Null);
+
+WPFI_U_SupplyTestLinked = WPC_U_CurrentSupplyTestLinked;
+WPFI_U_SupplyTestOriginBI = IIf(WPFI_U_SupplyTestLinked,WPCIF_SupplyTestOriginBI,Null);
+WPFI_U_SupplyTestKnownAtBI = IIf(WPFI_U_SupplyTestLinked,WPCIF_SupplyTestKnownBI,Null);
+WPFI_U_SupplyTestRawPrice = IIf(WPFI_U_SupplyTestLinked,WPCIF_SupplyTestSupport,Null);
+
+// Current range-linked bearish anchors.
+WPFI_L_UpthrustLinked = WPC_L_CurrentUpthrustLinked;
+WPFI_L_UpthrustOriginBI = IIf(WPFI_L_UpthrustLinked,WPCIF_UpthrustOriginBI,Null);
+WPFI_L_UpthrustKnownAtBI = IIf(WPFI_L_UpthrustLinked,WPCIF_UpthrustKnownBI,Null);
+WPFI_L_UpthrustRawPrice = IIf(WPFI_L_UpthrustLinked,WPCIF_UpthrustOriginHigh,Null);
+
+WPFI_U_UpthrustLinked = WPC_U_CurrentUpthrustLinked;
+WPFI_U_UpthrustOriginBI = IIf(WPFI_U_UpthrustLinked,WPCIF_UpthrustOriginBI,Null);
+WPFI_U_UpthrustKnownAtBI = IIf(WPFI_U_UpthrustLinked,WPCIF_UpthrustKnownBI,Null);
+WPFI_U_UpthrustRawPrice = IIf(WPFI_U_UpthrustLinked,WPCIF_UpthrustOriginHigh,Null);
+
+WPFI_L_LPSYLinked = WPC_L_CurrentLPSYLinked;
+WPFI_L_LPSYOriginBI = IIf(WPFI_L_LPSYLinked,WE_SW_L_LPSYExtremeBarIndex,Null);
+WPFI_L_LPSYKnownAtBI = IIf(WPFI_L_LPSYLinked,WE_SW_L_LPSYKnownAtBarIndex,Null);
+WPFI_L_LPSYRawPrice = IIf(WPFI_L_LPSYLinked,WE_SW_L_LPSYPivotHigh,Null);
+
+WPFI_U_LPSYLinked = WPC_U_CurrentLPSYLinked;
+WPFI_U_LPSYOriginBI = IIf(WPFI_U_LPSYLinked,WE_SW_U_LPSYExtremeBarIndex,Null);
+WPFI_U_LPSYKnownAtBI = IIf(WPFI_U_LPSYLinked,WE_SW_U_LPSYKnownAtBarIndex,Null);
+WPFI_U_LPSYRawPrice = IIf(WPFI_U_LPSYLinked,WE_SW_U_LPSYPivotHigh,Null);
+
+// Direction code used only by the projection layer: 1 bullish, 2 bearish,
+// 0 unresolved/not official.
+WPFI_L_ObjectiveDirectionCode = IIf(
+    WPFI_L_FamilyCode==3 OR WPFI_L_FamilyCode==6,1,
+    IIf(WPFI_L_FamilyCode==4 OR WPFI_L_FamilyCode==5,2,0));
+WPFI_U_ObjectiveDirectionCode = IIf(
+    WPFI_U_FamilyCode==3 OR WPFI_U_FamilyCode==6,1,
+    IIf(WPFI_U_FamilyCode==4 OR WPFI_U_FamilyCode==5,2,0));
+_SECTION_END();
