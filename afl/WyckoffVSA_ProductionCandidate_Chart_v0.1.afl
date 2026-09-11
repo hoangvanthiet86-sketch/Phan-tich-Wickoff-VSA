@@ -1,0 +1,43 @@
+/*
+    Wyckoff VSA Production Candidate v0.1 — compact chart/panel surface
+    Presentation only. No methodology override and no trading signal.
+*/
+#include_once <WyckoffVSA_ProductionCandidate_v0.1.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Chart_v0.1.afl>
+
+_SECTION_BEGIN("133. Production Candidate P&F overlay");
+// Keep both RangeContext objectives visible when both exist. No winner is selected.
+Plot(IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ConservativeObjectiveZoneLow,Null),
+    "P&F L Objective Low",colorDefault,styleLine|styleNoRescale);
+Plot(IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ConservativeObjectiveZoneHigh,Null),
+    "P&F L Objective High",colorDefault,styleLine|styleNoRescale);
+Plot(IIf(WPF_U_OfficialObjectiveAvailable,WPF_U_ConservativeObjectiveZoneLow,Null),
+    "P&F U Objective Low",colorDefault,styleLine|styleNoRescale);
+Plot(IIf(WPF_U_OfficialObjectiveAvailable,WPF_U_ConservativeObjectiveZoneHigh,Null),
+    "P&F U Objective High",colorDefault,styleLine|styleNoRescale);
+
+WPROD_ChartClass = WriteIf(SelectedValue(WPROD_CandidateClassCode)==2,"WATCH",
+    WriteIf(SelectedValue(WPROD_CandidateClassCode)==3,"BULLISH DEVELOPING",
+    WriteIf(SelectedValue(WPROD_CandidateClassCode)==4,"BULLISH QUALIFIED",
+    WriteIf(SelectedValue(WPROD_CandidateClassCode)==5,"BULLISH FULL TOP-DOWN",
+    WriteIf(SelectedValue(WPROD_CandidateClassCode)==6,"BEARISH DEVELOPING",
+    WriteIf(SelectedValue(WPROD_CandidateClassCode)==7,"BEARISH QUALIFIED",
+    WriteIf(SelectedValue(WPROD_CandidateClassCode)==8,"BEARISH FULL TOP-DOWN",
+    WriteIf(SelectedValue(WPROD_CandidateClassCode)==9,"REVIEW","NOT QUALIFIED"))))))));
+
+WPROD_ChartPnF = WriteIf(SelectedValue(WPROD_PnFObjectiveAmbiguous)==1,"P&F MULTIPLE / AMBIGUOUS",
+    WriteIf(SelectedValue(WPROD_PnFObjectiveAvailable)==0,"P&F OBJECTIVE NOT AVAILABLE",
+    WriteIf(SelectedValue(WPROD_PnFObjectiveDirectionCode)==1,"P&F BULLISH OBJECTIVE","P&F BEARISH OBJECTIVE")));
+WPROD_ChartHarmony = WriteIf(SelectedValue(WPROD_PnFHarmonyCode)==1,"ALIGNED",
+    WriteIf(SelectedValue(WPROD_PnFHarmonyCode)==2,"CONFLICT",
+    WriteIf(SelectedValue(WPROD_PnFHarmonyCode)==3,"AMBIGUOUS","NOT EVALUATED")));
+WPROD_ChartCompleteness = WriteIf(SelectedValue(WPROD_SelectionCompletenessCode)==2,
+    "SELECTION + P&F / NO R:R",
+    WriteIf(SelectedValue(WPROD_SelectionCompletenessCode)==1,"PARTIAL / NO P&F","INSUFFICIENT"));
+
+Title = Name()
+    + " | " + WPROD_ChartClass
+    + " | " + WPROD_ChartPnF
+    + " | " + WPROD_ChartHarmony
+    + " | " + WPROD_ChartCompleteness;
+_SECTION_END();
