@@ -10,6 +10,11 @@
 
     No Buy/Sell/Short/Cover, no ranking, no percentile, no confidence or
     probability output. Market Scanner is a downstream consumer.
+
+    AmiBroker 6.20 compatibility correction:
+    - user-defined function parameters A/B were renamed because AFL is
+      case-insensitive and "a" is a predefined identifier.
+    - no analytical logic was changed.
 */
 SetBarsRequired(sbrAll,sbrAll);
 #include_once <WyckoffVSA_StructureLocation_v1.0.afl>
@@ -44,7 +49,6 @@ WRS_GroupConfigured = StrLen(WRS_GroupBenchmarkSymbol)>0;
 WRS_MarketClose = WRS_Null;
 if(WRS_MarketConfigured)
 {
-    // R26: fixup=0 preserves missing synchronized bars as missing.
     WRS_MarketClose = Foreign(WRS_MarketBenchmarkSymbol,"C",0);
 }
 
@@ -58,8 +62,6 @@ WRS_StockCloseValid = WRS_Finite(Close) AND Close>0;
 WRS_MarketCloseFinite = WRS_Finite(WRS_MarketClose);
 WRS_GroupCloseFinite = WRS_Finite(WRS_GroupClose);
 
-// 0 NOT CONFIGURED / NOT AVAILABLE; 1 MISSING SYNC BAR;
-// 2 INVALID VALUE; 3 READY.
 WRS_MarketBenchmarkStatusCode = IIf(
     NOT WRS_MarketConfigured,0,
     IIf(IsNull(WRS_MarketClose),1,
@@ -82,121 +84,132 @@ WRS_ProvisionalFlag = IIf(
     (WRS_RuntimeLastBarIsProvisional==1 OR
      (WRS_UpstreamProvisionalKnown AND WRS_UpstreamProvisionalRaw==1)),1,0);
 
-// Source-revision detection requires a prior persisted run. The formula only
-// exposes that the status has not yet been assessed in-run.
-WRS_SourceRevisionStatusCode = WRS_Zero; // 0 = NOT ASSESSED IN FORMULA
+WRS_SourceRevisionStatusCode = WRS_Zero;
 _SECTION_END();
 
 _SECTION_BEGIN("111. Generic pairwise RS ratio and structure");
-function WRS_RunPair(channel,numerator,numeratorValid,denominator,denominatorValid,A,B,srcBI,srcDT,srcOffset)
+
+function WRS_RunPair(
+    wrsChannel,
+    wrsNumerator,
+    wrsNumeratorValid,
+    wrsDenominator,
+    wrsDenominatorValid,
+    pivotLeftBars,
+    pivotRightBars,
+    wrsSrcBI,
+    wrsSrcDT,
+    wrsSrcOffset )
 {
-    local p, kp, ratioValid, ratio;
-    local hiCode, loCode, hiValue, loValue;
-    local hiCount, loCount, hi1, hi2, lo1, lo2, structureValid, structureCode;
-    local hiBI1, hiBI2, loBI1, loBI2, hiDT1, hiDT2, loDT1, loDT2;
-    local anyEvent, anyKind, anyValue, anyExtremeBI, anyExtremeDT, anyOffset;
-    local anyCount, endKind, startKind, endValue, startValue, endBI, startBI, endDT, startDT, endOff, startOff;
-    local waveValid, waveDirection, wavePct, waveBars;
+    local wrsPfx, wrsKernelPfx, wrsRatioValidLocal, wrsRatioLocal;
+    local wrsHiCode, wrsLoCode, wrsHiValue, wrsLoValue;
+    local wrsHiCount, wrsLoCount, wrsHi1, wrsHi2, wrsLo1, wrsLo2, wrsStructureValid, wrsStructureCode;
+    local wrsHiBI1, wrsHiBI2, wrsLoBI1, wrsLoBI2, wrsHiDT1, wrsHiDT2, wrsLoDT1, wrsLoDT2;
+    local wrsAnyEvent, wrsAnyKind, wrsAnyValue, wrsAnyExtremeBI, wrsAnyExtremeDT, wrsAnyOffset;
+    local wrsAnyCount, wrsEndKind, wrsStartKind, wrsEndValue, wrsStartValue, wrsEndBI, wrsStartBI, wrsEndDT, wrsStartDT, wrsEndOff, wrsStartOff;
+    local wrsWaveValid, wrsWaveDirection, wrsWavePct, wrsWaveBars;
 
-    p = "WRS_"+channel+"_";
-    kp = "WDP_"+channel+"_";
+    wrsPfx = "WRS_"+wrsChannel+"_";
+    wrsKernelPfx = "WDP_"+wrsChannel+"_";
 
-    ratioValid = numeratorValid AND denominatorValid AND WRS_Finite(numerator)
-                 AND WRS_Finite(denominator) AND numerator>0 AND denominator>0;
-    ratio = IIf(ratioValid,numerator/denominator,Null);
+    wrsRatioValidLocal = wrsNumeratorValid AND wrsDenominatorValid AND WRS_Finite(wrsNumerator)
+                         AND WRS_Finite(wrsDenominator) AND wrsNumerator>0 AND wrsDenominator>0;
+    wrsRatioLocal = IIf(wrsRatioValidLocal,wrsNumerator/wrsDenominator,Null);
 
-    VarSet(p+"RatioValid",IIf(ratioValid,1,0));
-    VarSet(p+"Ratio",ratio);
-    VarSet(p+"SourceDateTime",IIf(ratioValid,srcDT,Null));
+    VarSet(wrsPfx+"RatioValid",IIf(wrsRatioValidLocal,1,0));
+    VarSet(wrsPfx+"Ratio",wrsRatioLocal);
+    VarSet(wrsPfx+"SourceDateTime",IIf(wrsRatioValidLocal,wrsSrcDT,Null));
 
-    WDP_RunDerivedSeries(channel,ratio,ratioValid,A,B,srcBI,srcDT,srcOffset);
+    WDP_RunDerivedSeries(
+        wrsChannel,wrsRatioLocal,wrsRatioValidLocal,
+        pivotLeftBars,pivotRightBars,wrsSrcBI,wrsSrcDT,wrsSrcOffset);
 
-    hiCode = VarGet(kp+"PivotHighEventCode");
-    loCode = VarGet(kp+"PivotLowEventCode");
-    hiValue = VarGet(kp+"PivotHighEventValue");
-    loValue = VarGet(kp+"PivotLowEventValue");
+    wrsHiCode = VarGet(wrsKernelPfx+"PivotHighEventCode");
+    wrsLoCode = VarGet(wrsKernelPfx+"PivotLowEventCode");
+    wrsHiValue = VarGet(wrsKernelPfx+"PivotHighEventValue");
+    wrsLoValue = VarGet(wrsKernelPfx+"PivotLowEventValue");
 
-    hiCount = Cum(hiCode==2);
-    loCount = Cum(loCode==2);
-    hi1 = ValueWhen(hiCode==2,hiValue,1);
-    hi2 = ValueWhen(hiCode==2,hiValue,2);
-    lo1 = ValueWhen(loCode==2,loValue,1);
-    lo2 = ValueWhen(loCode==2,loValue,2);
+    wrsHiCount = Cum(wrsHiCode==2);
+    wrsLoCount = Cum(wrsLoCode==2);
+    wrsHi1 = ValueWhen(wrsHiCode==2,wrsHiValue,1);
+    wrsHi2 = ValueWhen(wrsHiCode==2,wrsHiValue,2);
+    wrsLo1 = ValueWhen(wrsLoCode==2,wrsLoValue,1);
+    wrsLo2 = ValueWhen(wrsLoCode==2,wrsLoValue,2);
 
-    hiBI1 = ValueWhen(hiCode==2,VarGet(kp+"PivotHighExtremeBarIndex"),1);
-    hiBI2 = ValueWhen(hiCode==2,VarGet(kp+"PivotHighExtremeBarIndex"),2);
-    loBI1 = ValueWhen(loCode==2,VarGet(kp+"PivotLowExtremeBarIndex"),1);
-    loBI2 = ValueWhen(loCode==2,VarGet(kp+"PivotLowExtremeBarIndex"),2);
-    hiDT1 = ValueWhen(hiCode==2,VarGet(kp+"PivotHighExtremeDateTime"),1);
-    hiDT2 = ValueWhen(hiCode==2,VarGet(kp+"PivotHighExtremeDateTime"),2);
-    loDT1 = ValueWhen(loCode==2,VarGet(kp+"PivotLowExtremeDateTime"),1);
-    loDT2 = ValueWhen(loCode==2,VarGet(kp+"PivotLowExtremeDateTime"),2);
+    wrsHiBI1 = ValueWhen(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeBarIndex"),1);
+    wrsHiBI2 = ValueWhen(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeBarIndex"),2);
+    wrsLoBI1 = ValueWhen(wrsLoCode==2,VarGet(wrsKernelPfx+"PivotLowExtremeBarIndex"),1);
+    wrsLoBI2 = ValueWhen(wrsLoCode==2,VarGet(wrsKernelPfx+"PivotLowExtremeBarIndex"),2);
+    wrsHiDT1 = ValueWhen(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeDateTime"),1);
+    wrsHiDT2 = ValueWhen(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeDateTime"),2);
+    wrsLoDT1 = ValueWhen(wrsLoCode==2,VarGet(wrsKernelPfx+"PivotLowExtremeDateTime"),1);
+    wrsLoDT2 = ValueWhen(wrsLoCode==2,VarGet(wrsKernelPfx+"PivotLowExtremeDateTime"),2);
 
-    structureValid = hiCount>=2 AND loCount>=2;
-    structureCode = IIf(NOT structureValid,0,
-        IIf(hi1>hi2 AND lo1>lo2,1,
-        IIf(hi1<hi2 AND lo1<lo2,2,3)));
+    wrsStructureValid = wrsHiCount>=2 AND wrsLoCount>=2;
+    wrsStructureCode = IIf(NOT wrsStructureValid,0,
+        IIf(wrsHi1>wrsHi2 AND wrsLo1>wrsLo2,1,
+        IIf(wrsHi1<wrsHi2 AND wrsLo1<wrsLo2,2,3)));
 
-    VarSet(p+"StructureValid",IIf(structureValid,1,0));
-    VarSet(p+"StructureCode",structureCode);
-    VarSet(p+"PivotHighConfirmedCount",hiCount);
-    VarSet(p+"PivotLowConfirmedCount",loCount);
+    VarSet(wrsPfx+"StructureValid",IIf(wrsStructureValid,1,0));
+    VarSet(wrsPfx+"StructureCode",wrsStructureCode);
+    VarSet(wrsPfx+"PivotHighConfirmedCount",wrsHiCount);
+    VarSet(wrsPfx+"PivotLowConfirmedCount",wrsLoCount);
 
-    VarSet(p+"PivotHighLatestValue",IIf(hiCount>=1,hi1,Null));
-    VarSet(p+"PivotHighPreviousValue",IIf(hiCount>=2,hi2,Null));
-    VarSet(p+"PivotHighLatestExtremeBarIndex",IIf(hiCount>=1,hiBI1,Null));
-    VarSet(p+"PivotHighPreviousExtremeBarIndex",IIf(hiCount>=2,hiBI2,Null));
-    VarSet(p+"PivotHighLatestExtremeDateTime",IIf(hiCount>=1,hiDT1,Null));
-    VarSet(p+"PivotHighPreviousExtremeDateTime",IIf(hiCount>=2,hiDT2,Null));
-    VarSet(p+"PivotHighLatestConfirmBarIndex",VarGet(kp+"PivotHighLatestConfirmBarIndex"));
-    VarSet(p+"PivotHighLatestConfirmDateTime",VarGet(kp+"PivotHighLatestConfirmDateTime"));
+    VarSet(wrsPfx+"PivotHighLatestValue",IIf(wrsHiCount>=1,wrsHi1,Null));
+    VarSet(wrsPfx+"PivotHighPreviousValue",IIf(wrsHiCount>=2,wrsHi2,Null));
+    VarSet(wrsPfx+"PivotHighLatestExtremeBarIndex",IIf(wrsHiCount>=1,wrsHiBI1,Null));
+    VarSet(wrsPfx+"PivotHighPreviousExtremeBarIndex",IIf(wrsHiCount>=2,wrsHiBI2,Null));
+    VarSet(wrsPfx+"PivotHighLatestExtremeDateTime",IIf(wrsHiCount>=1,wrsHiDT1,Null));
+    VarSet(wrsPfx+"PivotHighPreviousExtremeDateTime",IIf(wrsHiCount>=2,wrsHiDT2,Null));
+    VarSet(wrsPfx+"PivotHighLatestConfirmBarIndex",VarGet(wrsKernelPfx+"PivotHighLatestConfirmBarIndex"));
+    VarSet(wrsPfx+"PivotHighLatestConfirmDateTime",VarGet(wrsKernelPfx+"PivotHighLatestConfirmDateTime"));
 
-    VarSet(p+"PivotLowLatestValue",IIf(loCount>=1,lo1,Null));
-    VarSet(p+"PivotLowPreviousValue",IIf(loCount>=2,lo2,Null));
-    VarSet(p+"PivotLowLatestExtremeBarIndex",IIf(loCount>=1,loBI1,Null));
-    VarSet(p+"PivotLowPreviousExtremeBarIndex",IIf(loCount>=2,loBI2,Null));
-    VarSet(p+"PivotLowLatestExtremeDateTime",IIf(loCount>=1,loDT1,Null));
-    VarSet(p+"PivotLowPreviousExtremeDateTime",IIf(loCount>=2,loDT2,Null));
-    VarSet(p+"PivotLowLatestConfirmBarIndex",VarGet(kp+"PivotLowLatestConfirmBarIndex"));
-    VarSet(p+"PivotLowLatestConfirmDateTime",VarGet(kp+"PivotLowLatestConfirmDateTime"));
+    VarSet(wrsPfx+"PivotLowLatestValue",IIf(wrsLoCount>=1,wrsLo1,Null));
+    VarSet(wrsPfx+"PivotLowPreviousValue",IIf(wrsLoCount>=2,wrsLo2,Null));
+    VarSet(wrsPfx+"PivotLowLatestExtremeBarIndex",IIf(wrsLoCount>=1,wrsLoBI1,Null));
+    VarSet(wrsPfx+"PivotLowPreviousExtremeBarIndex",IIf(wrsLoCount>=2,wrsLoBI2,Null));
+    VarSet(wrsPfx+"PivotLowLatestExtremeDateTime",IIf(wrsLoCount>=1,wrsLoDT1,Null));
+    VarSet(wrsPfx+"PivotLowPreviousExtremeDateTime",IIf(wrsLoCount>=2,wrsLoDT2,Null));
+    VarSet(wrsPfx+"PivotLowLatestConfirmBarIndex",VarGet(wrsKernelPfx+"PivotLowLatestConfirmBarIndex"));
+    VarSet(wrsPfx+"PivotLowLatestConfirmDateTime",VarGet(wrsKernelPfx+"PivotLowLatestConfirmDateTime"));
 
-    // Completed pivot-to-opposite-pivot wave descriptor. Consecutive same-kind
-    // pivot publications are kept auditable but do not form a completed wave.
-    anyEvent = (hiCode==2) OR (loCode==2);
-    anyKind = IIf(hiCode==2,1,IIf(loCode==2,2,0));
-    anyValue = IIf(hiCode==2,hiValue,loValue);
-    anyExtremeBI = IIf(hiCode==2,VarGet(kp+"PivotHighExtremeBarIndex"),VarGet(kp+"PivotLowExtremeBarIndex"));
-    anyExtremeDT = IIf(hiCode==2,VarGet(kp+"PivotHighExtremeDateTime"),VarGet(kp+"PivotLowExtremeDateTime"));
-    anyOffset = srcOffset;
-    anyCount = Cum(anyEvent);
+    wrsAnyEvent = (wrsHiCode==2) OR (wrsLoCode==2);
+    wrsAnyKind = IIf(wrsHiCode==2,1,IIf(wrsLoCode==2,2,0));
+    wrsAnyValue = IIf(wrsHiCode==2,wrsHiValue,wrsLoValue);
+    wrsAnyExtremeBI = IIf(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeBarIndex"),VarGet(wrsKernelPfx+"PivotLowExtremeBarIndex"));
+    wrsAnyExtremeDT = IIf(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeDateTime"),VarGet(wrsKernelPfx+"PivotLowExtremeDateTime"));
+    wrsAnyOffset = wrsSrcOffset;
+    wrsAnyCount = Cum(wrsAnyEvent);
 
-    endKind = ValueWhen(anyEvent,anyKind,1);
-    startKind = ValueWhen(anyEvent,anyKind,2);
-    endValue = ValueWhen(anyEvent,anyValue,1);
-    startValue = ValueWhen(anyEvent,anyValue,2);
-    endBI = ValueWhen(anyEvent,anyExtremeBI,1);
-    startBI = ValueWhen(anyEvent,anyExtremeBI,2);
-    endDT = ValueWhen(anyEvent,anyExtremeDT,1);
-    startDT = ValueWhen(anyEvent,anyExtremeDT,2);
-    endOff = ValueWhen(anyEvent,anyOffset,1);
-    startOff = ValueWhen(anyEvent,anyOffset,2);
+    wrsEndKind = ValueWhen(wrsAnyEvent,wrsAnyKind,1);
+    wrsStartKind = ValueWhen(wrsAnyEvent,wrsAnyKind,2);
+    wrsEndValue = ValueWhen(wrsAnyEvent,wrsAnyValue,1);
+    wrsStartValue = ValueWhen(wrsAnyEvent,wrsAnyValue,2);
+    wrsEndBI = ValueWhen(wrsAnyEvent,wrsAnyExtremeBI,1);
+    wrsStartBI = ValueWhen(wrsAnyEvent,wrsAnyExtremeBI,2);
+    wrsEndDT = ValueWhen(wrsAnyEvent,wrsAnyExtremeDT,1);
+    wrsStartDT = ValueWhen(wrsAnyEvent,wrsAnyExtremeDT,2);
+    wrsEndOff = ValueWhen(wrsAnyEvent,wrsAnyOffset,1);
+    wrsStartOff = ValueWhen(wrsAnyEvent,wrsAnyOffset,2);
 
-    waveValid = anyCount>=2 AND endKind!=startKind AND WRS_Finite(startValue)
-                AND WRS_Finite(endValue) AND startValue>0;
-    waveDirection = IIf(NOT waveValid,0,IIf(endValue>startValue,1,IIf(endValue<startValue,2,3)));
-    wavePct = IIf(waveValid,100*(endValue/startValue-1),Null);
-    waveBars = IIf(waveValid,endOff-startOff,Null);
+    wrsWaveValid = wrsAnyCount>=2 AND wrsEndKind!=wrsStartKind AND WRS_Finite(wrsStartValue)
+                   AND WRS_Finite(wrsEndValue) AND wrsStartValue>0;
+    wrsWaveDirection = IIf(NOT wrsWaveValid,0,
+                       IIf(wrsEndValue>wrsStartValue,1,
+                       IIf(wrsEndValue<wrsStartValue,2,3)));
+    wrsWavePct = IIf(wrsWaveValid,100*(wrsEndValue/wrsStartValue-1),Null);
+    wrsWaveBars = IIf(wrsWaveValid,wrsEndOff-wrsStartOff,Null);
 
-    VarSet(p+"WaveValid",IIf(waveValid,1,0));
-    VarSet(p+"WaveDirectionCode",waveDirection);
-    VarSet(p+"WaveStartRatio",IIf(waveValid,startValue,Null));
-    VarSet(p+"WaveEndRatio",IIf(waveValid,endValue,Null));
-    VarSet(p+"WaveChangePct",wavePct);
-    VarSet(p+"WaveStartBarIndex",IIf(waveValid,startBI,Null));
-    VarSet(p+"WaveEndBarIndex",IIf(waveValid,endBI,Null));
-    VarSet(p+"WaveStartDateTime",IIf(waveValid,startDT,Null));
-    VarSet(p+"WaveEndDateTime",IIf(waveValid,endDT,Null));
-    VarSet(p+"WaveDurationBars",waveBars);
+    VarSet(wrsPfx+"WaveValid",IIf(wrsWaveValid,1,0));
+    VarSet(wrsPfx+"WaveDirectionCode",wrsWaveDirection);
+    VarSet(wrsPfx+"WaveStartRatio",IIf(wrsWaveValid,wrsStartValue,Null));
+    VarSet(wrsPfx+"WaveEndRatio",IIf(wrsWaveValid,wrsEndValue,Null));
+    VarSet(wrsPfx+"WaveChangePct",wrsWavePct);
+    VarSet(wrsPfx+"WaveStartBarIndex",IIf(wrsWaveValid,wrsStartBI,Null));
+    VarSet(wrsPfx+"WaveEndBarIndex",IIf(wrsWaveValid,wrsEndBI,Null));
+    VarSet(wrsPfx+"WaveStartDateTime",IIf(wrsWaveValid,wrsStartDT,Null));
+    VarSet(wrsPfx+"WaveEndDateTime",IIf(wrsWaveValid,wrsEndDT,Null));
+    VarSet(wrsPfx+"WaveDurationBars",wrsWaveBars);
     return 1;
 }
 
@@ -206,6 +219,7 @@ WRS_StockVsMarket_Calculated = WRS_RunPair(
 
 WRS_StockVsGroup_Calculated = 0;
 WRS_GroupVsMarket_Calculated = 0;
+
 if(WRS_GroupConfigured)
 {
     WRS_StockVsGroup_Calculated = WRS_RunPair(
@@ -228,9 +242,6 @@ else
     WRS_GVM_StructureCode = WRS_Zero;
 }
 
-// Materialize dynamic pair fields before direct downstream use. This keeps
-// WRS_RunPair generic while avoiding any dependence on parser inference about
-// dynamically-created variable names.
 WRS_SVM_RatioValid = VarGet("WRS_SVM_RatioValid");
 WRS_SVM_Ratio = VarGet("WRS_SVM_Ratio");
 WRS_SVM_StructureValid = VarGet("WRS_SVM_StructureValid");
@@ -284,8 +295,6 @@ WRS_LeadershipChainCode = IIf(
     IIf(WRS_GVM_StructureCode==2 AND WRS_SVG_StructureCode==1,3,
     IIf(WRS_GVM_StructureCode==1 AND WRS_SVG_StructureCode==2,4,5)))));
 
-// Composite/MTF are optional upstream bridges on this stacked development
-// branch. If not loaded by the caller, diagnostics fail closed as insufficient.
 WRS_UpstreamDirectionalContextCode = VarGet("WCI_DirectionalContextCode");
 WRS_UpstreamEvidenceBalanceCode = VarGet("WCI_EvidenceBalanceCode");
 WRS_UpstreamMTFAlignmentCode = VarGet("WMTF_DirectionalAlignmentCode");
