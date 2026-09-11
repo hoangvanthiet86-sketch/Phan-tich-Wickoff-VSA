@@ -17,55 +17,59 @@ function WDP_Finite( x )
     return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
 }
 
-function WDP_ValidInteger( x, low, high )
+function WDP_ValidInteger( x, minAllowed, maxAllowed )
 {
-    return IIf(WDP_Finite(x),IIf(x>=low AND x<=high AND x==Floor(x),1,0),0);
+    return IIf(WDP_Finite(x),IIf(x>=minAllowed AND x<=maxAllowed AND x==Floor(x),1,0),0);
 }
 
 /*
-    Prepare the exact A+B+1 causal confirmation window used by
+    Prepare the exact left+right+1 causal confirmation window used by
     Structure/Location v1.0. Results are written under:
 
       WDP_<channel>_...
 
     `seriesValid` must represent explicit point-in-time validity of the
     derived numeric series. Missing values are never filled.
-*/
-function WDP_PrepareWindow( channel, seriesValid, requestedA, requestedB, srcBI, srcDT, srcOffset )
-{
-    local p, cfg, A, B, len, prefixCount, validCount, full, status, valid;
-    p = "WDP_"+channel+"_";
 
-    cfg = WDP_ValidInteger(requestedA,1,20) AND WDP_ValidInteger(requestedB,1,20);
-    A = IIf(cfg,requestedA,1);
-    B = IIf(cfg,requestedB,1);
-    len = A+B+1;
+    AmiBroker 6.20 compatibility:
+    - do not use predefined AFL identifiers such as High/Low/A as user names;
+    - do not use built-in function identifiers such as Status as variable names.
+*/
+function WDP_PrepareWindow( channel, seriesValid, requestedLeft, requestedRight, srcBI, srcDT, srcOffset )
+{
+    local pfx, cfgValid, leftBars, rightBars, winLength, prefixCount, validCount, windowFull, windowStatus, windowOK;
+    pfx = "WDP_"+channel+"_";
+
+    cfgValid = WDP_ValidInteger(requestedLeft,1,20) AND WDP_ValidInteger(requestedRight,1,20);
+    leftBars = IIf(cfgValid,requestedLeft,1);
+    rightBars = IIf(cfgValid,requestedRight,1);
+    winLength = leftBars+rightBars+1;
 
     prefixCount = Cum(seriesValid);
-    validCount = IIf(cfg,
-        IIf(srcOffset<len,prefixCount,
-            prefixCount-Nz(Ref(prefixCount,-len),0)),Null);
+    validCount = IIf(cfgValid,
+        IIf(srcOffset<winLength,prefixCount,
+            prefixCount-Nz(Ref(prefixCount,-winLength),0)),Null);
 
-    full = cfg AND srcOffset>=A+B;
-    status = IIf(NOT cfg,3,
-        IIf(NOT full,0,IIf(validCount==len,2,1)));
-    valid = IIf(status==2,1,0);
+    windowFull = cfgValid AND srcOffset>=leftBars+rightBars;
+    windowStatus = IIf(NOT cfgValid,3,
+        IIf(NOT windowFull,0,IIf(validCount==winLength,2,1)));
+    windowOK = IIf(windowStatus==2,1,0);
 
-    VarSet(p+"PivotLeft",IIf(cfg,requestedA,Null));
-    VarSet(p+"PivotRight",IIf(cfg,requestedB,Null));
-    VarSet(p+"PivotA",IIf(cfg,A,Null));
-    VarSet(p+"PivotB",IIf(cfg,B,Null));
-    VarSet(p+"PivotLength",IIf(cfg,len,Null));
-    VarSet(p+"PivotConfigValid",IIf(cfg,1,0));
-    VarSet(p+"PivotWindowValidCount",validCount);
-    VarSet(p+"PivotWindowStatusCode",status);
-    VarSet(p+"PivotWindowValid",valid);
-    VarSet(p+"PivotWindowStartBarIndex",IIf(full,Ref(srcBI,-(A+B)),Null));
-    VarSet(p+"PivotWindowEndBarIndex",IIf(full,srcBI,Null));
-    VarSet(p+"PivotWindowStartDateTime",IIf(full,Ref(srcDT,-(A+B)),Null));
-    VarSet(p+"PivotWindowEndDateTime",IIf(full,srcDT,Null));
-    VarSet(p+"PivotCandidateBarIndex",IIf(full,Ref(srcBI,-B),Null));
-    VarSet(p+"PivotCandidateDateTime",IIf(full,Ref(srcDT,-B),Null));
+    VarSet(pfx+"PivotLeft",IIf(cfgValid,requestedLeft,Null));
+    VarSet(pfx+"PivotRight",IIf(cfgValid,requestedRight,Null));
+    VarSet(pfx+"PivotA",IIf(cfgValid,leftBars,Null));
+    VarSet(pfx+"PivotB",IIf(cfgValid,rightBars,Null));
+    VarSet(pfx+"PivotLength",IIf(cfgValid,winLength,Null));
+    VarSet(pfx+"PivotConfigValid",IIf(cfgValid,1,0));
+    VarSet(pfx+"PivotWindowValidCount",validCount);
+    VarSet(pfx+"PivotWindowStatusCode",windowStatus);
+    VarSet(pfx+"PivotWindowValid",windowOK);
+    VarSet(pfx+"PivotWindowStartBarIndex",IIf(windowFull,Ref(srcBI,-(leftBars+rightBars)),Null));
+    VarSet(pfx+"PivotWindowEndBarIndex",IIf(windowFull,srcBI,Null));
+    VarSet(pfx+"PivotWindowStartDateTime",IIf(windowFull,Ref(srcDT,-(leftBars+rightBars)),Null));
+    VarSet(pfx+"PivotWindowEndDateTime",IIf(windowFull,srcDT,Null));
+    VarSet(pfx+"PivotCandidateBarIndex",IIf(windowFull,Ref(srcBI,-rightBars),Null));
+    VarSet(pfx+"PivotCandidateDateTime",IIf(windowFull,Ref(srcDT,-rightBars),Null));
     return 1;
 }
 
@@ -80,17 +84,17 @@ function WDP_PrepareWindow( channel, seriesValid, requestedA, requestedB, srcBI,
       candidate < every left value
       candidate <= every right value including confirmation bar
 
-    Candidate is always i-B and publication is always at i.
+    Candidate is always i-rightBars and publication is always at i.
 */
-function WDP_CalcPivotKind( channel, kind, highKind, series, windowValid, A, B, srcBI, srcDT )
+function WDP_CalcPivotKind( channel, kind, highKind, series, windowValid, leftBars, rightBars, srcBI, srcDT )
 {
-    local p, eventValid, eventCode, eventValue, extremeBI, extremeDT, confirmBI, confirmDT, lag;
+    local pfx, eventValid, eventCode, eventValue, extremeBI, extremeDT, confirmBI, confirmDT, lag;
     local latestValid, latestValue, latestExtremeBI, latestExtremeDT, latestConfirmBI, latestConfirmDT, latestAge, latestSince;
     local priorValid, priorValue, priorExtremeBI, priorExtremeDT, priorConfirmBI, priorConfirmDT, priorAge, priorSince;
     local storedValid, storedValue, storedExtremeBI, storedExtremeDT, storedConfirmBI, storedConfirmDT;
-    local storedExtremeOffset, storedConfirmOffset, i, j, k, ok, value, code;
+    local storedExtremeOffset, storedConfirmOffset, i, j, k, ok, pivotValue, code;
 
-    p = "WDP_"+channel+"_Pivot"+kind;
+    pfx = "WDP_"+channel+"_Pivot"+kind;
 
     eventValid = 0; eventCode = 0; eventValue = Null;
     extremeBI = Null; extremeDT = Null; confirmBI = Null; confirmDT = Null; lag = Null;
@@ -125,19 +129,19 @@ function WDP_CalcPivotKind( channel, kind, highKind, series, windowValid, A, B, 
         if(windowValid[i])
         {
             code = 1;
-            k = i-B;
-            value = series[k];
+            k = i-rightBars;
+            pivotValue = series[k];
             ok = 1;
 
-            for(j=k-A;j<k;j++)
+            for(j=k-leftBars;j<k;j++)
             {
                 if(highKind)
                 {
-                    if(NOT (value>series[j])) ok=0;
+                    if(NOT (pivotValue>series[j])) ok=0;
                 }
                 else
                 {
-                    if(NOT (value<series[j])) ok=0;
+                    if(NOT (pivotValue<series[j])) ok=0;
                 }
             }
 
@@ -145,26 +149,26 @@ function WDP_CalcPivotKind( channel, kind, highKind, series, windowValid, A, B, 
             {
                 if(highKind)
                 {
-                    if(NOT (value>=series[j])) ok=0;
+                    if(NOT (pivotValue>=series[j])) ok=0;
                 }
                 else
                 {
-                    if(NOT (value<=series[j])) ok=0;
+                    if(NOT (pivotValue<=series[j])) ok=0;
                 }
             }
 
             if(ok)
             {
                 code = 2;
-                eventValue[i] = value;
+                eventValue[i] = pivotValue;
                 extremeBI[i] = srcBI[k];
                 extremeDT[i] = srcDT[k];
                 confirmBI[i] = srcBI[i];
                 confirmDT[i] = srcDT[i];
-                lag[i] = B;
+                lag[i] = rightBars;
 
                 storedValid = 1;
-                storedValue = value;
+                storedValue = pivotValue;
                 storedExtremeBI = srcBI[k];
                 storedExtremeDT = srcDT[k];
                 storedConfirmBI = srcBI[i];
@@ -190,48 +194,48 @@ function WDP_CalcPivotKind( channel, kind, highKind, series, windowValid, A, B, 
         }
     }
 
-    VarSet(p+"EventValid",eventValid);
-    VarSet(p+"EventCode",eventCode);
-    VarSet(p+"EventValue",eventValue);
-    VarSet(p+"ExtremeBarIndex",extremeBI);
-    VarSet(p+"ExtremeDateTime",extremeDT);
-    VarSet(p+"ConfirmBarIndex",confirmBI);
-    VarSet(p+"ConfirmDateTime",confirmDT);
-    VarSet(p+"ConfirmationLag",lag);
+    VarSet(pfx+"EventValid",eventValid);
+    VarSet(pfx+"EventCode",eventCode);
+    VarSet(pfx+"EventValue",eventValue);
+    VarSet(pfx+"ExtremeBarIndex",extremeBI);
+    VarSet(pfx+"ExtremeDateTime",extremeDT);
+    VarSet(pfx+"ConfirmBarIndex",confirmBI);
+    VarSet(pfx+"ConfirmDateTime",confirmDT);
+    VarSet(pfx+"ConfirmationLag",lag);
 
-    VarSet(p+"LatestValid",latestValid);
-    VarSet(p+"LatestValue",latestValue);
-    VarSet(p+"LatestExtremeBarIndex",latestExtremeBI);
-    VarSet(p+"LatestExtremeDateTime",latestExtremeDT);
-    VarSet(p+"LatestConfirmBarIndex",latestConfirmBI);
-    VarSet(p+"LatestConfirmDateTime",latestConfirmDT);
-    VarSet(p+"LatestAge",latestAge);
-    VarSet(p+"LatestBarsSinceConfirmation",latestSince);
+    VarSet(pfx+"LatestValid",latestValid);
+    VarSet(pfx+"LatestValue",latestValue);
+    VarSet(pfx+"LatestExtremeBarIndex",latestExtremeBI);
+    VarSet(pfx+"LatestExtremeDateTime",latestExtremeDT);
+    VarSet(pfx+"LatestConfirmBarIndex",latestConfirmBI);
+    VarSet(pfx+"LatestConfirmDateTime",latestConfirmDT);
+    VarSet(pfx+"LatestAge",latestAge);
+    VarSet(pfx+"LatestBarsSinceConfirmation",latestSince);
 
-    VarSet(p+"LatestPriorValid",priorValid);
-    VarSet(p+"LatestPriorValue",priorValue);
-    VarSet(p+"LatestPriorExtremeBarIndex",priorExtremeBI);
-    VarSet(p+"LatestPriorExtremeDateTime",priorExtremeDT);
-    VarSet(p+"LatestPriorConfirmBarIndex",priorConfirmBI);
-    VarSet(p+"LatestPriorConfirmDateTime",priorConfirmDT);
-    VarSet(p+"LatestPriorAge",priorAge);
-    VarSet(p+"LatestPriorBarsSinceConfirmation",priorSince);
+    VarSet(pfx+"LatestPriorValid",priorValid);
+    VarSet(pfx+"LatestPriorValue",priorValue);
+    VarSet(pfx+"LatestPriorExtremeBarIndex",priorExtremeBI);
+    VarSet(pfx+"LatestPriorExtremeDateTime",priorExtremeDT);
+    VarSet(pfx+"LatestPriorConfirmBarIndex",priorConfirmBI);
+    VarSet(pfx+"LatestPriorConfirmDateTime",priorConfirmDT);
+    VarSet(pfx+"LatestPriorAge",priorAge);
+    VarSet(pfx+"LatestPriorBarsSinceConfirmation",priorSince);
     return 1;
 }
 
 /* Convenience entry point for one arbitrary derived numeric series.
    Both High-kind and Low-kind pivots are calculated from that same series. */
-function WDP_RunDerivedSeries( channel, series, seriesValid, requestedA, requestedB, srcBI, srcDT, srcOffset )
+function WDP_RunDerivedSeries( channel, series, seriesValid, requestedLeft, requestedRight, srcBI, srcDT, srcOffset )
 {
-    local p, cfg, A, B, win;
-    p = "WDP_"+channel+"_";
-    WDP_PrepareWindow(channel,seriesValid,requestedA,requestedB,srcBI,srcDT,srcOffset);
-    cfg = VarGet(p+"PivotConfigValid");
-    A = IIf(cfg,requestedA,1);
-    B = IIf(cfg,requestedB,1);
-    win = VarGet(p+"PivotWindowValid");
-    WDP_CalcPivotKind(channel,"High",1,series,win,A,B,srcBI,srcDT);
-    WDP_CalcPivotKind(channel,"Low",0,series,win,A,B,srcBI,srcDT);
+    local pfx, cfgValid, leftBars, rightBars, win;
+    pfx = "WDP_"+channel+"_";
+    WDP_PrepareWindow(channel,seriesValid,requestedLeft,requestedRight,srcBI,srcDT,srcOffset);
+    cfgValid = VarGet(pfx+"PivotConfigValid");
+    leftBars = IIf(cfgValid,requestedLeft,1);
+    rightBars = IIf(cfgValid,requestedRight,1);
+    win = VarGet(pfx+"PivotWindowValid");
+    WDP_CalcPivotKind(channel,"High",1,series,win,leftBars,rightBars,srcBI,srcDT);
+    WDP_CalcPivotKind(channel,"Low",0,series,win,leftBars,rightBars,srcBI,srcDT);
     return 1;
 }
 _SECTION_END();
