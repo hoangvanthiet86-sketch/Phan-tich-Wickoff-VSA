@@ -1,0 +1,44 @@
+/*
+    Wyckoff VSA Operational Clock v0.1
+
+    Infrastructure-only clock contract for live and Bar Replay execution.
+
+    Clock modes:
+    - LIVE_SYSTEM: GetPlaybackDateTime() == 0, use Now(5).
+    - BAR_REPLAY:  GetPlaybackDateTime() > 0, use replay playback position.
+
+    This file does not change Wyckoff/VSA analytical methodology. It only
+    provides a single causal "as-of" clock for snapshot/publisher contracts.
+*/
+#pragma nocache
+
+_SECTION_BEGIN("89. Operational Clock contract");
+WCLK_SchemaMajor = 1;
+WCLK_SchemaMinor = 0;
+
+WCLK_PlaybackDateTime = GetPlaybackDateTime();
+WCLK_IsReplay = WCLK_PlaybackDateTime > 0;
+WCLK_ModeCode = IIf(WCLK_IsReplay,2,1); // 1 LIVE_SYSTEM, 2 BAR_REPLAY
+WCLK_ModeText = "INSUFFICIENT\nLIVE SYSTEM\nBAR REPLAY";
+
+WCLK_AsOfDateTime = IIf(WCLK_IsReplay,WCLK_PlaybackDateTime,Now(5));
+WCLK_AsOfDateNum = DateTimeConvert(0,WCLK_AsOfDateTime);
+
+// DateNum format is 10000*(year-1900)+100*month+day.
+WCLK_YearOffset = Floor(WCLK_AsOfDateNum/10000);
+WCLK_Year = 1900 + WCLK_YearOffset;
+WCLK_DateRemainder = WCLK_AsOfDateNum - 10000*WCLK_YearOffset;
+WCLK_Month = Floor(WCLK_DateRemainder/100);
+WCLK_Day = WCLK_DateRemainder - 100*WCLK_Month;
+WCLK_AsOfBusinessDateKey = WCLK_Year*10000 + WCLK_Month*100 + WCLK_Day;
+
+WCLK_WeekEpoch = _DT("2000-01-03 00:00:00"); // Monday epoch
+WCLK_CurrentWeeklyOrdinal = Floor(DateTimeDiff(WCLK_AsOfDateTime,WCLK_WeekEpoch)/604800);
+WCLK_CurrentMonthlyOrdinal = WCLK_Year*12 + WCLK_Month;
+WCLK_ExpectedCompletedWeeklyOrdinal = WCLK_CurrentWeeklyOrdinal - 1;
+WCLK_ExpectedCompletedMonthlyOrdinal = WCLK_CurrentMonthlyOrdinal - 1;
+
+// Clock-basis provenance stored with snapshots.
+WCLK_ClockBasisCode = WCLK_ModeCode;
+WCLK_ClockValid = NOT IsNull(WCLK_AsOfDateTime) AND WCLK_AsOfDateTime > 0;
+_SECTION_END();
