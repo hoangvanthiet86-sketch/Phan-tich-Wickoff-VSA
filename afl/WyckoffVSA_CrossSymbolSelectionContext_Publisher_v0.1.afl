@@ -9,10 +9,9 @@
     to persistent scalar StaticVars. No selection interpretation or ranking.
 
     Operational clock correction:
-    - live mode uses system as-of through WCLK;
-    - Bar Replay mode uses playback position through WCLK;
-    - replayed historical Daily bars receive explicit replay-completed
-      provenance instead of being compared to the real computer date.
+    - current business date and publication as-of come from WCLK visible data;
+    - the same causal clock therefore works in ordinary Analysis and Bar Replay;
+    - no computer-date comparison is used.
 
     SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
 */
@@ -33,8 +32,7 @@ WXS_CurrentCalendarBusinessDateKey = WCLK_AsOfBusinessDateKey;
 WXS_PublishedAtDateTime = WCLK_AsOfDateTime;
 WXS_ClockBasisCode = WCLK_ClockBasisCode;
 WXS_DailyCompletionDeclaration = ParamToggle("Selection snapshot: current Daily bar completed","Not declared|Completed",0);
-WXS_ReplayCompletionActive = WCLK_IsReplay AND WXS_SourceBusinessDateKey<=WXS_CurrentCalendarBusinessDateKey;
-WXS_EffectiveCompletionDeclaration = IIf(WXS_ReplayCompletionActive,1,WXS_DailyCompletionDeclaration);
+WXS_EffectiveCompletionDeclaration = WXS_DailyCompletionDeclaration;
 
 WXS_Prefix = "WVSA_SELCTX_v01_" + WXS_SourceSymbol + "_";
 WXS_WriterLockName = WXS_Prefix + "WriterLock";
@@ -178,12 +176,7 @@ WXS_UpstreamReady =
 
 if (WXS_SourceBusinessDateKey < WXS_CurrentCalendarBusinessDateKey)
 {
-    WXS_CompletionBasisCode = 1; // CALENDAR DAY ROLLED OVER relative to WCLK as-of
-}
-else
-if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WCLK_IsReplay)
-{
-    WXS_CompletionBasisCode = 3; // BAR REPLAY POSITION: replay-visible historical Daily bar
+    WXS_CompletionBasisCode = 1; // CALENDAR DAY ROLLED OVER relative to visible-data as-of
 }
 else
 if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WXS_DailyCompletionDeclaration==1)
@@ -206,7 +199,7 @@ if (WXS_SourceBusinessDateKey > WXS_CurrentCalendarBusinessDateKey)
     WXS_PublisherStatusCode = 5;
 }
 else
-if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND NOT WCLK_IsReplay AND WXS_DailyCompletionDeclaration!=1)
+if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WXS_DailyCompletionDeclaration!=1)
 {
     WXS_PublisherStatusCode = 4;
 }
@@ -307,7 +300,6 @@ else
         StaticVarSet(WXS_Prefix+"MTF_M_SchemaMajor",WXS_MTF_M_SchemaMajor,True);
         StaticVarSet(WXS_Prefix+"MTF_M_SchemaMinor",WXS_MTF_M_SchemaMinor,True);
 
-        // Preserve original producer-version/sub-schema contract.
         StaticVarSet(WXS_Prefix+"SchemaMajor",WXS_SchemaMajor,True);
         StaticVarSet(WXS_Prefix+"SchemaMinor",WXS_SchemaMinor,True);
         StaticVarSetText(WXS_Prefix+"ProducerContractVersion",WXS_ContractVersion,True);
@@ -335,7 +327,6 @@ else
         WXS_VerifyReady = StaticVarGet(WXS_Prefix+"Ready");
         WXS_PublisherStatusCode = IIf(WXS_VerifyReady==1 AND WXS_VerifyGeneration==WXS_NewGeneration,1,8);
 
-        // Writer semaphore remains non-persistent as in the original contract.
         StaticVarSet(WXS_WriterLockName,0);
     }
 }
@@ -346,11 +337,9 @@ WXS_PublisherSourceBusinessDateKey = 0*BarIndex() + WXS_SourceBusinessDateKey;
 WXS_PublisherCurrentCalendarBusinessDateKey = 0*BarIndex() + WXS_CurrentCalendarBusinessDateKey;
 WXS_PublisherCompletionBasisCode = 0*BarIndex() + WXS_CompletionBasisCode;
 WXS_PublisherCompletionDeclarationCode = 0*BarIndex() + WXS_EffectiveCompletionDeclaration;
+WXS_PublisherClockBasisCode = 0*BarIndex() + WXS_ClockBasisCode;
 WXS_PublisherPreviousGeneration = 0*BarIndex() + WXS_PreviousGeneration;
 WXS_PublisherNewGeneration = 0*BarIndex() + WXS_NewGeneration;
 WXS_PublisherCompositePayloadValid = 0*BarIndex() + WXS_CompositePayloadValid;
 WXS_PublisherMTFPayloadValid = 0*BarIndex() + WXS_MTFPayloadValid;
-WXS_PublisherClockBasisCode = 0*BarIndex() + WXS_ClockBasisCode;
-WXS_PublisherBarReplayActive = 0*BarIndex() + WCLK_IsReplay;
-WXS_PublisherAsOfDateTime = 0*BarIndex() + WCLK_AsOfDateTime;
 _SECTION_END();
