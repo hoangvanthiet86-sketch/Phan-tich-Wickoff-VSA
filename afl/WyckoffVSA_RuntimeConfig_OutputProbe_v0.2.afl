@@ -1,0 +1,29 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Minimal output probe — diagnostic only.
+
+    Purpose:
+    - verify AmiBroker Analysis can load the v0.2 RuntimeConfig;
+    - verify Apply to Current + Range = 1 recent bar(s) emits one row;
+    - distinguish Analysis/formula-path problems from analytical-stack problems.
+
+    This file contains NO Wyckoff/VSA analytical engines.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+
+Filter = 1;
+
+AddTextColumn(Name(), "PROBE Symbol");
+AddColumn(DateTime(), "PROBE Date", formatDateTime);
+AddColumn(BarIndex(), "PROBE BarIndex", 1.0);
+AddColumn(WVRC_UseCentralConfig, "PROBE Central Config Flag", 1.0);
+AddColumn(WVRC_RuntimeConfigSchemaMajor, "PROBE Schema Major", 1.0);
+AddColumn(WVRC_RuntimeConfigSchemaMinor, "PROBE Schema Minor", 1.0);
+AddColumn(WVRC_RuntimeProfileCode, "PROBE Runtime Profile", 1.0);
+AddTextColumn(WVRC_RSMarketSymbol, "PROBE RS Market");
+AddTextColumn(WVRC_SelectionMarketSymbol, "PROBE Selection Market");
+AddColumn(WVRC_ConfigValid, "PROBE Config Valid", 1.0);
+AddTextColumn("WVRC_OUTPUT_PROBE_20260912_A", "PROBE VERSION");
