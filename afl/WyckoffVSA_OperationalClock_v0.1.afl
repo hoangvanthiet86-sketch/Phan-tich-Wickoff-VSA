@@ -11,9 +11,13 @@
     compare against the computer clock. That keeps AmiBroker 6.20 compatibility
     and prevents live/replay calendar bases from diverging.
 
+    IMPORTANT FOR AMIBROKER 6.20:
+    This file is an INCLUDED LIBRARY, so it must NOT declare #pragma nocache.
+    The top-level exploration/publisher entrypoint owns #pragma nocache and
+    places it before all #include directives, as required by AFL.
+
     No Wyckoff/VSA analytical methodology is changed.
 */
-#pragma nocache
 
 _SECTION_BEGIN("89. Operational Clock contract");
 WCLK_SchemaMajor = 1;
