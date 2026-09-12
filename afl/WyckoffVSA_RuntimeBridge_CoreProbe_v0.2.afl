@@ -1,0 +1,27 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    CORE bridge isolation probe — PRE-NATIVE-TEST.
+
+    Diagnostic only. Loads RuntimeConfig + bridged Core and emits every
+    Analysis bar. No methodology or analytical logic change.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+WVRC_UseCentralConfig = 1;
+#include_once <WyckoffVSA_Core_v1.0.afl>
+
+Filter = 1;
+
+WVCP_BridgeCore = Nz(VarGet("WVRC_CoreUseCentralConfig"),0);
+AddTextColumn(Name(),"PROBE Symbol");
+AddColumn(DateTime(),"PROBE Date",formatDateTime);
+AddColumn(BarIndex(),"PROBE BarIndex",1.0);
+AddColumn(WVRC_UseCentralConfig,"Central Config Flag",1.0);
+AddColumn(WVCP_BridgeCore,"Bridge Core Active",1.0);
+AddColumn(VolumeLookback,"Core Volume Lookback",1.0);
+AddColumn(SpreadLookback,"Core Spread Lookback",1.0);
+AddColumn(ATRPeriod,"Core ATR Period",1.0);
+AddColumn(ThresholdConfigValid,"Core Threshold Config Valid",1.0);
+AddTextColumn("CORE_BRIDGE_PROBE_20260912_A","PROBE VERSION");
