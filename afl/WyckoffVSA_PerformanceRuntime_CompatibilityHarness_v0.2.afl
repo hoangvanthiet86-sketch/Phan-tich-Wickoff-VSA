@@ -79,10 +79,11 @@ WVRCB_ProvisionalMatch =
     WCI_RuntimeLastBarIsProvisional == WVRC_LastBarProvisional AND
     WRS_RuntimeLastBarIsProvisional == WVRC_LastBarProvisional;
 
+// Declaration text is presentation/provenance only in v0.1 and does not alter
+// Scanner decisions. Result-affecting equivalence is guarded by status code.
 WVRCB_RSMatch =
     WRS_MarketBenchmarkSymbol == WVRC_RSMarketSymbol AND
     WRS_GroupBenchmarkSymbol == WVRC_RSGroupSymbol AND
-    WRS_AdjustmentBasisDeclaration == WVRC_RSAdjustmentBasisDeclaration AND
     WRS_AdjustmentBasisStatusScalar == WVRC_RSAdjustmentBasisStatus;
 
 WVRCB_SelectionMatch =
