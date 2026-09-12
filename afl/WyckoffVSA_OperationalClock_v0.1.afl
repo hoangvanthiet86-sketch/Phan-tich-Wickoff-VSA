@@ -16,6 +16,11 @@
     The top-level exploration/publisher entrypoint owns #pragma nocache and
     places it before all #include directives, as required by AFL.
 
+    Business-date correction:
+    - derive year/month/day from the SAME last-visible DateNum used by the
+      operational as-of;
+    - do not call Year()/Month()/Day() separately, avoiding a mixed date basis.
+
     No Wyckoff/VSA analytical methodology is changed.
 */
 
@@ -24,19 +29,22 @@ WCLK_SchemaMajor = 1;
 WCLK_SchemaMinor = 0;
 
 // Clock basis 3 = VISIBLE DATA AS-OF.
-// The same causal basis is used for ordinary Analysis and Bar Replay.
 WCLK_ModeCode = 3;
 WCLK_ModeText = "INSUFFICIENT\nLIVE SYSTEM\nBAR REPLAY\nVISIBLE DATA AS-OF";
 WCLK_ClockBasisCode = 3;
 
-// LastValue() observes only bars visible to the current formula execution.
-// In Bar Replay this naturally tracks the playback position because future
-// quotations are hidden by AmiBroker itself.
+// One causal source for BOTH DateTime and business-date components.
 WCLK_AsOfDateTime = LastValue(DateTime());
-WCLK_Year = LastValue(Year());
-WCLK_Month = LastValue(Month());
-WCLK_Day = LastValue(Day());
-WCLK_AsOfBusinessDateKey = WCLK_Year*10000 + WCLK_Month*100 + WCLK_Day;
+WCLK_AsOfDateNum = LastValue(DateNum());
+
+// AmiBroker DateNum format:
+// 10000 * (year - 1900) + 100 * month + day.
+WCLK_YearOffset = Floor(WCLK_AsOfDateNum / 10000);
+WCLK_Year = 1900 + WCLK_YearOffset;
+WCLK_DateRemainder = WCLK_AsOfDateNum - 10000 * WCLK_YearOffset;
+WCLK_Month = Floor(WCLK_DateRemainder / 100);
+WCLK_Day = WCLK_DateRemainder - 100 * WCLK_Month;
+WCLK_AsOfBusinessDateKey = WCLK_Year * 10000 + WCLK_Month * 100 + WCLK_Day;
 
 WCLK_WeekEpoch = _DT("2000-01-03 00:00:00"); // Monday epoch
 WCLK_CurrentWeeklyOrdinal = Floor(DateTimeDiff(WCLK_AsOfDateTime,WCLK_WeekEpoch)/604800);
@@ -44,7 +52,13 @@ WCLK_CurrentMonthlyOrdinal = WCLK_Year*12 + WCLK_Month;
 WCLK_ExpectedCompletedWeeklyOrdinal = WCLK_CurrentWeeklyOrdinal - 1;
 WCLK_ExpectedCompletedMonthlyOrdinal = WCLK_CurrentMonthlyOrdinal - 1;
 
-WCLK_ClockValid = BarCount>0 AND NOT IsNull(WCLK_AsOfDateTime) AND WCLK_Year>1900 AND WCLK_Month>=1 AND WCLK_Month<=12 AND WCLK_Day>=1 AND WCLK_Day<=31;
+WCLK_ClockValid =
+    BarCount>0 AND
+    NOT IsNull(WCLK_AsOfDateTime) AND
+    NOT IsNull(WCLK_AsOfDateNum) AND
+    WCLK_Year>1900 AND
+    WCLK_Month>=1 AND WCLK_Month<=12 AND
+    WCLK_Day>=1 AND WCLK_Day<=31;
 
 // Legacy diagnostics retained only so older wrappers do not fail while the
 // integration branch transitions to the visible-data clock. They are not used
