@@ -1,0 +1,45 @@
+/*
+    Wyckoff VSA Runtime v0.2 — Phase/Composite native probe.
+
+    Diagnostic only. Requires the generated runtime Phase/Composite stack from:
+    tools/BUILD_WVRC_PHASE_COMPOSITE_RUNTIME_STACK_v0.2.ps1
+
+    No NATIVE PASS is claimed by this source file.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+
+Filter = 1;
+
+AddTextColumn(Name(),"PROBE Symbol");
+AddColumn(DateTime(),"PROBE Date",formatDateTime);
+AddColumn(BarIndex(),"PROBE BarIndex",1.0);
+AddColumn(WVRC_ConfigValid,"Runtime Config Valid",1.0);
+AddColumn(WVRC_LastBarProvisional,"Runtime Provisional Requested",1.0);
+AddColumn(WCI_ProvisionalFlag,"Composite Provisional Flag",1.0);
+AddColumn(WCI_ContextMultiplicityCode,"Context Multiplicity Code",1.0);
+AddColumn(WCI_ContextAmbiguous,"Context Ambiguous",1.0);
+AddColumn(WCI_CurrentRangeContextID,"Current Range Context ID",1.0);
+AddColumn(WCI_RangeStatusCode,"Range Status Code",1.0);
+AddColumn(WCI_PrimaryRangeLow,"Primary Range Low",1.4);
+AddColumn(WCI_PrimaryRangeHigh,"Primary Range High",1.4);
+AddColumn(WCI_PrimaryRangeWidth,"Primary Range Width",1.4);
+AddColumn(WCI_RangeAgeBars,"Range Age Bars",1.0);
+AddColumn(WCI_RangePosition,"Range Position",1.4);
+AddColumn(WCI_PriorTrendContextCode,"Prior Trend Code",1.0);
+AddColumn(WCI_PhaseStateCode,"Phase Code",1.0);
+AddColumn(WCI_StructuralDevelopmentCode,"Structural Development Code",1.0);
+AddColumn(WCI_FamilyHypothesisCode,"Family Code",1.0);
+AddColumn(WCI_DirectionalContextCode,"Directional Context Code",1.0);
+AddColumn(WCI_HypothesisRevisionCode,"Hypothesis Revision Code",1.0);
+AddColumn(WCI_EvidenceBalanceCode,"Evidence Balance Code",1.0);
+AddColumn(WCI_HypothesisAlignmentCode,"Hypothesis Alignment Code",1.0);
+AddColumn(WCI_SOSLinkedCount,"SOS Linked Count",1.0);
+AddColumn(WCI_LPSLinkedCount,"LPS Linked Count",1.0);
+AddColumn(WCI_SOWLinkedCount,"SOW Linked Count",1.0);
+AddColumn(WCI_LPSYLinkedCount,"LPSY Linked Count",1.0);
+AddColumn(WCI_CurrentEventMask,"Current Event Mask",1.0);
+AddTextColumn("COMPOSITE_RUNTIME_V02_PROBE_20260912_A","PROBE VERSION");
