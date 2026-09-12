@@ -1,0 +1,55 @@
+/* Wyckoff VSA Runtime v0.2 Scanner equivalence probe. Diagnostic only. */
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_MarketScanner_Runtime_v0.2.afl>
+
+Filter = 1;
+
+AddTextColumn(Name(),"PROBE Symbol");
+AddColumn(DateTime(),"PROBE Date",formatDateTime);
+AddColumn(BarIndex(),"PROBE BarIndex",1.0);
+AddColumn(WVRC_ConfigValid,"Runtime Config Valid",1.0);
+AddTextColumn(WVRC_RSMarketSymbol,"Runtime RS Market");
+AddTextColumn(WVRC_RSGroupSymbol,"Runtime RS Group");
+AddTextColumn(WVRC_SelectionMarketSymbol,"Runtime Selection Market");
+AddTextColumn(WVRC_SelectionGroupSymbol,"Runtime Selection Group");
+AddColumn(WVRC_RequireFullTopDown,"Runtime Full Top-Down",1.0);
+
+AddColumn(WCI_ContextMultiplicityCode,"Composite Multiplicity",1.0);
+AddColumn(WCI_PhaseStateCode,"Composite Phase",1.0);
+AddColumn(WCI_FamilyHypothesisCode,"Composite Family",1.0);
+AddColumn(WCI_RangePosition,"Composite Range Position",1.4);
+
+AddColumn(WMTF_SnapshotContractValid,"MTF Contract Valid",1.0);
+AddColumn(WMTF_WeeklySnapshotStatusCode,"MTF Weekly Status",1.0);
+AddColumn(WMTF_MonthlySnapshotStatusCode,"MTF Monthly Status",1.0);
+AddColumn(WMTF_DirectionalAlignmentCode,"MTF Directional Alignment",1.0);
+
+AddColumn(WRS_ContextValid,"RS Context Valid",1.0);
+AddColumn(WRS_ContextStatusCode,"RS Context Status",1.0);
+AddColumn(WRS_MarketBenchmarkStatusCode,"RS Market Benchmark Status",1.0);
+AddColumn(WRS_StockVsMarketRSStructureCode,"RS Stock vs Market Structure",1.0);
+AddColumn(WRS_PriceRSRelationshipCode,"Price RS Relationship",1.0);
+
+AddColumn(WXS_MarketValid,"Selection Market Valid",1.0);
+AddColumn(WXS_MarketStatusCode,"Selection Market Status",1.0);
+AddColumn(WXS_GroupValid,"Selection Group Valid",1.0);
+AddColumn(WXS_GroupStatusCode,"Selection Group Status",1.0);
+
+AddColumn(WSCN_DataEligibilityCode,"Data Eligibility",1.0);
+AddColumn(WSCN_ExclusionReasonMask,"Exclusion Mask",1.0);
+AddColumn(WSCN_CandidateClassCode,"Candidate Class",1.0);
+AddColumn(WSCN_CandidateSideCode,"Candidate Side",1.0);
+AddColumn(WSCN_CandidateStageCode,"Candidate Stage",1.0);
+AddColumn(WSCN_QualifiedCandidateFlag,"Qualified",1.0);
+AddColumn(WSCN_DevelopingCandidateFlag,"Developing",1.0);
+AddColumn(WSCN_WatchFlag,"Watch",1.0);
+AddColumn(WSCN_ReviewFlag,"Review",1.0);
+AddColumn(WSCN_MethodBlockReasonMask,"Method Block Mask",1.0);
+AddColumn(WSCN_StockRangeStatusCode,"Range Status",1.0);
+AddColumn(WSCN_StockRangePositionValid,"Range Position Valid",1.0);
+AddColumn(WSCN_StockRangePosition,"Range Position",1.4);
+AddColumn(WSCN_RangeLocationCoherent,"Range Location Coherent",1.0);
+AddColumn(WSCN_RangeLocationConflict,"Range Location Conflict",1.0);
+AddTextColumn("SCANNER_RUNTIME_V02_PROBE_20260912_D","PROBE VERSION");
