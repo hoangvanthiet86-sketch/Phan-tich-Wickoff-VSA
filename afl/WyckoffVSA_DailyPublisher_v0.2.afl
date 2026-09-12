@@ -1,0 +1,306 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Daily Stock Snapshot Publisher.
+
+    PRE-NATIVE-TEST IMPLEMENTATION.
+
+    Runs the native-validated Runtime v0.2 scanner stack once for each symbol
+    and persists a compact scalar snapshot. P&F is intentionally excluded.
+
+    This file does not change analytical methodology. The scanner decision
+    surface is serialized exactly from the Runtime v0.2 variables that passed
+    the 1,558/1,558 universe-equivalence checkpoint.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_DailySnapshotContract_v0.2.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_MultiTimeframeContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+#include_once <WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_MarketScanner_Runtime_v0.2.afl>
+
+_SECTION_BEGIN("Performance Runtime v0.2 Daily Publisher");
+
+WDP_SourceSymbol = Name();
+WDP_SourceDateTime = LastValue(DateTime());
+WDP_SourceBarIndex = LastValue(BarIndex());
+WDP_BusinessDateKey = WCLK_AsOfBusinessDateKey;
+WDP_ClockValid = WCLK_ClockValid;
+WDP_DailyIntervalValid = Interval()==inDaily;
+
+// Publisher status:
+// 0 NOT RUN / INSUFFICIENT
+// 1 COMMITTED
+// 2 INVALID INTERVAL
+// 3 RUNTIME CONFIG INVALID
+// 4 PROVISIONAL SOURCE NOT PUBLISHABLE
+// 5 INVALID CLOCK / DATE / SYMBOL
+// 6 INVALID REQUIRED PAYLOAD
+// 7 WRITER BUSY
+// 8 COMMIT VERIFY FAILED
+WDP_PublisherStatusCode = 0;
+WDP_PublisherStatusText =
+    "NOT RUN / INSUFFICIENT\nCOMMITTED\nINVALID INTERVAL\nRUNTIME CONFIG INVALID\nPROVISIONAL SOURCE NOT PUBLISHABLE\nINVALID CLOCK / DATE / SYMBOL\nINVALID REQUIRED PAYLOAD\nWRITER BUSY\nCOMMIT VERIFY FAILED";
+
+// Compact scalar payload.
+WDP_DataEligible = LastValue(WSCN_DataEligibilityCode);
+WDP_CandidateClass = LastValue(WSCN_CandidateClassCode);
+WDP_Side = LastValue(WSCN_CandidateSideCode);
+WDP_Stage = LastValue(WSCN_CandidateStageCode);
+WDP_Qualified = LastValue(WSCN_QualifiedCandidateFlag);
+WDP_Developing = LastValue(WSCN_DevelopingCandidateFlag);
+WDP_Watch = LastValue(WSCN_WatchFlag);
+WDP_Review = LastValue(WSCN_ReviewFlag);
+WDP_ExclusionMask = LastValue(WSCN_ExclusionReasonMask);
+WDP_MethodBlockMask = LastValue(WSCN_MethodBlockReasonMask);
+
+WDP_ContextMultiplicity = LastValue(WCI_ContextMultiplicityCode);
+WDP_ContextAmbiguous = LastValue(WCI_ContextAmbiguous);
+WDP_CurrentRangeContextID = LastValue(WCI_CurrentRangeContextID);
+WDP_RangeStatus = LastValue(WSCN_StockRangeStatusCode);
+WDP_RangePositionValid = LastValue(WSCN_StockRangePositionValid);
+WDP_RangePosition = LastValue(WSCN_StockRangePosition);
+WDP_RangeLocationCoherent = LastValue(WSCN_RangeLocationCoherent);
+WDP_RangeLocationConflict = LastValue(WSCN_RangeLocationConflict);
+WDP_PhaseState = LastValue(WCI_PhaseStateCode);
+WDP_FamilyHypothesis = LastValue(WCI_FamilyHypothesisCode);
+WDP_DirectionalContext = LastValue(WCI_DirectionalContextCode);
+WDP_EvidenceBalance = LastValue(WCI_EvidenceBalanceCode);
+WDP_CurrentEventMask = LastValue(WCI_CurrentEventMask);
+
+WDP_MTFContractValid = LastValue(WMTF_SnapshotContractValid);
+WDP_MTFDirectionalAlignment = LastValue(WMTF_DirectionalAlignmentCode);
+WDP_MTFEvidenceAlignment = LastValue(WMTF_EvidenceAlignmentCode);
+WDP_MTFPhaseRelationship = LastValue(WMTF_PhaseRelationshipCode);
+WDP_MTFWeeklyStatus = LastValue(WMTF_WeeklySnapshotStatusCode);
+WDP_MTFMonthlyStatus = LastValue(WMTF_MonthlySnapshotStatusCode);
+
+WDP_RSContextValid = LastValue(WRS_ContextValid);
+WDP_RSContextStatus = LastValue(WRS_ContextStatusCode);
+WDP_RSMarketBenchmarkStatus = LastValue(WRS_MarketBenchmarkStatusCode);
+WDP_RSStockVsMarketStructure = LastValue(WRS_StockVsMarketRSStructureCode);
+WDP_RSPriceRelationship = LastValue(WRS_PriceRSRelationshipCode);
+
+WDP_SelectionMarketValid = LastValue(WXS_MarketValid);
+WDP_SelectionMarketStatus = LastValue(WXS_MarketStatusCode);
+WDP_SelectionGroupValid = LastValue(WXS_GroupValid);
+WDP_SelectionGroupStatus = LastValue(WXS_GroupStatusCode);
+
+WDP_SourceIdentityValid =
+    WDP_ClockValid AND
+    StrLen(WDP_SourceSymbol)>0 AND
+    NOT IsNull(WDP_SourceDateTime) AND
+    NOT IsNull(WDP_BusinessDateKey) AND
+    WDP_BusinessDateKey>0;
+
+WDP_RequiredPayloadValid =
+    NOT IsNull(WDP_DataEligible) AND
+    NOT IsNull(WDP_CandidateClass) AND
+    NOT IsNull(WDP_Side) AND
+    NOT IsNull(WDP_Stage) AND
+    NOT IsNull(WDP_Qualified) AND
+    NOT IsNull(WDP_Developing) AND
+    NOT IsNull(WDP_Watch) AND
+    NOT IsNull(WDP_Review) AND
+    NOT IsNull(WDP_ExclusionMask) AND
+    NOT IsNull(WDP_MethodBlockMask) AND
+    NOT IsNull(WDP_ContextMultiplicity) AND
+    NOT IsNull(WDP_ContextAmbiguous) AND
+    NOT IsNull(WDP_PhaseState) AND
+    NOT IsNull(WDP_FamilyHypothesis) AND
+    NOT IsNull(WDP_DirectionalContext) AND
+    NOT IsNull(WDP_EvidenceBalance) AND
+    NOT IsNull(WDP_CurrentEventMask) AND
+    NOT IsNull(WDP_MTFContractValid) AND
+    NOT IsNull(WDP_MTFDirectionalAlignment) AND
+    NOT IsNull(WDP_MTFWeeklyStatus) AND
+    NOT IsNull(WDP_MTFMonthlyStatus) AND
+    NOT IsNull(WDP_RSContextValid) AND
+    NOT IsNull(WDP_RSContextStatus) AND
+    NOT IsNull(WDP_RSMarketBenchmarkStatus) AND
+    NOT IsNull(WDP_RSStockVsMarketStructure) AND
+    NOT IsNull(WDP_RSPriceRelationship) AND
+    NOT IsNull(WDP_SelectionMarketValid) AND
+    NOT IsNull(WDP_SelectionMarketStatus) AND
+    NOT IsNull(WDP_SelectionGroupValid) AND
+    NOT IsNull(WDP_SelectionGroupStatus);
+
+WDP_WriterLockName = WDS_Prefix + "WriterLock";
+WDP_WriterLockAcquired = 0;
+WDP_PreviousGeneration = Nz(StaticVarGet(WDS_Prefix+"CommittedGenerationID"),0);
+WDP_NewGeneration = WDP_PreviousGeneration + 1;
+
+if (NOT WDP_DailyIntervalValid)
+{
+    WDP_PublisherStatusCode = 2;
+}
+else
+if (WVRC_ConfigValid!=1)
+{
+    WDP_PublisherStatusCode = 3;
+}
+else
+if (WVRC_LastBarProvisional!=0)
+{
+    WDP_PublisherStatusCode = 4;
+}
+else
+if (NOT WDP_SourceIdentityValid)
+{
+    WDP_PublisherStatusCode = 5;
+}
+else
+if (NOT WDP_RequiredPayloadValid)
+{
+    WDP_PublisherStatusCode = 6;
+}
+else
+{
+    WDP_WriterLockAcquired = StaticVarCompareExchange(WDP_WriterLockName,1,0)==0;
+
+    if (NOT WDP_WriterLockAcquired)
+    {
+        WDP_PublisherStatusCode = 7;
+    }
+    else
+    {
+        WDP_PreviousGeneration = Nz(StaticVarGet(WDS_Prefix+"CommittedGenerationID"),0);
+        WDP_NewGeneration = WDP_PreviousGeneration + 1;
+
+        // Atomic publication: Ready/WriteComplete low before any payload writes.
+        StaticVarSet(WDS_Prefix+"Ready",0,True);
+        StaticVarSet(WDS_Prefix+"WriteComplete",0,True);
+
+        // Identity / schema / provenance.
+        StaticVarSet(WDS_Prefix+"SchemaMajor",WDS_SchemaMajor,True);
+        StaticVarSet(WDS_Prefix+"SchemaMinor",WDS_SchemaMinor,True);
+        StaticVarSetText(WDS_Prefix+"Symbol",WDP_SourceSymbol,True);
+        StaticVarSetText(WDS_Prefix+"RuntimeVersion",WDS_RuntimeVersion,True);
+        StaticVarSetText(WDS_Prefix+"ContractVersion",WDS_ContractVersion,True);
+        StaticVarSetText(WDS_Prefix+"ConfigFingerprint",WDS_ConfigFingerprint,True);
+        StaticVarSet(WDS_Prefix+"BusinessDateKey",WDP_BusinessDateKey,True);
+        StaticVarSet(WDS_Prefix+"SourceDateTime",WDP_SourceDateTime,True);
+        StaticVarSet(WDS_Prefix+"SourceBarIndex",WDP_SourceBarIndex,True);
+
+        // Scanner decision surface.
+        StaticVarSet(WDS_Prefix+"DataEligible",WDP_DataEligible,True);
+        StaticVarSet(WDS_Prefix+"CandidateClass",WDP_CandidateClass,True);
+        StaticVarSet(WDS_Prefix+"Side",WDP_Side,True);
+        StaticVarSet(WDS_Prefix+"Stage",WDP_Stage,True);
+        StaticVarSet(WDS_Prefix+"Qualified",WDP_Qualified,True);
+        StaticVarSet(WDS_Prefix+"Developing",WDP_Developing,True);
+        StaticVarSet(WDS_Prefix+"Watch",WDP_Watch,True);
+        StaticVarSet(WDS_Prefix+"Review",WDP_Review,True);
+        StaticVarSet(WDS_Prefix+"ExclusionMask",WDP_ExclusionMask,True);
+        StaticVarSet(WDS_Prefix+"MethodBlockMask",WDP_MethodBlockMask,True);
+
+        // Compact upstream diagnostics needed by Fast Scanner / audit.
+        StaticVarSet(WDS_Prefix+"ContextMultiplicity",WDP_ContextMultiplicity,True);
+        StaticVarSet(WDS_Prefix+"ContextAmbiguous",WDP_ContextAmbiguous,True);
+        StaticVarSet(WDS_Prefix+"CurrentRangeContextID",WDP_CurrentRangeContextID,True);
+        StaticVarSet(WDS_Prefix+"RangeStatus",WDP_RangeStatus,True);
+        StaticVarSet(WDS_Prefix+"RangePositionValid",WDP_RangePositionValid,True);
+        StaticVarSet(WDS_Prefix+"RangePosition",WDP_RangePosition,True);
+        StaticVarSet(WDS_Prefix+"RangeLocationCoherent",WDP_RangeLocationCoherent,True);
+        StaticVarSet(WDS_Prefix+"RangeLocationConflict",WDP_RangeLocationConflict,True);
+        StaticVarSet(WDS_Prefix+"PhaseState",WDP_PhaseState,True);
+        StaticVarSet(WDS_Prefix+"FamilyHypothesis",WDP_FamilyHypothesis,True);
+        StaticVarSet(WDS_Prefix+"DirectionalContext",WDP_DirectionalContext,True);
+        StaticVarSet(WDS_Prefix+"EvidenceBalance",WDP_EvidenceBalance,True);
+        StaticVarSet(WDS_Prefix+"CurrentEventMask",WDP_CurrentEventMask,True);
+
+        StaticVarSet(WDS_Prefix+"MTFContractValid",WDP_MTFContractValid,True);
+        StaticVarSet(WDS_Prefix+"MTFDirectionalAlignment",WDP_MTFDirectionalAlignment,True);
+        StaticVarSet(WDS_Prefix+"MTFEvidenceAlignment",WDP_MTFEvidenceAlignment,True);
+        StaticVarSet(WDS_Prefix+"MTFPhaseRelationship",WDP_MTFPhaseRelationship,True);
+        StaticVarSet(WDS_Prefix+"MTFWeeklyStatus",WDP_MTFWeeklyStatus,True);
+        StaticVarSet(WDS_Prefix+"MTFMonthlyStatus",WDP_MTFMonthlyStatus,True);
+
+        StaticVarSet(WDS_Prefix+"RSContextValid",WDP_RSContextValid,True);
+        StaticVarSet(WDS_Prefix+"RSContextStatus",WDP_RSContextStatus,True);
+        StaticVarSet(WDS_Prefix+"RSMarketBenchmarkStatus",WDP_RSMarketBenchmarkStatus,True);
+        StaticVarSet(WDS_Prefix+"RSStockVsMarketStructure",WDP_RSStockVsMarketStructure,True);
+        StaticVarSet(WDS_Prefix+"RSPriceRelationship",WDP_RSPriceRelationship,True);
+
+        StaticVarSet(WDS_Prefix+"SelectionMarketValid",WDP_SelectionMarketValid,True);
+        StaticVarSet(WDS_Prefix+"SelectionMarketStatus",WDP_SelectionMarketStatus,True);
+        StaticVarSet(WDS_Prefix+"SelectionGroupValid",WDP_SelectionGroupValid,True);
+        StaticVarSet(WDS_Prefix+"SelectionGroupStatus",WDP_SelectionGroupStatus,True);
+
+        // Commit marker then WriteComplete/Ready last.
+        StaticVarSet(WDS_Prefix+"CommittedGenerationID",WDP_NewGeneration,True);
+        StaticVarSet(WDS_Prefix+"WriteComplete",1,True);
+        StaticVarSet(WDS_Prefix+"Ready",1,True);
+
+        WDP_VerifyGeneration = Nz(StaticVarGet(WDS_Prefix+"CommittedGenerationID"),0);
+        WDP_VerifyReady = Nz(StaticVarGet(WDS_Prefix+"Ready"),0);
+        WDP_VerifyWriteComplete = Nz(StaticVarGet(WDS_Prefix+"WriteComplete"),0);
+        WDP_VerifyBusinessDateKey = Nz(StaticVarGet(WDS_Prefix+"BusinessDateKey"),0);
+        WDP_VerifySchemaMajor = Nz(StaticVarGet(WDS_Prefix+"SchemaMajor"),0);
+        WDP_VerifyFingerprint = StaticVarGetText(WDS_Prefix+"ConfigFingerprint");
+
+        WDP_CommitVerified =
+            WDP_VerifyGeneration==WDP_NewGeneration AND
+            WDP_VerifyReady==1 AND
+            WDP_VerifyWriteComplete==1 AND
+            WDP_VerifyBusinessDateKey==WDP_BusinessDateKey AND
+            WDP_VerifySchemaMajor==WDS_SchemaMajor AND
+            WDP_VerifyFingerprint==WDS_ConfigFingerprint;
+
+        if (WDP_CommitVerified)
+        {
+            WDP_PublisherStatusCode = 1;
+        }
+        else
+        {
+            StaticVarSet(WDS_Prefix+"Ready",0,True);
+            StaticVarSet(WDS_Prefix+"WriteComplete",0,True);
+            WDP_PublisherStatusCode = 8;
+        }
+
+        StaticVarSet(WDP_WriterLockName,0);
+    }
+}
+
+WDP_LastVisibleBar = BarIndex()==LastValue(BarIndex());
+Filter = WDP_LastVisibleBar;
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of Date",formatDateTime);
+AddColumn(0*BarIndex()+WDP_PublisherStatusCode,"Publisher Status",1.0);
+AddMultiTextColumn(0*BarIndex()+WDP_PublisherStatusCode,WDP_PublisherStatusText,"Publisher Status Text");
+AddColumn(0*BarIndex()+WDP_NewGeneration,"Generation",1.0);
+AddColumn(0*BarIndex()+WDP_BusinessDateKey,"Business DateNum",1.0);
+AddColumn(0*BarIndex()+WDP_DataEligible,"Data Eligible",1.0);
+AddColumn(0*BarIndex()+WDP_CandidateClass,"Candidate Class",1.0);
+AddColumn(0*BarIndex()+WDP_Stage,"Stage",1.0);
+AddColumn(0*BarIndex()+WDP_Watch,"Watch",1.0);
+AddColumn(0*BarIndex()+WDP_Review,"Review",1.0);
+AddColumn(0*BarIndex()+WDP_MethodBlockMask,"Method Block Mask",1.0);
+AddTextColumn(WDS_RuntimeVersion,"Runtime Version");
+AddTextColumn("DAILY_PUBLISHER_V02_20260912_A","Publisher Version");
+
+_SECTION_END();
