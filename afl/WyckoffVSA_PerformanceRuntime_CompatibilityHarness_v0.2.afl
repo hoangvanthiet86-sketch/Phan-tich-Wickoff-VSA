@@ -12,7 +12,8 @@
 
     IMPORTANT:
     - this is NOT yet the persistent Snapshot/Fast Scanner implementation;
-    - legacy module Params still exist and may appear in Parameters;
+    - legacy module Params still exist and may appear in Parameters when the
+      compatibility bridge is not active;
     - no analytical algorithm is changed here;
     - configuration mismatch is diagnostic and cannot be accepted as PASS;
     - this harness intentionally emits every bar in the Analysis range.
@@ -25,6 +26,12 @@
 SetBarsRequired(sbrAll,sbrAll);
 
 #include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+
+// Defensive runtime-entry assertion. RuntimeConfig v0.2 is the canonical owner
+// of this flag, but the harness asserts it again before any bridged v0.1 module
+// is included. This prevents a stale local RuntimeConfig copy from silently
+// falling back to duplicate legacy Params during compatibility testing.
+WVRC_UseCentralConfig = 1;
 
 #include_once <WyckoffVSA_Core_v1.0.afl>
 #include_once <WyckoffVSA_Candidate_v1.0.afl>
@@ -110,6 +117,16 @@ WVRCB_ConfigMismatchMask =
 WVRCB_ConfigEquivalent = WVRC_ConfigValid AND WVRCB_ConfigMismatchMask == 0;
 WVRCB_ConfigStatusCode = IIf(NOT WVRC_ConfigValid,0,IIf(WVRCB_ConfigEquivalent,2,1));
 WVRCB_ConfigStatusText = "V0.2 CONFIG INVALID\nLEGACY / V0.2 CONFIG MISMATCH\nCONFIG EQUIVALENT";
+
+// Bridge activation diagnostics. These variables are published only by files
+// that have the Single Configuration Authority compatibility bridge installed.
+WVRCB_CentralConfigFlag = Nz(VarGet("WVRC_UseCentralConfig"),0);
+WVRCB_CoreBridgeActive = Nz(VarGet("WVRC_CoreUseCentralConfig"),0);
+WVRCB_StructureBridgeActive = Nz(VarGet("WVRC_SLUseCentralConfig"),0);
+WVRCB_CompositeBridgeActive = Nz(VarGet("WVRC_CompositeUseCentralConfig"),0);
+WVRCB_RSBridgeActive = Nz(VarGet("WVRC_RSUseCentralConfig"),0);
+WVRCB_SelectionBridgeActive = Nz(VarGet("WVRC_SelectionUseCentralConfig"),0);
+WVRCB_ScannerBridgeActive = Nz(VarGet("WVRC_ScannerUseCentralConfig"),0);
 _SECTION_END();
 
 _SECTION_BEGIN("92. v0.2 Direct-Compute Scanner Surface");
@@ -163,6 +180,13 @@ if(WVRC_ShowDecisionDiagnostics OR WVRC_OutputDetailEffective>=1)
 {
     AddColumn(WSCN_ExclusionReasonMask,"Exclusion Mask",1.0);
     AddColumn(WVRCB_ConfigMismatchMask,"Config Mismatch Mask",1.0);
+    AddColumn(WVRCB_CentralConfigFlag,"Central Config Flag",1.0);
+    AddColumn(WVRCB_CoreBridgeActive,"Bridge Core Active",1.0);
+    AddColumn(WVRCB_StructureBridgeActive,"Bridge Structure Active",1.0);
+    AddColumn(WVRCB_CompositeBridgeActive,"Bridge Composite Active",1.0);
+    AddColumn(WVRCB_RSBridgeActive,"Bridge RS Active",1.0);
+    AddColumn(WVRCB_SelectionBridgeActive,"Bridge Selection Active",1.0);
+    AddColumn(WVRCB_ScannerBridgeActive,"Bridge Scanner Active",1.0);
     AddColumn(WVRCB_CoreMatch,"Config Match Core",1.0);
     AddColumn(WVRCB_StructureMatch,"Config Match Structure",1.0);
     AddColumn(WVRCB_ProvisionalMatch,"Config Match Provisional",1.0);
