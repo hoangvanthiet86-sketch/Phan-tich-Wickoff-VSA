@@ -15,8 +15,10 @@
     - legacy module Params still exist and may appear in Parameters;
     - no analytical algorithm is changed here;
     - configuration mismatch is diagnostic and cannot be accepted as PASS;
-    - AUDIT / REGRESSION always emits the visible last bar so mismatch
-      diagnostics remain visible instead of silently returning no rows;
+    - this harness intentionally emits every bar in the Analysis range.
+      Native compatibility tests must therefore use Apply to Current +
+      Range = 1 recent bar(s). This removes all Filter ambiguity while
+      validating the runtime/configuration contract.
     - no NATIVE PASS is claimed by this source file.
 */
 #pragma nocache
@@ -112,8 +114,7 @@ _SECTION_END();
 
 _SECTION_BEGIN("92. v0.2 Direct-Compute Scanner Surface");
 
-// Robust visible-last-bar selector. This does not alter analytical logic.
-WVRCB_IsLastBar = BarIndex() == LastValue(BarIndex());
+WVRCB_IsVisibleLastBar = BarIndex() == LastValue(BarIndex());
 WVRCB_FilterQualified = WSCN_QualifiedCandidateFlag==1;
 WVRCB_FilterDeveloping = WSCN_DevelopingCandidateFlag==1 OR WSCN_QualifiedCandidateFlag==1;
 WVRCB_FilterWatch = WSCN_WatchFlag==1 OR WSCN_DevelopingCandidateFlag==1 OR WSCN_QualifiedCandidateFlag==1;
@@ -127,11 +128,11 @@ WVRCB_FilterSelected = IIf(
     IIf(WVRC_ProductionFilterCode==3,WVRCB_FilterReview,
     IIf(WVRC_ProductionFilterCode==4,WVRCB_FilterAllEligible,0)))));
 
-// AUDIT / REGRESSION is diagnostic-first: always show the visible last bar,
-// even when config is mismatched. Other profiles remain fail-closed.
-WVRCB_AuditDiagnosticMode = WVRC_RuntimeProfileCode==2;
-Filter = WVRCB_IsLastBar AND
-    IIf(WVRCB_AuditDiagnosticMode,1,WVRCB_ConfigEquivalent AND WVRCB_FilterSelected);
+// Diagnostic harness only: emit every bar selected by Analysis.
+// With Apply to Current + Range = 1 recent bar(s), this guarantees one row.
+// Requested Production Filter and last-bar state remain visible as diagnostics
+// but are deliberately NOT allowed to hide the row during compatibility tests.
+Filter = 1;
 
 WVRCB_CandidateClassText = "DATA GATED / INSUFFICIENT\nNOT A CURRENT CANDIDATE\nWATCH\nDEVELOPING BULLISH\nQUALIFIED BULLISH - MARKET ALIGNED\nQUALIFIED BULLISH - FULL TOP-DOWN\nDEVELOPING BEARISH\nQUALIFIED BEARISH - MARKET ALIGNED\nQUALIFIED BEARISH - FULL TOP-DOWN\nREVIEW - CONFLICT / AMBIGUITY";
 WVRCB_CandidateSideText = "NONE / UNRESOLVED\nBULLISH\nBEARISH";
@@ -144,6 +145,8 @@ WVRCB_RSText = "INSUFFICIENT\nRS IMPROVING / BULLISH STRUCTURE\nRS DETERIORATING
 AddTextColumn(Name(),"Symbol");
 AddColumn(DateTime(),"As-Of Date",formatDateTime);
 AddMultiTextColumn(WVRCB_ConfigStatusCode,WVRCB_ConfigStatusText,"Runtime Config Status");
+AddColumn(WVRCB_IsVisibleLastBar,"Visible Last Bar",1.0);
+AddColumn(WVRCB_FilterSelected,"Requested Filter Match",1.0);
 AddColumn(WSCN_DataEligibilityCode,"Data Eligible",1.0);
 AddMultiTextColumn(WSCN_CandidateClassCode,WVRCB_CandidateClassText,"Candidate Class");
 AddMultiTextColumn(WSCN_CandidateSideCode,WVRCB_CandidateSideText,"Candidate Side");
