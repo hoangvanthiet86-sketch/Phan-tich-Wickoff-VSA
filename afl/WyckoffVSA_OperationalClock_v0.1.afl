@@ -16,10 +16,12 @@
     The top-level exploration/publisher entrypoint owns #pragma nocache and
     places it before all #include directives, as required by AFL.
 
-    Business-date correction:
-    - derive year/month/day from the SAME last-visible DateNum used by the
-      operational as-of;
-    - do not call Year()/Month()/Day() separately, avoiding a mixed date basis.
+    Business-date key correction:
+    - use the native AmiBroker DateNum value directly as the business-date key;
+    - do NOT encode YYYYMMDD as a numeric AFL value because YYYYMMDD values in
+      the 20-million range exceed exact consecutive-integer precision of the
+      numeric array representation and can alias adjacent dates;
+    - parsed year/month/day are diagnostics only.
 
     No Wyckoff/VSA analytical methodology is changed.
 */
@@ -33,18 +35,21 @@ WCLK_ModeCode = 3;
 WCLK_ModeText = "INSUFFICIENT\nLIVE SYSTEM\nBAR REPLAY\nVISIBLE DATA AS-OF";
 WCLK_ClockBasisCode = 3;
 
-// One causal source for BOTH DateTime and business-date components.
+// One causal source for DateTime and the business-date key.
 WCLK_AsOfDateTime = LastValue(DateTime());
 WCLK_AsOfDateNum = LastValue(DateNum());
 
 // AmiBroker DateNum format:
 // 10000 * (year - 1900) + 100 * month + day.
+// Example: 2026-09-11 => 1260911.
 WCLK_YearOffset = Floor(WCLK_AsOfDateNum / 10000);
 WCLK_Year = 1900 + WCLK_YearOffset;
 WCLK_DateRemainder = WCLK_AsOfDateNum - 10000 * WCLK_YearOffset;
 WCLK_Month = Floor(WCLK_DateRemainder / 100);
 WCLK_Day = WCLK_DateRemainder - 100 * WCLK_Month;
-WCLK_AsOfBusinessDateKey = WCLK_Year * 10000 + WCLK_Month * 100 + WCLK_Day;
+
+// Canonical business-date key: native DateNum, not numeric YYYYMMDD.
+WCLK_AsOfBusinessDateKey = WCLK_AsOfDateNum;
 
 WCLK_WeekEpoch = _DT("2000-01-03 00:00:00"); // Monday epoch
 WCLK_CurrentWeeklyOrdinal = Floor(DateTimeDiff(WCLK_AsOfDateTime,WCLK_WeekEpoch)/604800);
