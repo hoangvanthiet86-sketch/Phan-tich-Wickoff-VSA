@@ -59,7 +59,7 @@ WVRC_RSMarketSymbol = ParamStr("6.1 Market Benchmark","VNINDEX");
 WVRC_RSGroupSymbol = ParamStr("6.2 Group Benchmark","");
 WVRC_RSAdjustmentBasisDeclaration = ParamStr(
     "6.3 Adjustment Basis Declaration",
-    "COMPATIBLE - DECLARED");
+    "ADJUSTED PRICE");
 WVRC_RSAdjustmentBasisStatus = Param(
     "6.4 Adjustment Basis Status: 0=UNVERIFIED 1=COMPATIBLE-DECLARED 2=INCOMPATIBLE",
     1,0,2,1);
