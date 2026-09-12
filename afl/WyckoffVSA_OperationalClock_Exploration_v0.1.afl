@@ -1,0 +1,34 @@
+/*
+    Wyckoff VSA Operational Clock v0.1 — native audit surface.
+
+    Run once with Bar Replay OFF and once with Bar Replay ON.
+*/
+#pragma nocache
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+
+_SECTION_BEGIN("89.1 Operational Clock Exploration");
+Filter = Status("lastbarinrange");
+
+WCLK_ModeArray = 0*BarIndex()+WCLK_ModeCode;
+WCLK_ReplayArray = 0*BarIndex()+WCLK_IsReplay;
+WCLK_AsOfArray = 0*BarIndex()+WCLK_AsOfDateTime;
+WCLK_BusinessDateArray = 0*BarIndex()+WCLK_AsOfBusinessDateKey;
+WCLK_CurrentWeeklyArray = 0*BarIndex()+WCLK_CurrentWeeklyOrdinal;
+WCLK_ExpectedWeeklyArray = 0*BarIndex()+WCLK_ExpectedCompletedWeeklyOrdinal;
+WCLK_CurrentMonthlyArray = 0*BarIndex()+WCLK_CurrentMonthlyOrdinal;
+WCLK_ExpectedMonthlyArray = 0*BarIndex()+WCLK_ExpectedCompletedMonthlyOrdinal;
+WCLK_ValidArray = 0*BarIndex()+WCLK_ClockValid;
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"Visible Last Bar",formatDateTime);
+AddColumn(WCLK_ModeArray,"Clock Mode Code",1.0);
+AddMultiTextColumn(WCLK_ModeArray,WCLK_ModeText,"Clock Mode");
+AddColumn(WCLK_ReplayArray,"Bar Replay Active",1.0);
+AddColumn(WCLK_AsOfArray,"Operational As-Of",formatDateTime);
+AddColumn(WCLK_BusinessDateArray,"As-Of Business Date",1.0);
+AddColumn(WCLK_CurrentWeeklyArray,"Current Weekly Ordinal",1.0);
+AddColumn(WCLK_ExpectedWeeklyArray,"Expected Completed Weekly",1.0);
+AddColumn(WCLK_CurrentMonthlyArray,"Current Monthly Ordinal",1.0);
+AddColumn(WCLK_ExpectedMonthlyArray,"Expected Completed Monthly",1.0);
+AddColumn(WCLK_ValidArray,"Clock Valid",1.0);
+_SECTION_END();
