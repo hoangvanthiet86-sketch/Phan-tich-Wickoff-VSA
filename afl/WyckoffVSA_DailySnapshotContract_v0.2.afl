@@ -1,0 +1,48 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Daily Stock Snapshot Contract.
+
+    PRE-NATIVE-TEST IMPLEMENTATION.
+    No analytical methodology is implemented here.
+
+    Purpose:
+    - one schema/prefix/config-fingerprint definition shared by Publisher and Consumer;
+    - exact configuration identity without hash-collision risk (full text fingerprint);
+    - persistent per-symbol snapshot namespace.
+*/
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+
+WDS_SchemaMajor = 2;
+WDS_SchemaMinor = 0;
+WDS_RuntimeVersion = "0.2";
+WDS_ContractVersion = "0.2";
+WDS_Symbol = Name();
+WDS_Prefix = "WVSA_DAILY_v02_" + WDS_Symbol + "_";
+
+// Full-text fingerprint: no compact hash/collision assumption.
+// Only controls capable of affecting the analytical decision surface are included.
+WDS_ConfigFingerprint =
+    "WVRC2.0;" +
+    StrFormat(
+        "RP=%.0f;PROV=%.0f;VL=%.0f;SL=%.0f;ATR=%.0f;HER=%.6f;LER=%.6f;LDR=%.6f;HDR=%.6f;SHORT=%.0f;MED=%.0f;LONG=%.0f;PL=%.0f;PR=%.0f;RSA=%.0f;FTD=%.0f;",
+        WVRC_RuntimeProfileCode,
+        WVRC_LastBarProvisional,
+        WVRC_VolumeLookback,
+        WVRC_SpreadLookback,
+        WVRC_ATRPeriod,
+        WVRC_HighEffortRVOL,
+        WVRC_LowEffortRVOL,
+        WVRC_LowDirectionalResultATR,
+        WVRC_HighDirectionalResultATR,
+        WVRC_ShortLookback,
+        WVRC_MediumLookback,
+        WVRC_LongLookback,
+        WVRC_PivotLeft,
+        WVRC_PivotRight,
+        WVRC_RSAdjustmentBasisStatus,
+        WVRC_RequireFullTopDown) +
+    "RSM=" + WVRC_RSMarketSymbol + ";" +
+    "RSG=" + WVRC_RSGroupSymbol + ";" +
+    "RSB=" + WVRC_RSAdjustmentBasisDeclaration + ";" +
+    "SELM=" + WVRC_SelectionMarketSymbol + ";" +
+    "SELG=" + WVRC_SelectionGroupSymbol + ";";
