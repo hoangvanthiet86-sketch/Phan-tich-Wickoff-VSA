@@ -3,12 +3,15 @@
 
     Infrastructure-only clock contract for live and Bar Replay execution.
 
-    Clock modes:
-    - LIVE_SYSTEM: GetPlaybackDateTime() == 0, use Now(5).
-    - BAR_REPLAY:  GetPlaybackDateTime() != 0, use replay playback position.
+    AmiBroker Bar Replay hides all quotations after the playback position from
+    formulas and Automatic Analysis. Therefore the last visible quotation is a
+    causal as-of source in BOTH ordinary execution and Bar Replay.
 
-    This file does not change Wyckoff/VSA analytical methodology. It only
-    provides a single causal "as-of" clock for snapshot/publisher contracts.
+    This implementation intentionally does NOT call GetPlaybackDateTime() or
+    compare against the computer clock. That keeps AmiBroker 6.20 compatibility
+    and prevents live/replay calendar bases from diverging.
+
+    No Wyckoff/VSA analytical methodology is changed.
 */
 #pragma nocache
 
@@ -16,27 +19,19 @@ _SECTION_BEGIN("89. Operational Clock contract");
 WCLK_SchemaMajor = 1;
 WCLK_SchemaMinor = 0;
 
-WCLK_PlaybackDateTime = GetPlaybackDateTime();
-WCLK_IsReplay = WCLK_PlaybackDateTime != 0;
-WCLK_ModeCode = 1; // LIVE_SYSTEM
-WCLK_ModeText = "INSUFFICIENT\nLIVE SYSTEM\nBAR REPLAY";
-WCLK_AsOfDateTime = Now(5);
+// Clock basis 3 = VISIBLE DATA AS-OF.
+// The same causal basis is used for ordinary Analysis and Bar Replay.
+WCLK_ModeCode = 3;
+WCLK_ModeText = "INSUFFICIENT\nLIVE SYSTEM\nBAR REPLAY\nVISIBLE DATA AS-OF";
+WCLK_ClockBasisCode = 3;
 
-// Use ordinary scalar control flow instead of IIf so DateTime remains scalar.
-if (WCLK_IsReplay)
-{
-    WCLK_ModeCode = 2;
-    WCLK_AsOfDateTime = WCLK_PlaybackDateTime;
-}
-
-WCLK_AsOfDateNum = DateTimeConvert(0,WCLK_AsOfDateTime);
-
-// DateNum format is 10000*(year-1900)+100*month+day.
-WCLK_YearOffset = Floor(WCLK_AsOfDateNum/10000);
-WCLK_Year = 1900 + WCLK_YearOffset;
-WCLK_DateRemainder = WCLK_AsOfDateNum - 10000*WCLK_YearOffset;
-WCLK_Month = Floor(WCLK_DateRemainder/100);
-WCLK_Day = WCLK_DateRemainder - 100*WCLK_Month;
+// LastValue() observes only bars visible to the current formula execution.
+// In Bar Replay this naturally tracks the playback position because future
+// quotations are hidden by AmiBroker itself.
+WCLK_AsOfDateTime = LastValue(DateTime());
+WCLK_Year = LastValue(Year());
+WCLK_Month = LastValue(Month());
+WCLK_Day = LastValue(Day());
 WCLK_AsOfBusinessDateKey = WCLK_Year*10000 + WCLK_Month*100 + WCLK_Day;
 
 WCLK_WeekEpoch = _DT("2000-01-03 00:00:00"); // Monday epoch
@@ -45,7 +40,11 @@ WCLK_CurrentMonthlyOrdinal = WCLK_Year*12 + WCLK_Month;
 WCLK_ExpectedCompletedWeeklyOrdinal = WCLK_CurrentWeeklyOrdinal - 1;
 WCLK_ExpectedCompletedMonthlyOrdinal = WCLK_CurrentMonthlyOrdinal - 1;
 
-// Clock-basis provenance stored with snapshots.
-WCLK_ClockBasisCode = WCLK_ModeCode;
-WCLK_ClockValid = WCLK_AsOfDateTime != 0;
+WCLK_ClockValid = BarCount>0 AND NOT IsNull(WCLK_AsOfDateTime) AND WCLK_Year>1900 AND WCLK_Month>=1 AND WCLK_Month<=12 AND WCLK_Day>=1 AND WCLK_Day<=31;
+
+// Legacy diagnostics retained only so older wrappers do not fail while the
+// integration branch transitions to the visible-data clock. They are not used
+// for operational decisions.
+WCLK_PlaybackDateTime = 0;
+WCLK_IsReplay = 0;
 _SECTION_END();
