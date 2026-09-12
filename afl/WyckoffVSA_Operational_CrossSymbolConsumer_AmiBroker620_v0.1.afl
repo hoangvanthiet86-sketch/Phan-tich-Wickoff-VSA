@@ -3,67 +3,29 @@
     AmiBroker 6.20 native checkpoint wrapper.
 
     Purpose:
-    - read the already-published Market/Group selection-context snapshots;
-    - force the consumer business-date comparison onto the accepted WCLK DateNum key;
-    - expose top-level parameters directly to AmiBroker Analysis;
-    - emit exactly the last visible bar for deterministic native audit.
+    - consume already-published Market / Group selection-context snapshots;
+    - apply the producer version guard;
+    - expose the final Consumer status in one compact Exploration surface.
 
-    This file does NOT modify Wyckoff/VSA analytical logic.
+    IMPORTANT:
+    - the Consumer now performs the actual read at top level;
+    - this wrapper MUST NOT call the retired WXS_ReadSelectionSnapshot function;
+    - run with Analysis Range = 1 recent bar(s).
+
+    No Wyckoff/VSA analytical methodology is changed.
 */
 #pragma nocache
 SetBarsRequired(sbrAll,sbrAll);
-
-WOPCON_MarketSymbol = ParamStr("Selection: Market benchmark symbol","VNINDEX");
-WOPCON_GroupSymbol  = ParamStr("Selection: Group benchmark symbol","");
 
 #include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>
 
 _SECTION_BEGIN("152. Operational Cross-Symbol Consumer Audit");
 
-// Operational overrides for this audit surface.
-// Use the already-accepted visible-data clock DateNum key.
-WXS_ConsumerBusinessDateKey = WCLK_AsOfBusinessDateKey;
-
-WXS_RequestedMarketSymbol = WOPCON_MarketSymbol;
-WXS_RequestedGroupSymbol = WOPCON_GroupSymbol;
-WXS_MarketRequested = StrLen(WXS_RequestedMarketSymbol)>0;
-WXS_GroupRequested = StrLen(WXS_RequestedGroupSymbol)>0;
-WXS_RoleConfigConflict =
-    WXS_MarketRequested AND
-    WXS_GroupRequested AND
-    WXS_RequestedMarketSymbol==WXS_RequestedGroupSymbol;
-
-// Re-run the reader with the explicit top-level operational inputs.
-WXS_MarketReadExecuted =
-    WXS_ReadSelectionSnapshot("WXSM_",WXS_RequestedMarketSymbol,WXS_MarketRequested);
-WXS_GroupReadExecuted =
-    WXS_ReadSelectionSnapshot("WXSG_",WXS_RequestedGroupSymbol,WXS_GroupRequested);
-
-WXS_MarketStatusCodeScalar = VarGet("WXSM_StatusCode");
-WXS_GroupStatusCodeScalar = VarGet("WXSG_StatusCode");
-
-// Re-run producer-version guard after the operational read.
-WXS_MarketStatusCodeScalar =
-    WXS_ApplyVersionGuard(
-        "WXSM_",
-        WXS_RequestedMarketSymbol,
-        WXS_MarketRequested,
-        WXS_MarketStatusCodeScalar);
-
-WXS_GroupStatusCodeScalar =
-    WXS_ApplyVersionGuard(
-        "WXSG_",
-        WXS_RequestedGroupSymbol,
-        WXS_GroupRequested,
-        WXS_GroupStatusCodeScalar);
-
-WXS_MarketValidScalar = WXS_MarketStatusCodeScalar==1;
-WXS_GroupValidScalar = WXS_GroupStatusCodeScalar==1;
-
-WOPCON_LastVisibleBarIndex = LastValue(BarIndex());
-Filter = BarIndex()==WOPCON_LastVisibleBarIndex;
+// Deterministic audit surface. Use Range = 1 recent bar(s).
+Filter = 1;
 
 AddTextColumn(Name(),"Stock Symbol");
+AddColumn(DateTime(),"Visible Bar",formatDateTime);
 AddColumn(0*BarIndex()+WCLK_ModeCode,"Clock Mode",1.0);
 AddColumn(0*BarIndex()+WCLK_AsOfDateTime,"Visible-Data As-Of",formatDateTime);
 AddColumn(0*BarIndex()+WXS_ConsumerBusinessDateKey,"Consumer DateNum Key",1.0);
@@ -75,6 +37,10 @@ AddColumn(0*BarIndex()+WXS_MarketStatusCodeScalar,"Market StatusCode",1.0);
 AddMultiTextColumn(0*BarIndex()+WXS_MarketStatusCodeScalar,WXS_ConsumerStatusText,"Market Status");
 AddColumn(0*BarIndex()+WXS_MarketValidScalar,"Market Valid",1.0);
 AddColumn(0*BarIndex()+VarGet("WXSM_ProducerVersionCompatible"),"Market Version Compatible",1.0);
+AddTextColumn(VarGetText("WXSM_ProducerContractVersion"),"Market Contract Version");
+AddTextColumn(VarGetText("WXSM_ProducerCompositeVersion"),"Market Composite Version");
+AddTextColumn(VarGetText("WXSM_ProducerMTFVersion"),"Market MTF Version");
+
 AddColumn(0*BarIndex()+VarGet("WXSM_SourceBusinessDateKey"),"Market Source DateNum Key",1.0);
 AddColumn(0*BarIndex()+VarGet("WXSM_SourceBarDateTime"),"Market Source DateTime",formatDateTime);
 AddColumn(0*BarIndex()+VarGet("WXSM_ClockBasisCode"),"Market Clock Basis",1.0);
