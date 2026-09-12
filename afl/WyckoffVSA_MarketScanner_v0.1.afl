@@ -3,6 +3,7 @@
 
     Approved specification: PR #36, MS01-MS40.
     Specification merge: b70cae9c8714cbb2b17082d155e57b50110aa13f
+    MS41 range-location correction: 0cb4fc86cdc3a3fe9f721c3edf1c67eee76ad9e5
     Cross-Symbol contract: PR #37, XS01-XS38.
     Cross-Symbol implementation parent: PR #38 development stack.
 
@@ -137,6 +138,28 @@ WSCN_GroupSelectionContextS = IIf(NOT WSCN_GroupRequestedS,0,
         WSCN_GroupEvidenceS,WSCN_GroupHypothesisAlignmentS,WSCN_GroupMTFAlignmentS));
 
 WSCN_CandidateStageS = WSCN_StageFromPhase(WSCN_StockPhaseS);
+
+// MS41: consume the already-published Phase/Context range-location state.
+// No RangeContext lifecycle, threshold or event logic is recreated here.
+WSCN_SingleLowerRangeS = WSCN_StockMultiplicityS==1 AND
+    LastValue(WPC_L_ContextPresent)==1 AND LastValue(WPC_U_ContextPresent)!=1;
+WSCN_SingleUpperRangeS = WSCN_StockMultiplicityS==1 AND
+    LastValue(WPC_U_ContextPresent)==1 AND LastValue(WPC_L_ContextPresent)!=1;
+WSCN_StockRangeStatusS = IIf(WSCN_SingleLowerRangeS,LastValue(WPCP_L_RangeStatusCode),
+    IIf(WSCN_SingleUpperRangeS,LastValue(WPCP_U_RangeStatusCode),0));
+WSCN_StockRangePositionS = IIf(WSCN_SingleLowerRangeS,LastValue(WPC_L_RangePosition),
+    IIf(WSCN_SingleUpperRangeS,LastValue(WPC_U_RangePosition),Null));
+WSCN_StockRangePositionValidS = IIf(WSCN_SingleLowerRangeS,LastValue(WPC_L_RangePositionValid),
+    IIf(WSCN_SingleUpperRangeS,LastValue(WPC_U_RangePositionValid),0));
+WSCN_StockRangeUsableActiveS = WSCN_StockMultiplicityS==1 AND
+    WSCN_StockRangeStatusS==1 AND WSCN_StockRangePositionValidS==1 AND
+    WSCN_FiniteScalar(WSCN_StockRangePositionS);
+WSCN_RangeLocationConflictS = WSCN_CandidateStageS==1 AND
+    WSCN_StockRangeUsableActiveS AND
+    (WSCN_StockRangePositionS<0 OR WSCN_StockRangePositionS>1);
+WSCN_RangeLocationCoherentS = WSCN_CandidateStageS!=1 OR
+    (WSCN_StockRangeUsableActiveS AND
+     WSCN_StockRangePositionS>=0 AND WSCN_StockRangePositionS<=1);
 _SECTION_END();
 
 _SECTION_BEGIN("122. Data eligibility and diagnostic exclusions");
@@ -201,13 +224,13 @@ WSCN_ReviewFlagS = WSCN_DataEligibilityS AND (
     WSCN_MultipleRangeContextsS OR WSCN_PriceRSNonConfirmationS OR
     WSCN_StockVSAMixedOrConflictS OR WSCN_StockMTFConflictS OR WSCN_RSMixedS OR
     WSCN_MarketStockDirectionalConflictS OR WSCN_GroupDirectionalConflictS OR
-    WSCN_RoleConfigConflictS);
+    WSCN_RoleConfigConflictS OR WSCN_RangeLocationConflictS);
 
 // Method block mask; diagnostic bits, never a score.
 // 1 market opposite/unresolved; 2 phase too early; 4 stock hypothesis unresolved/opposite;
 // 8 MTF counter/conflict; 16 RS opposite/mixed; 32 VSA conflicting/mixed;
 // 64 Price/RS non-confirmation; 128 Group leadership conflict; 256 multiple ranges;
-// 512 Market/Group role/config conflict.
+// 512 Market/Group role/config conflict; 1024 A/B range-location conflict.
 WSCN_BullishMarketBlockS = WSCN_MarketSelectionContextS!=2;
 WSCN_BearishMarketBlockS = WSCN_MarketSelectionContextS!=3;
 WSCN_PhaseTooEarlyS = WSCN_CandidateStageS==0 OR WSCN_CandidateStageS==1;
@@ -230,7 +253,8 @@ WSCN_MethodBlockReasonMaskS =
     + IIf(WSCN_GroupLeadershipConflictS,128,0)
     + IIf(WSCN_MultipleRangeContextsS,256,0)
     + IIf(WSCN_RoleConfigConflictS OR NOT WSCN_MarketBenchmarkConfigMatchS OR
-          (WSCN_GroupRequestedS AND NOT WSCN_GroupBenchmarkConfigMatchS),512,0);
+          (WSCN_GroupRequestedS AND NOT WSCN_GroupBenchmarkConfigMatchS),512,0)
+    + IIf(WSCN_RangeLocationConflictS,1024,0);
 _SECTION_END();
 
 _SECTION_BEGIN("124. Candidate classification");
@@ -271,9 +295,9 @@ WSCN_BearishDevelopingS = WSCN_DataEligibilityS AND NOT WSCN_ReviewFlagS AND
     WSCN_BearishEvidenceAcceptableS AND
     (WSCN_StockMTFAlignmentS==1 OR WSCN_StockMTFAlignmentS==3);
 
-// A/B = Watch only. Direction is descriptive and does not create qualification.
+// A/B = Watch only. MS41 additionally requires coherent current range location.
 WSCN_WatchS = WSCN_DataEligibilityS AND NOT WSCN_ReviewFlagS AND
-    WSCN_CandidateStageS==1 AND
+    WSCN_CandidateStageS==1 AND WSCN_RangeLocationCoherentS AND
     (WSCN_StockVsMarketRSStructureS==1 OR WSCN_StockVsMarketRSStructureS==2);
 
 WSCN_CandidateClassS = IIf(NOT WSCN_DataEligibilityS,0,
@@ -313,6 +337,14 @@ WSCN_ExclusionReasonMask = WSCN_Zero + WSCN_ExclusionReasonMaskS;
 WSCN_MethodBlockReasonMask = WSCN_Zero + WSCN_MethodBlockReasonMaskS;
 WSCN_SelectionCompletenessCode = WSCN_Zero + WSCN_SelectionCompletenessS;
 WSCN_FullTopDownDataEligible = WSCN_Zero + WSCN_FullTopDownDataEligibleS;
+
+// MS41 public audit surface.
+WSCN_RangeLocationConflict = WSCN_Zero + WSCN_RangeLocationConflictS;
+WSCN_RangeLocationCoherent = WSCN_Zero + WSCN_RangeLocationCoherentS;
+WSCN_StockRangeUsableActive = WSCN_Zero + WSCN_StockRangeUsableActiveS;
+WSCN_StockRangeStatusCode = WSCN_Zero + WSCN_StockRangeStatusS;
+WSCN_StockRangePosition = WSCN_Zero + WSCN_StockRangePositionS;
+WSCN_StockRangePositionValid = WSCN_Zero + WSCN_StockRangePositionValidS;
 
 WSCN_StockDirectionalContextCode = WSCN_Zero + WSCN_StockDirectionalS;
 WSCN_StockPhaseStateCode = WSCN_Zero + WSCN_StockPhaseS;
