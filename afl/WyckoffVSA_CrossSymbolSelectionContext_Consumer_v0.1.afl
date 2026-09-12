@@ -8,8 +8,13 @@
     writer lock. Snapshot is accepted only after Ready/generation, schema,
     exact-symbol, interval, business-date, completion, Composite and MTF gates.
 
-    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    Operational clock correction:
+    - accepts replay completion provenance code 3 from the publisher;
+    - validates snapshot clock basis against the active WCLK basis.
+
+    SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
 */
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
 
 _SECTION_BEGIN("112. Cross-Symbol Selection Context Consumer");
 WXS_ExpectedSchemaMajor = 1;
@@ -26,6 +31,7 @@ WXS_ConsumerStatusText = "NOT READ / INSUFFICIENT\nVALID\nNOT REQUESTED\nMISSING
 function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
 {
     global WXS_ExpectedSchemaMajor, WXS_ExpectedSchemaMinor, WXS_ConsumerBusinessDateKey;
+    global WCLK_ClockBasisCode, WCLK_IsReplay;
 
     StatusCode = 0;
     SnapshotPrefix = "";
@@ -42,6 +48,7 @@ function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
     PublishedAtDateTime = Null;
     CompletionBasisCode = Null;
     CompletionDeclarationCode = Null;
+    SnapshotClockBasisCode = Null;
     CompositePayloadValid = Null;
     MTFPayloadValid = Null;
 
@@ -144,7 +151,6 @@ function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
         }
         else
         {
-            // Read entire stable-candidate bundle.
             SchemaMajor = StaticVarGet(SnapshotPrefix+"SchemaMajor");
             SchemaMinor = StaticVarGet(SnapshotPrefix+"SchemaMinor");
             SnapshotSourceSymbol = StaticVarGetText(SnapshotPrefix+"SourceSymbol");
@@ -154,6 +160,7 @@ function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
             PublishedAtDateTime = StaticVarGet(SnapshotPrefix+"PublishedAtDateTime");
             CompletionBasisCode = StaticVarGet(SnapshotPrefix+"CompletionBasisCode");
             CompletionDeclarationCode = StaticVarGet(SnapshotPrefix+"CompletionDeclarationCode");
+            SnapshotClockBasisCode = StaticVarGet(SnapshotPrefix+"ClockBasisCode");
             CompositePayloadValid = StaticVarGet(SnapshotPrefix+"CompositePayloadValid");
             MTFPayloadValid = StaticVarGet(SnapshotPrefix+"MTFPayloadValid");
 
@@ -233,7 +240,10 @@ function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
             GenerationB = StaticVarGet(SnapshotPrefix+"CommittedGenerationID");
             ReadyB = StaticVarGet(SnapshotPrefix+"Ready");
 
-            CompletionValid = CompletionBasisCode==1 OR (CompletionBasisCode==2 AND CompletionDeclarationCode==1);
+            CompletionValid = CompletionBasisCode==1 OR
+                (CompletionBasisCode==2 AND CompletionDeclarationCode==1) OR
+                (CompletionBasisCode==3 AND SnapshotClockBasisCode==2 AND WCLK_IsReplay);
+            ClockBasisValid = SnapshotClockBasisCode==WCLK_ClockBasisCode;
             CompositeCoreValid = CompositePayloadValid==1 AND
                 NOT IsNull(ContextMultiplicityCode) AND NOT IsNull(DirectionalContextCode) AND
                 NOT IsNull(PhaseStateCode) AND NOT IsNull(EvidenceBalanceCode) AND
@@ -267,7 +277,7 @@ function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
             if (ProvisionalFlag!=0)
                 StatusCode = 10;
             else
-            if (NOT CompletionValid)
+            if (NOT CompletionValid OR NOT ClockBasisValid)
                 StatusCode = 11;
             else
             if (NOT CompositeCoreValid)
@@ -280,15 +290,11 @@ function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
         }
     }
 
-    // Shared role output contract. Dynamic variables are global in AFL.
     VarSetText(OutPrefix+"RequestedSymbol",ExpectedSymbol);
     VarSetText(OutPrefix+"SnapshotSourceSymbol",SnapshotSourceSymbol);
     VarSet(OutPrefix+"StatusCode",StatusCode);
     VarSet(OutPrefix+"Valid",StatusCode==1);
-    VarSet(OutPrefix+"ReadyA",ReadyA);
-    VarSet(OutPrefix+"ReadyB",ReadyB);
-    VarSet(OutPrefix+"GenerationA",GenerationA);
-    VarSet(OutPrefix+"GenerationB",GenerationB);
+    VarSet(OutPrefix+"GenerationID",GenerationB);
     VarSet(OutPrefix+"SchemaMajor",SchemaMajor);
     VarSet(OutPrefix+"SchemaMinor",SchemaMinor);
     VarSet(OutPrefix+"SourceInterval",SourceInterval);
@@ -297,6 +303,7 @@ function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
     VarSet(OutPrefix+"PublishedAtDateTime",PublishedAtDateTime);
     VarSet(OutPrefix+"CompletionBasisCode",CompletionBasisCode);
     VarSet(OutPrefix+"CompletionDeclarationCode",CompletionDeclarationCode);
+    VarSet(OutPrefix+"ClockBasisCode",SnapshotClockBasisCode);
     VarSet(OutPrefix+"CompositePayloadValid",CompositePayloadValid);
     VarSet(OutPrefix+"MTFPayloadValid",MTFPayloadValid);
 
@@ -372,19 +379,14 @@ function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
     VarSet(OutPrefix+"MTF_W_SchemaMinor",MTF_W_SchemaMinor);
     VarSet(OutPrefix+"MTF_M_SchemaMajor",MTF_M_SchemaMajor);
     VarSet(OutPrefix+"MTF_M_SchemaMinor",MTF_M_SchemaMinor);
-
-    return StatusCode;
+    return 1;
 }
 
-WXS_MarketStatusCodeScalar = WXS_ReadSelectionSnapshot("WXSM_",WXS_RequestedMarketSymbol,WXS_MarketRequested);
-WXS_GroupStatusCodeScalar = WXS_ReadSelectionSnapshot("WXSG_",WXS_RequestedGroupSymbol,WXS_GroupRequested);
-WXS_MarketValidScalar = WXS_MarketStatusCodeScalar==1;
-WXS_GroupValidScalar = WXS_GroupStatusCodeScalar==1;
+WXS_MarketReadExecuted = WXS_ReadSelectionSnapshot("WXSM_",WXS_RequestedMarketSymbol,WXS_MarketRequested);
+WXS_GroupReadExecuted = WXS_ReadSelectionSnapshot("WXSG_",WXS_RequestedGroupSymbol,WXS_GroupRequested);
 
-WXS_MarketStatusCode = 0*BarIndex() + WXS_MarketStatusCodeScalar;
-WXS_GroupStatusCode = 0*BarIndex() + WXS_GroupStatusCodeScalar;
-WXS_MarketValid = 0*BarIndex() + WXS_MarketValidScalar;
-WXS_GroupValid = 0*BarIndex() + WXS_GroupValidScalar;
-WXS_ConsumerBusinessDateKeyArray = 0*BarIndex() + WXS_ConsumerBusinessDateKey;
-WXS_RoleConfigConflictArray = 0*BarIndex() + WXS_RoleConfigConflict;
+WXS_MarketStatusCodeScalar = VarGet("WXSM_StatusCode");
+WXS_GroupStatusCodeScalar = VarGet("WXSG_StatusCode");
+WXS_MarketValidScalar = VarGet("WXSM_Valid");
+WXS_GroupValidScalar = VarGet("WXSG_Valid");
 _SECTION_END();
