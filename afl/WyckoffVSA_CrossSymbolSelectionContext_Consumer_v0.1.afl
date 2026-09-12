@@ -1,392 +1,553 @@
 /*
     Wyckoff VSA Cross-Symbol Selection Context Consumer v0.1
+    AmiBroker 6.20 top-level compatibility implementation.
 
-    Approved contract: PR #37, XS01-XS38.
-    Approval merge commit: d006959f11f5ec544f5f000c53448cec2643dc99
+    Contract preserved:
+    - reads persistent Market / Group selection-context snapshots;
+    - exact symbol / interval / date / completion / schema / payload validation;
+    - same status codes and public WXSM_ / WXSG_ variables;
+    - no ranking, no Buy/Sell/Short/Cover, no change to Wyckoff/VSA analysis.
 
-    Shared one-reader function with Market/Group wrappers. Readers never take
-    writer lock. Snapshot is accepted only after Ready/generation, schema,
-    exact-symbol, interval, business-date, completion, Composite and MTF gates.
-
-    Operational clock correction:
-    - accepts replay completion provenance code 3 from the publisher;
-    - validates snapshot clock basis against the active WCLK basis.
-
-    SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
+    AmiBroker 6.20 compatibility correction:
+    - removes the large string-heavy user-defined reader function that caused
+      Exploration to emit no rows in native testing;
+    - reads Market and Group roles directly at top level;
+    - uses the accepted WCLK native DateNum business-date key.
 */
 #include_once <WyckoffVSA_OperationalClock_v0.1.afl>
 
 _SECTION_BEGIN("112. Cross-Symbol Selection Context Consumer");
+
 WXS_ExpectedSchemaMajor = 1;
 WXS_ExpectedSchemaMinor = 0;
-WXS_ConsumerBusinessDateKey = LastValue(Year()*10000 + Month()*100 + Day());
+WXS_ConsumerBusinessDateKey = WCLK_AsOfBusinessDateKey;
+
 WXS_RequestedMarketSymbol = ParamStr("Selection: Market benchmark symbol","");
 WXS_RequestedGroupSymbol = ParamStr("Selection: Group benchmark symbol","");
 WXS_MarketRequested = StrLen(WXS_RequestedMarketSymbol)>0;
 WXS_GroupRequested = StrLen(WXS_RequestedGroupSymbol)>0;
-WXS_RoleConfigConflict = WXS_MarketRequested AND WXS_GroupRequested AND WXS_RequestedMarketSymbol==WXS_RequestedGroupSymbol;
+WXS_RoleConfigConflict =
+    WXS_MarketRequested AND
+    WXS_GroupRequested AND
+    WXS_RequestedMarketSymbol==WXS_RequestedGroupSymbol;
 
-WXS_ConsumerStatusText = "NOT READ / INSUFFICIENT\nVALID\nNOT REQUESTED\nMISSING\nWRITER BUSY / WRITE IN PROGRESS / UNSTABLE GENERATION\nSCHEMA VERSION MISMATCH\nSYMBOL MISMATCH\nINTERVAL MISMATCH\nSTALE BUSINESS DATE\nFUTURE BUSINESS DATE\nPROVISIONAL SOURCE\nINVALID COMPLETION PROVENANCE\nINVALID COMPOSITE PAYLOAD\nINVALID MTF PAYLOAD\nINVALID SOURCE DATETIME";
+WXS_ConsumerStatusText =
+    "NOT READ / INSUFFICIENT\nVALID\nNOT REQUESTED\nMISSING\n"
+    + "WRITER BUSY / WRITE IN PROGRESS / UNSTABLE GENERATION\n"
+    + "SCHEMA VERSION MISMATCH\nSYMBOL MISMATCH\nINTERVAL MISMATCH\n"
+    + "STALE BUSINESS DATE\nFUTURE BUSINESS DATE\nPROVISIONAL SOURCE\n"
+    + "INVALID COMPLETION PROVENANCE\nINVALID COMPOSITE PAYLOAD\n"
+    + "INVALID MTF PAYLOAD\nINVALID SOURCE DATETIME";
 
-function WXS_ReadSelectionSnapshot(OutPrefix,ExpectedSymbol,RequestedFlag)
+WXSM_RequestedSymbol = WXS_RequestedMarketSymbol;
+WXSM_SnapshotSourceSymbol = "";
+WXSM_GenerationID = Null;
+WXSM_SchemaMajor = Null;
+WXSM_SchemaMinor = Null;
+WXSM_SourceInterval = Null;
+WXSM_SourceBusinessDateKey = Null;
+WXSM_SourceBarDateTime = Null;
+WXSM_PublishedAtDateTime = Null;
+WXSM_CompletionBasisCode = Null;
+WXSM_CompletionDeclarationCode = Null;
+WXSM_ClockBasisCode = Null;
+WXSM_CompositePayloadValid = Null;
+WXSM_MTFPayloadValid = Null;
+WXSM_ContextMultiplicityCode = Null;
+WXSM_ContextAmbiguous = Null;
+WXSM_CurrentRangeContextID = Null;
+WXSM_RangeStatusCode = Null;
+WXSM_PhaseStateCode = Null;
+WXSM_StructuralDevelopmentCode = Null;
+WXSM_FamilyHypothesisCode = Null;
+WXSM_DirectionalContextCode = Null;
+WXSM_EvidenceBalanceCode = Null;
+WXSM_HypothesisAlignmentCode = Null;
+WXSM_HypothesisRevisionCode = Null;
+WXSM_CurrentEventMask = Null;
+WXSM_ProvisionalFlag = Null;
+WXSM_PrimaryRangeLow = Null;
+WXSM_PrimaryRangeHigh = Null;
+WXSM_RangeAgeBars = Null;
+WXSM_L_ContextPresent = Null;
+WXSM_L_RangeContextID = Null;
+WXSM_L_RangeStatusCode = Null;
+WXSM_L_PhaseStateCode = Null;
+WXSM_L_FamilyHypothesisCode = Null;
+WXSM_L_EvidenceBalanceCode = Null;
+WXSM_L_MixedEvidenceReasonCode = Null;
+WXSM_L_PrimaryRangeLow = Null;
+WXSM_L_PrimaryRangeHigh = Null;
+WXSM_L_RangeAgeBars = Null;
+WXSM_U_ContextPresent = Null;
+WXSM_U_RangeContextID = Null;
+WXSM_U_RangeStatusCode = Null;
+WXSM_U_PhaseStateCode = Null;
+WXSM_U_FamilyHypothesisCode = Null;
+WXSM_U_EvidenceBalanceCode = Null;
+WXSM_U_MixedEvidenceReasonCode = Null;
+WXSM_U_PrimaryRangeLow = Null;
+WXSM_U_PrimaryRangeHigh = Null;
+WXSM_U_RangeAgeBars = Null;
+WXSM_MTF_SnapshotContractValid = Null;
+WXSM_MTF_DailyValid = Null;
+WXSM_MTF_WeeklyValid = Null;
+WXSM_MTF_MonthlyValid = Null;
+WXSM_MTF_D_DirectionalContextCode = Null;
+WXSM_MTF_W_DirectionalContextCode = Null;
+WXSM_MTF_M_DirectionalContextCode = Null;
+WXSM_MTF_D_PhaseStateCode = Null;
+WXSM_MTF_W_PhaseStateCode = Null;
+WXSM_MTF_M_PhaseStateCode = Null;
+WXSM_MTF_D_FamilyHypothesisCode = Null;
+WXSM_MTF_W_FamilyHypothesisCode = Null;
+WXSM_MTF_M_FamilyHypothesisCode = Null;
+WXSM_MTF_D_EvidenceBalanceCode = Null;
+WXSM_MTF_W_EvidenceBalanceCode = Null;
+WXSM_MTF_M_EvidenceBalanceCode = Null;
+WXSM_MTF_DirectionalAlignmentCode = Null;
+WXSM_MTF_EvidenceAlignmentCode = Null;
+WXSM_MTF_PhaseRelationshipCode = Null;
+WXSM_MTF_ConflictReasonCode = Null;
+WXSM_MTF_WeeklySnapshotStatusCode = Null;
+WXSM_MTF_MonthlySnapshotStatusCode = Null;
+WXSM_MTF_D_SourceBarDateTime = Null;
+WXSM_MTF_W_SourcePeriodOrdinal = Null;
+WXSM_MTF_M_SourcePeriodOrdinal = Null;
+WXSM_MTF_W_SourceBarDateTime = Null;
+WXSM_MTF_M_SourceBarDateTime = Null;
+WXSM_MTF_W_GenerationID = Null;
+WXSM_MTF_M_GenerationID = Null;
+WXSM_MTF_W_SchemaMajor = Null;
+WXSM_MTF_W_SchemaMinor = Null;
+WXSM_MTF_M_SchemaMajor = Null;
+WXSM_MTF_M_SchemaMinor = Null;
+WXSM_StatusCode = 0;
+WXSM_Valid = 0;
+WXSM_ReadyA = Null;
+WXSM_ReadyB = Null;
+WXSM_GenerationA = Null;
+WXSM_GenerationB = Null;
+WXSM_CompletionValid = 0;
+WXSM_ClockBasisValid = 0;
+WXSM_CompositeCoreValid = 0;
+WXSM_MTFCoreValid = 0;
+
+if (NOT WXS_MarketRequested)
 {
-    global WXS_ExpectedSchemaMajor, WXS_ExpectedSchemaMinor, WXS_ConsumerBusinessDateKey;
-    global WCLK_ClockBasisCode, WCLK_IsReplay;
-
-    StatusCode = 0;
-    SnapshotPrefix = "";
-    SnapshotSourceSymbol = "";
-    ReadyA = Null;
-    ReadyB = Null;
-    GenerationA = Null;
-    GenerationB = Null;
-    SchemaMajor = Null;
-    SchemaMinor = Null;
-    SourceInterval = Null;
-    SourceBusinessDateKey = Null;
-    SourceBarDateTime = Null;
-    PublishedAtDateTime = Null;
-    CompletionBasisCode = Null;
-    CompletionDeclarationCode = Null;
-    SnapshotClockBasisCode = Null;
-    CompositePayloadValid = Null;
-    MTFPayloadValid = Null;
-
-    ContextMultiplicityCode = Null;
-    ContextAmbiguous = Null;
-    CurrentRangeContextID = Null;
-    RangeStatusCode = Null;
-    PhaseStateCode = Null;
-    StructuralDevelopmentCode = Null;
-    FamilyHypothesisCode = Null;
-    DirectionalContextCode = Null;
-    EvidenceBalanceCode = Null;
-    HypothesisAlignmentCode = Null;
-    HypothesisRevisionCode = Null;
-    CurrentEventMask = Null;
-    ProvisionalFlag = Null;
-    PrimaryRangeLow = Null;
-    PrimaryRangeHigh = Null;
-    RangeAgeBars = Null;
-
-    L_ContextPresent = Null;
-    L_RangeContextID = Null;
-    L_RangeStatusCode = Null;
-    L_PhaseStateCode = Null;
-    L_FamilyHypothesisCode = Null;
-    L_EvidenceBalanceCode = Null;
-    L_MixedEvidenceReasonCode = Null;
-    L_PrimaryRangeLow = Null;
-    L_PrimaryRangeHigh = Null;
-    L_RangeAgeBars = Null;
-
-    U_ContextPresent = Null;
-    U_RangeContextID = Null;
-    U_RangeStatusCode = Null;
-    U_PhaseStateCode = Null;
-    U_FamilyHypothesisCode = Null;
-    U_EvidenceBalanceCode = Null;
-    U_MixedEvidenceReasonCode = Null;
-    U_PrimaryRangeLow = Null;
-    U_PrimaryRangeHigh = Null;
-    U_RangeAgeBars = Null;
-
-    MTF_SnapshotContractValid = Null;
-    MTF_DailyValid = Null;
-    MTF_WeeklyValid = Null;
-    MTF_MonthlyValid = Null;
-    MTF_D_DirectionalContextCode = Null;
-    MTF_W_DirectionalContextCode = Null;
-    MTF_M_DirectionalContextCode = Null;
-    MTF_D_PhaseStateCode = Null;
-    MTF_W_PhaseStateCode = Null;
-    MTF_M_PhaseStateCode = Null;
-    MTF_D_FamilyHypothesisCode = Null;
-    MTF_W_FamilyHypothesisCode = Null;
-    MTF_M_FamilyHypothesisCode = Null;
-    MTF_D_EvidenceBalanceCode = Null;
-    MTF_W_EvidenceBalanceCode = Null;
-    MTF_M_EvidenceBalanceCode = Null;
-    MTF_DirectionalAlignmentCode = Null;
-    MTF_EvidenceAlignmentCode = Null;
-    MTF_PhaseRelationshipCode = Null;
-    MTF_ConflictReasonCode = Null;
-    MTF_WeeklySnapshotStatusCode = Null;
-    MTF_MonthlySnapshotStatusCode = Null;
-    MTF_D_SourceBarDateTime = Null;
-    MTF_W_SourcePeriodOrdinal = Null;
-    MTF_M_SourcePeriodOrdinal = Null;
-    MTF_W_SourceBarDateTime = Null;
-    MTF_M_SourceBarDateTime = Null;
-    MTF_W_GenerationID = Null;
-    MTF_M_GenerationID = Null;
-    MTF_W_SchemaMajor = Null;
-    MTF_W_SchemaMinor = Null;
-    MTF_M_SchemaMajor = Null;
-    MTF_M_SchemaMinor = Null;
-
-    if (NOT RequestedFlag)
-    {
-        StatusCode = 2;
-    }
-    else
-    if (StrLen(ExpectedSymbol)==0)
-    {
-        StatusCode = 0;
-    }
-    else
-    {
-        SnapshotPrefix = "WVSA_SELCTX_v01_" + ExpectedSymbol + "_";
-        ReadyA = StaticVarGet(SnapshotPrefix+"Ready");
-        GenerationA = StaticVarGet(SnapshotPrefix+"CommittedGenerationID");
-
-        if (IsNull(ReadyA) OR IsNull(GenerationA))
-        {
-            StatusCode = 3;
-        }
-        else
-        if (ReadyA!=1 OR GenerationA<=0)
-        {
-            StatusCode = 4;
-        }
-        else
-        {
-            SchemaMajor = StaticVarGet(SnapshotPrefix+"SchemaMajor");
-            SchemaMinor = StaticVarGet(SnapshotPrefix+"SchemaMinor");
-            SnapshotSourceSymbol = StaticVarGetText(SnapshotPrefix+"SourceSymbol");
-            SourceInterval = StaticVarGet(SnapshotPrefix+"SourceInterval");
-            SourceBusinessDateKey = StaticVarGet(SnapshotPrefix+"SourceBusinessDateKey");
-            SourceBarDateTime = StaticVarGet(SnapshotPrefix+"SourceBarDateTime");
-            PublishedAtDateTime = StaticVarGet(SnapshotPrefix+"PublishedAtDateTime");
-            CompletionBasisCode = StaticVarGet(SnapshotPrefix+"CompletionBasisCode");
-            CompletionDeclarationCode = StaticVarGet(SnapshotPrefix+"CompletionDeclarationCode");
-            SnapshotClockBasisCode = StaticVarGet(SnapshotPrefix+"ClockBasisCode");
-            CompositePayloadValid = StaticVarGet(SnapshotPrefix+"CompositePayloadValid");
-            MTFPayloadValid = StaticVarGet(SnapshotPrefix+"MTFPayloadValid");
-
-            ContextMultiplicityCode = StaticVarGet(SnapshotPrefix+"ContextMultiplicityCode");
-            ContextAmbiguous = StaticVarGet(SnapshotPrefix+"ContextAmbiguous");
-            CurrentRangeContextID = StaticVarGet(SnapshotPrefix+"CurrentRangeContextID");
-            RangeStatusCode = StaticVarGet(SnapshotPrefix+"RangeStatusCode");
-            PhaseStateCode = StaticVarGet(SnapshotPrefix+"PhaseStateCode");
-            StructuralDevelopmentCode = StaticVarGet(SnapshotPrefix+"StructuralDevelopmentCode");
-            FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"FamilyHypothesisCode");
-            DirectionalContextCode = StaticVarGet(SnapshotPrefix+"DirectionalContextCode");
-            EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"EvidenceBalanceCode");
-            HypothesisAlignmentCode = StaticVarGet(SnapshotPrefix+"HypothesisAlignmentCode");
-            HypothesisRevisionCode = StaticVarGet(SnapshotPrefix+"HypothesisRevisionCode");
-            CurrentEventMask = StaticVarGet(SnapshotPrefix+"CurrentEventMask");
-            ProvisionalFlag = StaticVarGet(SnapshotPrefix+"ProvisionalFlag");
-            PrimaryRangeLow = StaticVarGet(SnapshotPrefix+"PrimaryRangeLow");
-            PrimaryRangeHigh = StaticVarGet(SnapshotPrefix+"PrimaryRangeHigh");
-            RangeAgeBars = StaticVarGet(SnapshotPrefix+"RangeAgeBars");
-
-            L_ContextPresent = StaticVarGet(SnapshotPrefix+"L_ContextPresent");
-            L_RangeContextID = StaticVarGet(SnapshotPrefix+"L_RangeContextID");
-            L_RangeStatusCode = StaticVarGet(SnapshotPrefix+"L_RangeStatusCode");
-            L_PhaseStateCode = StaticVarGet(SnapshotPrefix+"L_PhaseStateCode");
-            L_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"L_FamilyHypothesisCode");
-            L_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"L_EvidenceBalanceCode");
-            L_MixedEvidenceReasonCode = StaticVarGet(SnapshotPrefix+"L_MixedEvidenceReasonCode");
-            L_PrimaryRangeLow = StaticVarGet(SnapshotPrefix+"L_PrimaryRangeLow");
-            L_PrimaryRangeHigh = StaticVarGet(SnapshotPrefix+"L_PrimaryRangeHigh");
-            L_RangeAgeBars = StaticVarGet(SnapshotPrefix+"L_RangeAgeBars");
-
-            U_ContextPresent = StaticVarGet(SnapshotPrefix+"U_ContextPresent");
-            U_RangeContextID = StaticVarGet(SnapshotPrefix+"U_RangeContextID");
-            U_RangeStatusCode = StaticVarGet(SnapshotPrefix+"U_RangeStatusCode");
-            U_PhaseStateCode = StaticVarGet(SnapshotPrefix+"U_PhaseStateCode");
-            U_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"U_FamilyHypothesisCode");
-            U_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"U_EvidenceBalanceCode");
-            U_MixedEvidenceReasonCode = StaticVarGet(SnapshotPrefix+"U_MixedEvidenceReasonCode");
-            U_PrimaryRangeLow = StaticVarGet(SnapshotPrefix+"U_PrimaryRangeLow");
-            U_PrimaryRangeHigh = StaticVarGet(SnapshotPrefix+"U_PrimaryRangeHigh");
-            U_RangeAgeBars = StaticVarGet(SnapshotPrefix+"U_RangeAgeBars");
-
-            MTF_SnapshotContractValid = StaticVarGet(SnapshotPrefix+"MTF_SnapshotContractValid");
-            MTF_DailyValid = StaticVarGet(SnapshotPrefix+"MTF_DailyValid");
-            MTF_WeeklyValid = StaticVarGet(SnapshotPrefix+"MTF_WeeklyValid");
-            MTF_MonthlyValid = StaticVarGet(SnapshotPrefix+"MTF_MonthlyValid");
-            MTF_D_DirectionalContextCode = StaticVarGet(SnapshotPrefix+"MTF_D_DirectionalContextCode");
-            MTF_W_DirectionalContextCode = StaticVarGet(SnapshotPrefix+"MTF_W_DirectionalContextCode");
-            MTF_M_DirectionalContextCode = StaticVarGet(SnapshotPrefix+"MTF_M_DirectionalContextCode");
-            MTF_D_PhaseStateCode = StaticVarGet(SnapshotPrefix+"MTF_D_PhaseStateCode");
-            MTF_W_PhaseStateCode = StaticVarGet(SnapshotPrefix+"MTF_W_PhaseStateCode");
-            MTF_M_PhaseStateCode = StaticVarGet(SnapshotPrefix+"MTF_M_PhaseStateCode");
-            MTF_D_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"MTF_D_FamilyHypothesisCode");
-            MTF_W_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"MTF_W_FamilyHypothesisCode");
-            MTF_M_FamilyHypothesisCode = StaticVarGet(SnapshotPrefix+"MTF_M_FamilyHypothesisCode");
-            MTF_D_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"MTF_D_EvidenceBalanceCode");
-            MTF_W_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"MTF_W_EvidenceBalanceCode");
-            MTF_M_EvidenceBalanceCode = StaticVarGet(SnapshotPrefix+"MTF_M_EvidenceBalanceCode");
-            MTF_DirectionalAlignmentCode = StaticVarGet(SnapshotPrefix+"MTF_DirectionalAlignmentCode");
-            MTF_EvidenceAlignmentCode = StaticVarGet(SnapshotPrefix+"MTF_EvidenceAlignmentCode");
-            MTF_PhaseRelationshipCode = StaticVarGet(SnapshotPrefix+"MTF_PhaseRelationshipCode");
-            MTF_ConflictReasonCode = StaticVarGet(SnapshotPrefix+"MTF_ConflictReasonCode");
-            MTF_WeeklySnapshotStatusCode = StaticVarGet(SnapshotPrefix+"MTF_WeeklySnapshotStatusCode");
-            MTF_MonthlySnapshotStatusCode = StaticVarGet(SnapshotPrefix+"MTF_MonthlySnapshotStatusCode");
-            MTF_D_SourceBarDateTime = StaticVarGet(SnapshotPrefix+"MTF_D_SourceBarDateTime");
-            MTF_W_SourcePeriodOrdinal = StaticVarGet(SnapshotPrefix+"MTF_W_SourcePeriodOrdinal");
-            MTF_M_SourcePeriodOrdinal = StaticVarGet(SnapshotPrefix+"MTF_M_SourcePeriodOrdinal");
-            MTF_W_SourceBarDateTime = StaticVarGet(SnapshotPrefix+"MTF_W_SourceBarDateTime");
-            MTF_M_SourceBarDateTime = StaticVarGet(SnapshotPrefix+"MTF_M_SourceBarDateTime");
-            MTF_W_GenerationID = StaticVarGet(SnapshotPrefix+"MTF_W_GenerationID");
-            MTF_M_GenerationID = StaticVarGet(SnapshotPrefix+"MTF_M_GenerationID");
-            MTF_W_SchemaMajor = StaticVarGet(SnapshotPrefix+"MTF_W_SchemaMajor");
-            MTF_W_SchemaMinor = StaticVarGet(SnapshotPrefix+"MTF_W_SchemaMinor");
-            MTF_M_SchemaMajor = StaticVarGet(SnapshotPrefix+"MTF_M_SchemaMajor");
-            MTF_M_SchemaMinor = StaticVarGet(SnapshotPrefix+"MTF_M_SchemaMinor");
-
-            GenerationB = StaticVarGet(SnapshotPrefix+"CommittedGenerationID");
-            ReadyB = StaticVarGet(SnapshotPrefix+"Ready");
-
-            CompletionValid = CompletionBasisCode==1 OR
-                (CompletionBasisCode==2 AND CompletionDeclarationCode==1) OR
-                (CompletionBasisCode==3 AND SnapshotClockBasisCode==2 AND WCLK_IsReplay);
-            ClockBasisValid = SnapshotClockBasisCode==WCLK_ClockBasisCode;
-            CompositeCoreValid = CompositePayloadValid==1 AND
-                NOT IsNull(ContextMultiplicityCode) AND NOT IsNull(DirectionalContextCode) AND
-                NOT IsNull(PhaseStateCode) AND NOT IsNull(EvidenceBalanceCode) AND
-                NOT IsNull(HypothesisAlignmentCode) AND NOT IsNull(ProvisionalFlag);
-            MTFCoreValid = MTFPayloadValid==1 AND MTF_SnapshotContractValid==1 AND
-                MTF_DailyValid==1 AND MTF_WeeklyValid==1 AND MTF_MonthlyValid==1 AND
-                NOT IsNull(MTF_DirectionalAlignmentCode) AND
-                NOT IsNull(MTF_EvidenceAlignmentCode) AND NOT IsNull(MTF_PhaseRelationshipCode);
-
-            if (ReadyB!=1 OR GenerationB!=GenerationA OR GenerationB<=0)
-                StatusCode = 4;
-            else
-            if (SchemaMajor!=WXS_ExpectedSchemaMajor OR SchemaMinor!=WXS_ExpectedSchemaMinor)
-                StatusCode = 5;
-            else
-            if (SnapshotSourceSymbol!=ExpectedSymbol)
-                StatusCode = 6;
-            else
-            if (SourceInterval!=inDaily)
-                StatusCode = 7;
-            else
-            if (IsNull(SourceBusinessDateKey) OR SourceBusinessDateKey<=0 OR IsNull(SourceBarDateTime))
-                StatusCode = 14;
-            else
-            if (SourceBusinessDateKey < WXS_ConsumerBusinessDateKey)
-                StatusCode = 8;
-            else
-            if (SourceBusinessDateKey > WXS_ConsumerBusinessDateKey)
-                StatusCode = 9;
-            else
-            if (ProvisionalFlag!=0)
-                StatusCode = 10;
-            else
-            if (NOT CompletionValid OR NOT ClockBasisValid)
-                StatusCode = 11;
-            else
-            if (NOT CompositeCoreValid)
-                StatusCode = 12;
-            else
-            if (NOT MTFCoreValid)
-                StatusCode = 13;
-            else
-                StatusCode = 1;
-        }
-    }
-
-    VarSetText(OutPrefix+"RequestedSymbol",ExpectedSymbol);
-    VarSetText(OutPrefix+"SnapshotSourceSymbol",SnapshotSourceSymbol);
-    VarSet(OutPrefix+"StatusCode",StatusCode);
-    VarSet(OutPrefix+"Valid",StatusCode==1);
-    VarSet(OutPrefix+"GenerationID",GenerationB);
-    VarSet(OutPrefix+"SchemaMajor",SchemaMajor);
-    VarSet(OutPrefix+"SchemaMinor",SchemaMinor);
-    VarSet(OutPrefix+"SourceInterval",SourceInterval);
-    VarSet(OutPrefix+"SourceBusinessDateKey",SourceBusinessDateKey);
-    VarSet(OutPrefix+"SourceBarDateTime",SourceBarDateTime);
-    VarSet(OutPrefix+"PublishedAtDateTime",PublishedAtDateTime);
-    VarSet(OutPrefix+"CompletionBasisCode",CompletionBasisCode);
-    VarSet(OutPrefix+"CompletionDeclarationCode",CompletionDeclarationCode);
-    VarSet(OutPrefix+"ClockBasisCode",SnapshotClockBasisCode);
-    VarSet(OutPrefix+"CompositePayloadValid",CompositePayloadValid);
-    VarSet(OutPrefix+"MTFPayloadValid",MTFPayloadValid);
-
-    VarSet(OutPrefix+"ContextMultiplicityCode",ContextMultiplicityCode);
-    VarSet(OutPrefix+"ContextAmbiguous",ContextAmbiguous);
-    VarSet(OutPrefix+"CurrentRangeContextID",CurrentRangeContextID);
-    VarSet(OutPrefix+"RangeStatusCode",RangeStatusCode);
-    VarSet(OutPrefix+"PhaseStateCode",PhaseStateCode);
-    VarSet(OutPrefix+"StructuralDevelopmentCode",StructuralDevelopmentCode);
-    VarSet(OutPrefix+"FamilyHypothesisCode",FamilyHypothesisCode);
-    VarSet(OutPrefix+"DirectionalContextCode",DirectionalContextCode);
-    VarSet(OutPrefix+"EvidenceBalanceCode",EvidenceBalanceCode);
-    VarSet(OutPrefix+"HypothesisAlignmentCode",HypothesisAlignmentCode);
-    VarSet(OutPrefix+"HypothesisRevisionCode",HypothesisRevisionCode);
-    VarSet(OutPrefix+"CurrentEventMask",CurrentEventMask);
-    VarSet(OutPrefix+"ProvisionalFlag",ProvisionalFlag);
-    VarSet(OutPrefix+"PrimaryRangeLow",PrimaryRangeLow);
-    VarSet(OutPrefix+"PrimaryRangeHigh",PrimaryRangeHigh);
-    VarSet(OutPrefix+"RangeAgeBars",RangeAgeBars);
-
-    VarSet(OutPrefix+"L_ContextPresent",L_ContextPresent);
-    VarSet(OutPrefix+"L_RangeContextID",L_RangeContextID);
-    VarSet(OutPrefix+"L_RangeStatusCode",L_RangeStatusCode);
-    VarSet(OutPrefix+"L_PhaseStateCode",L_PhaseStateCode);
-    VarSet(OutPrefix+"L_FamilyHypothesisCode",L_FamilyHypothesisCode);
-    VarSet(OutPrefix+"L_EvidenceBalanceCode",L_EvidenceBalanceCode);
-    VarSet(OutPrefix+"L_MixedEvidenceReasonCode",L_MixedEvidenceReasonCode);
-    VarSet(OutPrefix+"L_PrimaryRangeLow",L_PrimaryRangeLow);
-    VarSet(OutPrefix+"L_PrimaryRangeHigh",L_PrimaryRangeHigh);
-    VarSet(OutPrefix+"L_RangeAgeBars",L_RangeAgeBars);
-
-    VarSet(OutPrefix+"U_ContextPresent",U_ContextPresent);
-    VarSet(OutPrefix+"U_RangeContextID",U_RangeContextID);
-    VarSet(OutPrefix+"U_RangeStatusCode",U_RangeStatusCode);
-    VarSet(OutPrefix+"U_PhaseStateCode",U_PhaseStateCode);
-    VarSet(OutPrefix+"U_FamilyHypothesisCode",U_FamilyHypothesisCode);
-    VarSet(OutPrefix+"U_EvidenceBalanceCode",U_EvidenceBalanceCode);
-    VarSet(OutPrefix+"U_MixedEvidenceReasonCode",U_MixedEvidenceReasonCode);
-    VarSet(OutPrefix+"U_PrimaryRangeLow",U_PrimaryRangeLow);
-    VarSet(OutPrefix+"U_PrimaryRangeHigh",U_PrimaryRangeHigh);
-    VarSet(OutPrefix+"U_RangeAgeBars",U_RangeAgeBars);
-
-    VarSet(OutPrefix+"MTF_SnapshotContractValid",MTF_SnapshotContractValid);
-    VarSet(OutPrefix+"MTF_DailyValid",MTF_DailyValid);
-    VarSet(OutPrefix+"MTF_WeeklyValid",MTF_WeeklyValid);
-    VarSet(OutPrefix+"MTF_MonthlyValid",MTF_MonthlyValid);
-    VarSet(OutPrefix+"MTF_D_DirectionalContextCode",MTF_D_DirectionalContextCode);
-    VarSet(OutPrefix+"MTF_W_DirectionalContextCode",MTF_W_DirectionalContextCode);
-    VarSet(OutPrefix+"MTF_M_DirectionalContextCode",MTF_M_DirectionalContextCode);
-    VarSet(OutPrefix+"MTF_D_PhaseStateCode",MTF_D_PhaseStateCode);
-    VarSet(OutPrefix+"MTF_W_PhaseStateCode",MTF_W_PhaseStateCode);
-    VarSet(OutPrefix+"MTF_M_PhaseStateCode",MTF_M_PhaseStateCode);
-    VarSet(OutPrefix+"MTF_D_FamilyHypothesisCode",MTF_D_FamilyHypothesisCode);
-    VarSet(OutPrefix+"MTF_W_FamilyHypothesisCode",MTF_W_FamilyHypothesisCode);
-    VarSet(OutPrefix+"MTF_M_FamilyHypothesisCode",MTF_M_FamilyHypothesisCode);
-    VarSet(OutPrefix+"MTF_D_EvidenceBalanceCode",MTF_D_EvidenceBalanceCode);
-    VarSet(OutPrefix+"MTF_W_EvidenceBalanceCode",MTF_W_EvidenceBalanceCode);
-    VarSet(OutPrefix+"MTF_M_EvidenceBalanceCode",MTF_M_EvidenceBalanceCode);
-    VarSet(OutPrefix+"MTF_DirectionalAlignmentCode",MTF_DirectionalAlignmentCode);
-    VarSet(OutPrefix+"MTF_EvidenceAlignmentCode",MTF_EvidenceAlignmentCode);
-    VarSet(OutPrefix+"MTF_PhaseRelationshipCode",MTF_PhaseRelationshipCode);
-    VarSet(OutPrefix+"MTF_ConflictReasonCode",MTF_ConflictReasonCode);
-    VarSet(OutPrefix+"MTF_WeeklySnapshotStatusCode",MTF_WeeklySnapshotStatusCode);
-    VarSet(OutPrefix+"MTF_MonthlySnapshotStatusCode",MTF_MonthlySnapshotStatusCode);
-    VarSet(OutPrefix+"MTF_D_SourceBarDateTime",MTF_D_SourceBarDateTime);
-    VarSet(OutPrefix+"MTF_W_SourcePeriodOrdinal",MTF_W_SourcePeriodOrdinal);
-    VarSet(OutPrefix+"MTF_M_SourcePeriodOrdinal",MTF_M_SourcePeriodOrdinal);
-    VarSet(OutPrefix+"MTF_W_SourceBarDateTime",MTF_W_SourceBarDateTime);
-    VarSet(OutPrefix+"MTF_M_SourceBarDateTime",MTF_M_SourceBarDateTime);
-    VarSet(OutPrefix+"MTF_W_GenerationID",MTF_W_GenerationID);
-    VarSet(OutPrefix+"MTF_M_GenerationID",MTF_M_GenerationID);
-    VarSet(OutPrefix+"MTF_W_SchemaMajor",MTF_W_SchemaMajor);
-    VarSet(OutPrefix+"MTF_W_SchemaMinor",MTF_W_SchemaMinor);
-    VarSet(OutPrefix+"MTF_M_SchemaMajor",MTF_M_SchemaMajor);
-    VarSet(OutPrefix+"MTF_M_SchemaMinor",MTF_M_SchemaMinor);
-    return 1;
+    WXSM_StatusCode = 2;
 }
+else
+{
+    WXSM_Prefix = "WVSA_SELCTX_v01_" + WXS_RequestedMarketSymbol + "_";
+    WXSM_ReadyA = StaticVarGet(WXSM_Prefix+"Ready");
+    WXSM_GenerationA = StaticVarGet(WXSM_Prefix+"CommittedGenerationID");
 
-WXS_MarketReadExecuted = WXS_ReadSelectionSnapshot("WXSM_",WXS_RequestedMarketSymbol,WXS_MarketRequested);
-WXS_GroupReadExecuted = WXS_ReadSelectionSnapshot("WXSG_",WXS_RequestedGroupSymbol,WXS_GroupRequested);
+    if (IsNull(WXSM_ReadyA) OR IsNull(WXSM_GenerationA))
+    {
+        WXSM_StatusCode = 3;
+    }
+    else
+    if (WXSM_ReadyA!=1 OR WXSM_GenerationA<=0)
+    {
+        WXSM_StatusCode = 4;
+    }
+    else
+    {
+        WXSM_SchemaMajor = StaticVarGet(WXSM_Prefix+"SchemaMajor");
+        WXSM_SchemaMinor = StaticVarGet(WXSM_Prefix+"SchemaMinor");
+        WXSM_SnapshotSourceSymbol = StaticVarGetText(WXSM_Prefix+"SourceSymbol");
+        WXSM_SourceInterval = StaticVarGet(WXSM_Prefix+"SourceInterval");
+        WXSM_SourceBusinessDateKey = StaticVarGet(WXSM_Prefix+"SourceBusinessDateKey");
+        WXSM_SourceBarDateTime = StaticVarGet(WXSM_Prefix+"SourceBarDateTime");
+        WXSM_PublishedAtDateTime = StaticVarGet(WXSM_Prefix+"PublishedAtDateTime");
+        WXSM_CompletionBasisCode = StaticVarGet(WXSM_Prefix+"CompletionBasisCode");
+        WXSM_CompletionDeclarationCode = StaticVarGet(WXSM_Prefix+"CompletionDeclarationCode");
+        WXSM_ClockBasisCode = StaticVarGet(WXSM_Prefix+"ClockBasisCode");
+        WXSM_CompositePayloadValid = StaticVarGet(WXSM_Prefix+"CompositePayloadValid");
+        WXSM_MTFPayloadValid = StaticVarGet(WXSM_Prefix+"MTFPayloadValid");
+        WXSM_ContextMultiplicityCode = StaticVarGet(WXSM_Prefix+"ContextMultiplicityCode");
+        WXSM_ContextAmbiguous = StaticVarGet(WXSM_Prefix+"ContextAmbiguous");
+        WXSM_CurrentRangeContextID = StaticVarGet(WXSM_Prefix+"CurrentRangeContextID");
+        WXSM_RangeStatusCode = StaticVarGet(WXSM_Prefix+"RangeStatusCode");
+        WXSM_PhaseStateCode = StaticVarGet(WXSM_Prefix+"PhaseStateCode");
+        WXSM_StructuralDevelopmentCode = StaticVarGet(WXSM_Prefix+"StructuralDevelopmentCode");
+        WXSM_FamilyHypothesisCode = StaticVarGet(WXSM_Prefix+"FamilyHypothesisCode");
+        WXSM_DirectionalContextCode = StaticVarGet(WXSM_Prefix+"DirectionalContextCode");
+        WXSM_EvidenceBalanceCode = StaticVarGet(WXSM_Prefix+"EvidenceBalanceCode");
+        WXSM_HypothesisAlignmentCode = StaticVarGet(WXSM_Prefix+"HypothesisAlignmentCode");
+        WXSM_HypothesisRevisionCode = StaticVarGet(WXSM_Prefix+"HypothesisRevisionCode");
+        WXSM_CurrentEventMask = StaticVarGet(WXSM_Prefix+"CurrentEventMask");
+        WXSM_ProvisionalFlag = StaticVarGet(WXSM_Prefix+"ProvisionalFlag");
+        WXSM_PrimaryRangeLow = StaticVarGet(WXSM_Prefix+"PrimaryRangeLow");
+        WXSM_PrimaryRangeHigh = StaticVarGet(WXSM_Prefix+"PrimaryRangeHigh");
+        WXSM_RangeAgeBars = StaticVarGet(WXSM_Prefix+"RangeAgeBars");
+        WXSM_L_ContextPresent = StaticVarGet(WXSM_Prefix+"L_ContextPresent");
+        WXSM_L_RangeContextID = StaticVarGet(WXSM_Prefix+"L_RangeContextID");
+        WXSM_L_RangeStatusCode = StaticVarGet(WXSM_Prefix+"L_RangeStatusCode");
+        WXSM_L_PhaseStateCode = StaticVarGet(WXSM_Prefix+"L_PhaseStateCode");
+        WXSM_L_FamilyHypothesisCode = StaticVarGet(WXSM_Prefix+"L_FamilyHypothesisCode");
+        WXSM_L_EvidenceBalanceCode = StaticVarGet(WXSM_Prefix+"L_EvidenceBalanceCode");
+        WXSM_L_MixedEvidenceReasonCode = StaticVarGet(WXSM_Prefix+"L_MixedEvidenceReasonCode");
+        WXSM_L_PrimaryRangeLow = StaticVarGet(WXSM_Prefix+"L_PrimaryRangeLow");
+        WXSM_L_PrimaryRangeHigh = StaticVarGet(WXSM_Prefix+"L_PrimaryRangeHigh");
+        WXSM_L_RangeAgeBars = StaticVarGet(WXSM_Prefix+"L_RangeAgeBars");
+        WXSM_U_ContextPresent = StaticVarGet(WXSM_Prefix+"U_ContextPresent");
+        WXSM_U_RangeContextID = StaticVarGet(WXSM_Prefix+"U_RangeContextID");
+        WXSM_U_RangeStatusCode = StaticVarGet(WXSM_Prefix+"U_RangeStatusCode");
+        WXSM_U_PhaseStateCode = StaticVarGet(WXSM_Prefix+"U_PhaseStateCode");
+        WXSM_U_FamilyHypothesisCode = StaticVarGet(WXSM_Prefix+"U_FamilyHypothesisCode");
+        WXSM_U_EvidenceBalanceCode = StaticVarGet(WXSM_Prefix+"U_EvidenceBalanceCode");
+        WXSM_U_MixedEvidenceReasonCode = StaticVarGet(WXSM_Prefix+"U_MixedEvidenceReasonCode");
+        WXSM_U_PrimaryRangeLow = StaticVarGet(WXSM_Prefix+"U_PrimaryRangeLow");
+        WXSM_U_PrimaryRangeHigh = StaticVarGet(WXSM_Prefix+"U_PrimaryRangeHigh");
+        WXSM_U_RangeAgeBars = StaticVarGet(WXSM_Prefix+"U_RangeAgeBars");
+        WXSM_MTF_SnapshotContractValid = StaticVarGet(WXSM_Prefix+"MTF_SnapshotContractValid");
+        WXSM_MTF_DailyValid = StaticVarGet(WXSM_Prefix+"MTF_DailyValid");
+        WXSM_MTF_WeeklyValid = StaticVarGet(WXSM_Prefix+"MTF_WeeklyValid");
+        WXSM_MTF_MonthlyValid = StaticVarGet(WXSM_Prefix+"MTF_MonthlyValid");
+        WXSM_MTF_D_DirectionalContextCode = StaticVarGet(WXSM_Prefix+"MTF_D_DirectionalContextCode");
+        WXSM_MTF_W_DirectionalContextCode = StaticVarGet(WXSM_Prefix+"MTF_W_DirectionalContextCode");
+        WXSM_MTF_M_DirectionalContextCode = StaticVarGet(WXSM_Prefix+"MTF_M_DirectionalContextCode");
+        WXSM_MTF_D_PhaseStateCode = StaticVarGet(WXSM_Prefix+"MTF_D_PhaseStateCode");
+        WXSM_MTF_W_PhaseStateCode = StaticVarGet(WXSM_Prefix+"MTF_W_PhaseStateCode");
+        WXSM_MTF_M_PhaseStateCode = StaticVarGet(WXSM_Prefix+"MTF_M_PhaseStateCode");
+        WXSM_MTF_D_FamilyHypothesisCode = StaticVarGet(WXSM_Prefix+"MTF_D_FamilyHypothesisCode");
+        WXSM_MTF_W_FamilyHypothesisCode = StaticVarGet(WXSM_Prefix+"MTF_W_FamilyHypothesisCode");
+        WXSM_MTF_M_FamilyHypothesisCode = StaticVarGet(WXSM_Prefix+"MTF_M_FamilyHypothesisCode");
+        WXSM_MTF_D_EvidenceBalanceCode = StaticVarGet(WXSM_Prefix+"MTF_D_EvidenceBalanceCode");
+        WXSM_MTF_W_EvidenceBalanceCode = StaticVarGet(WXSM_Prefix+"MTF_W_EvidenceBalanceCode");
+        WXSM_MTF_M_EvidenceBalanceCode = StaticVarGet(WXSM_Prefix+"MTF_M_EvidenceBalanceCode");
+        WXSM_MTF_DirectionalAlignmentCode = StaticVarGet(WXSM_Prefix+"MTF_DirectionalAlignmentCode");
+        WXSM_MTF_EvidenceAlignmentCode = StaticVarGet(WXSM_Prefix+"MTF_EvidenceAlignmentCode");
+        WXSM_MTF_PhaseRelationshipCode = StaticVarGet(WXSM_Prefix+"MTF_PhaseRelationshipCode");
+        WXSM_MTF_ConflictReasonCode = StaticVarGet(WXSM_Prefix+"MTF_ConflictReasonCode");
+        WXSM_MTF_WeeklySnapshotStatusCode = StaticVarGet(WXSM_Prefix+"MTF_WeeklySnapshotStatusCode");
+        WXSM_MTF_MonthlySnapshotStatusCode = StaticVarGet(WXSM_Prefix+"MTF_MonthlySnapshotStatusCode");
+        WXSM_MTF_D_SourceBarDateTime = StaticVarGet(WXSM_Prefix+"MTF_D_SourceBarDateTime");
+        WXSM_MTF_W_SourcePeriodOrdinal = StaticVarGet(WXSM_Prefix+"MTF_W_SourcePeriodOrdinal");
+        WXSM_MTF_M_SourcePeriodOrdinal = StaticVarGet(WXSM_Prefix+"MTF_M_SourcePeriodOrdinal");
+        WXSM_MTF_W_SourceBarDateTime = StaticVarGet(WXSM_Prefix+"MTF_W_SourceBarDateTime");
+        WXSM_MTF_M_SourceBarDateTime = StaticVarGet(WXSM_Prefix+"MTF_M_SourceBarDateTime");
+        WXSM_MTF_W_GenerationID = StaticVarGet(WXSM_Prefix+"MTF_W_GenerationID");
+        WXSM_MTF_M_GenerationID = StaticVarGet(WXSM_Prefix+"MTF_M_GenerationID");
+        WXSM_MTF_W_SchemaMajor = StaticVarGet(WXSM_Prefix+"MTF_W_SchemaMajor");
+        WXSM_MTF_W_SchemaMinor = StaticVarGet(WXSM_Prefix+"MTF_W_SchemaMinor");
+        WXSM_MTF_M_SchemaMajor = StaticVarGet(WXSM_Prefix+"MTF_M_SchemaMajor");
+        WXSM_MTF_M_SchemaMinor = StaticVarGet(WXSM_Prefix+"MTF_M_SchemaMinor");
+        WXSM_GenerationB = StaticVarGet(WXSM_Prefix+"CommittedGenerationID");
+        WXSM_ReadyB = StaticVarGet(WXSM_Prefix+"Ready");
+        WXSM_GenerationID = WXSM_GenerationB;
 
-WXS_MarketStatusCodeScalar = VarGet("WXSM_StatusCode");
-WXS_GroupStatusCodeScalar = VarGet("WXSG_StatusCode");
-WXS_MarketValidScalar = VarGet("WXSM_Valid");
-WXS_GroupValidScalar = VarGet("WXSG_Valid");
+        WXSM_CompletionValid =
+            WXSM_CompletionBasisCode==1 OR
+            (WXSM_CompletionBasisCode==2 AND WXSM_CompletionDeclarationCode==1) OR
+            (WXSM_CompletionBasisCode==3 AND WXSM_ClockBasisCode==2 AND WCLK_IsReplay);
+        WXSM_ClockBasisValid = WXSM_ClockBasisCode==WCLK_ClockBasisCode;
+        WXSM_CompositeCoreValid = WXSM_CompositePayloadValid==1 AND
+            NOT IsNull(WXSM_ContextMultiplicityCode) AND NOT IsNull(WXSM_DirectionalContextCode) AND
+            NOT IsNull(WXSM_PhaseStateCode) AND NOT IsNull(WXSM_EvidenceBalanceCode) AND
+            NOT IsNull(WXSM_HypothesisAlignmentCode) AND NOT IsNull(WXSM_ProvisionalFlag);
+        WXSM_MTFCoreValid = WXSM_MTFPayloadValid==1 AND WXSM_MTF_SnapshotContractValid==1 AND
+            WXSM_MTF_DailyValid==1 AND WXSM_MTF_WeeklyValid==1 AND WXSM_MTF_MonthlyValid==1 AND
+            NOT IsNull(WXSM_MTF_DirectionalAlignmentCode) AND
+            NOT IsNull(WXSM_MTF_EvidenceAlignmentCode) AND NOT IsNull(WXSM_MTF_PhaseRelationshipCode);
+
+        if (WXSM_ReadyB!=1 OR WXSM_GenerationB!=WXSM_GenerationA OR WXSM_GenerationB<=0)
+            WXSM_StatusCode = 4;
+        else
+        if (WXSM_SchemaMajor!=WXS_ExpectedSchemaMajor OR WXSM_SchemaMinor!=WXS_ExpectedSchemaMinor)
+            WXSM_StatusCode = 5;
+        else
+        if (WXSM_SnapshotSourceSymbol!=WXS_RequestedMarketSymbol)
+            WXSM_StatusCode = 6;
+        else
+        if (WXSM_SourceInterval!=inDaily)
+            WXSM_StatusCode = 7;
+        else
+        if (IsNull(WXSM_SourceBusinessDateKey) OR WXSM_SourceBusinessDateKey<=0 OR IsNull(WXSM_SourceBarDateTime))
+            WXSM_StatusCode = 14;
+        else
+        if (WXSM_SourceBusinessDateKey < WXS_ConsumerBusinessDateKey)
+            WXSM_StatusCode = 8;
+        else
+        if (WXSM_SourceBusinessDateKey > WXS_ConsumerBusinessDateKey)
+            WXSM_StatusCode = 9;
+        else
+        if (WXSM_ProvisionalFlag!=0)
+            WXSM_StatusCode = 10;
+        else
+        if (NOT WXSM_CompletionValid OR NOT WXSM_ClockBasisValid)
+            WXSM_StatusCode = 11;
+        else
+        if (NOT WXSM_CompositeCoreValid)
+            WXSM_StatusCode = 12;
+        else
+        if (NOT WXSM_MTFCoreValid)
+            WXSM_StatusCode = 13;
+        else
+            WXSM_StatusCode = 1;
+    }
+}
+WXSM_Valid = WXSM_StatusCode==1;
+
+WXSG_RequestedSymbol = WXS_RequestedGroupSymbol;
+WXSG_SnapshotSourceSymbol = "";
+WXSG_GenerationID = Null;
+WXSG_SchemaMajor = Null;
+WXSG_SchemaMinor = Null;
+WXSG_SourceInterval = Null;
+WXSG_SourceBusinessDateKey = Null;
+WXSG_SourceBarDateTime = Null;
+WXSG_PublishedAtDateTime = Null;
+WXSG_CompletionBasisCode = Null;
+WXSG_CompletionDeclarationCode = Null;
+WXSG_ClockBasisCode = Null;
+WXSG_CompositePayloadValid = Null;
+WXSG_MTFPayloadValid = Null;
+WXSG_ContextMultiplicityCode = Null;
+WXSG_ContextAmbiguous = Null;
+WXSG_CurrentRangeContextID = Null;
+WXSG_RangeStatusCode = Null;
+WXSG_PhaseStateCode = Null;
+WXSG_StructuralDevelopmentCode = Null;
+WXSG_FamilyHypothesisCode = Null;
+WXSG_DirectionalContextCode = Null;
+WXSG_EvidenceBalanceCode = Null;
+WXSG_HypothesisAlignmentCode = Null;
+WXSG_HypothesisRevisionCode = Null;
+WXSG_CurrentEventMask = Null;
+WXSG_ProvisionalFlag = Null;
+WXSG_PrimaryRangeLow = Null;
+WXSG_PrimaryRangeHigh = Null;
+WXSG_RangeAgeBars = Null;
+WXSG_L_ContextPresent = Null;
+WXSG_L_RangeContextID = Null;
+WXSG_L_RangeStatusCode = Null;
+WXSG_L_PhaseStateCode = Null;
+WXSG_L_FamilyHypothesisCode = Null;
+WXSG_L_EvidenceBalanceCode = Null;
+WXSG_L_MixedEvidenceReasonCode = Null;
+WXSG_L_PrimaryRangeLow = Null;
+WXSG_L_PrimaryRangeHigh = Null;
+WXSG_L_RangeAgeBars = Null;
+WXSG_U_ContextPresent = Null;
+WXSG_U_RangeContextID = Null;
+WXSG_U_RangeStatusCode = Null;
+WXSG_U_PhaseStateCode = Null;
+WXSG_U_FamilyHypothesisCode = Null;
+WXSG_U_EvidenceBalanceCode = Null;
+WXSG_U_MixedEvidenceReasonCode = Null;
+WXSG_U_PrimaryRangeLow = Null;
+WXSG_U_PrimaryRangeHigh = Null;
+WXSG_U_RangeAgeBars = Null;
+WXSG_MTF_SnapshotContractValid = Null;
+WXSG_MTF_DailyValid = Null;
+WXSG_MTF_WeeklyValid = Null;
+WXSG_MTF_MonthlyValid = Null;
+WXSG_MTF_D_DirectionalContextCode = Null;
+WXSG_MTF_W_DirectionalContextCode = Null;
+WXSG_MTF_M_DirectionalContextCode = Null;
+WXSG_MTF_D_PhaseStateCode = Null;
+WXSG_MTF_W_PhaseStateCode = Null;
+WXSG_MTF_M_PhaseStateCode = Null;
+WXSG_MTF_D_FamilyHypothesisCode = Null;
+WXSG_MTF_W_FamilyHypothesisCode = Null;
+WXSG_MTF_M_FamilyHypothesisCode = Null;
+WXSG_MTF_D_EvidenceBalanceCode = Null;
+WXSG_MTF_W_EvidenceBalanceCode = Null;
+WXSG_MTF_M_EvidenceBalanceCode = Null;
+WXSG_MTF_DirectionalAlignmentCode = Null;
+WXSG_MTF_EvidenceAlignmentCode = Null;
+WXSG_MTF_PhaseRelationshipCode = Null;
+WXSG_MTF_ConflictReasonCode = Null;
+WXSG_MTF_WeeklySnapshotStatusCode = Null;
+WXSG_MTF_MonthlySnapshotStatusCode = Null;
+WXSG_MTF_D_SourceBarDateTime = Null;
+WXSG_MTF_W_SourcePeriodOrdinal = Null;
+WXSG_MTF_M_SourcePeriodOrdinal = Null;
+WXSG_MTF_W_SourceBarDateTime = Null;
+WXSG_MTF_M_SourceBarDateTime = Null;
+WXSG_MTF_W_GenerationID = Null;
+WXSG_MTF_M_GenerationID = Null;
+WXSG_MTF_W_SchemaMajor = Null;
+WXSG_MTF_W_SchemaMinor = Null;
+WXSG_MTF_M_SchemaMajor = Null;
+WXSG_MTF_M_SchemaMinor = Null;
+WXSG_StatusCode = 0;
+WXSG_Valid = 0;
+WXSG_ReadyA = Null;
+WXSG_ReadyB = Null;
+WXSG_GenerationA = Null;
+WXSG_GenerationB = Null;
+WXSG_CompletionValid = 0;
+WXSG_ClockBasisValid = 0;
+WXSG_CompositeCoreValid = 0;
+WXSG_MTFCoreValid = 0;
+
+if (NOT WXS_GroupRequested)
+{
+    WXSG_StatusCode = 2;
+}
+else
+{
+    WXSG_Prefix = "WVSA_SELCTX_v01_" + WXS_RequestedGroupSymbol + "_";
+    WXSG_ReadyA = StaticVarGet(WXSG_Prefix+"Ready");
+    WXSG_GenerationA = StaticVarGet(WXSG_Prefix+"CommittedGenerationID");
+
+    if (IsNull(WXSG_ReadyA) OR IsNull(WXSG_GenerationA))
+    {
+        WXSG_StatusCode = 3;
+    }
+    else
+    if (WXSG_ReadyA!=1 OR WXSG_GenerationA<=0)
+    {
+        WXSG_StatusCode = 4;
+    }
+    else
+    {
+        WXSG_SchemaMajor = StaticVarGet(WXSG_Prefix+"SchemaMajor");
+        WXSG_SchemaMinor = StaticVarGet(WXSG_Prefix+"SchemaMinor");
+        WXSG_SnapshotSourceSymbol = StaticVarGetText(WXSG_Prefix+"SourceSymbol");
+        WXSG_SourceInterval = StaticVarGet(WXSG_Prefix+"SourceInterval");
+        WXSG_SourceBusinessDateKey = StaticVarGet(WXSG_Prefix+"SourceBusinessDateKey");
+        WXSG_SourceBarDateTime = StaticVarGet(WXSG_Prefix+"SourceBarDateTime");
+        WXSG_PublishedAtDateTime = StaticVarGet(WXSG_Prefix+"PublishedAtDateTime");
+        WXSG_CompletionBasisCode = StaticVarGet(WXSG_Prefix+"CompletionBasisCode");
+        WXSG_CompletionDeclarationCode = StaticVarGet(WXSG_Prefix+"CompletionDeclarationCode");
+        WXSG_ClockBasisCode = StaticVarGet(WXSG_Prefix+"ClockBasisCode");
+        WXSG_CompositePayloadValid = StaticVarGet(WXSG_Prefix+"CompositePayloadValid");
+        WXSG_MTFPayloadValid = StaticVarGet(WXSG_Prefix+"MTFPayloadValid");
+        WXSG_ContextMultiplicityCode = StaticVarGet(WXSG_Prefix+"ContextMultiplicityCode");
+        WXSG_ContextAmbiguous = StaticVarGet(WXSG_Prefix+"ContextAmbiguous");
+        WXSG_CurrentRangeContextID = StaticVarGet(WXSG_Prefix+"CurrentRangeContextID");
+        WXSG_RangeStatusCode = StaticVarGet(WXSG_Prefix+"RangeStatusCode");
+        WXSG_PhaseStateCode = StaticVarGet(WXSG_Prefix+"PhaseStateCode");
+        WXSG_StructuralDevelopmentCode = StaticVarGet(WXSG_Prefix+"StructuralDevelopmentCode");
+        WXSG_FamilyHypothesisCode = StaticVarGet(WXSG_Prefix+"FamilyHypothesisCode");
+        WXSG_DirectionalContextCode = StaticVarGet(WXSG_Prefix+"DirectionalContextCode");
+        WXSG_EvidenceBalanceCode = StaticVarGet(WXSG_Prefix+"EvidenceBalanceCode");
+        WXSG_HypothesisAlignmentCode = StaticVarGet(WXSG_Prefix+"HypothesisAlignmentCode");
+        WXSG_HypothesisRevisionCode = StaticVarGet(WXSG_Prefix+"HypothesisRevisionCode");
+        WXSG_CurrentEventMask = StaticVarGet(WXSG_Prefix+"CurrentEventMask");
+        WXSG_ProvisionalFlag = StaticVarGet(WXSG_Prefix+"ProvisionalFlag");
+        WXSG_PrimaryRangeLow = StaticVarGet(WXSG_Prefix+"PrimaryRangeLow");
+        WXSG_PrimaryRangeHigh = StaticVarGet(WXSG_Prefix+"PrimaryRangeHigh");
+        WXSG_RangeAgeBars = StaticVarGet(WXSG_Prefix+"RangeAgeBars");
+        WXSG_L_ContextPresent = StaticVarGet(WXSG_Prefix+"L_ContextPresent");
+        WXSG_L_RangeContextID = StaticVarGet(WXSG_Prefix+"L_RangeContextID");
+        WXSG_L_RangeStatusCode = StaticVarGet(WXSG_Prefix+"L_RangeStatusCode");
+        WXSG_L_PhaseStateCode = StaticVarGet(WXSG_Prefix+"L_PhaseStateCode");
+        WXSG_L_FamilyHypothesisCode = StaticVarGet(WXSG_Prefix+"L_FamilyHypothesisCode");
+        WXSG_L_EvidenceBalanceCode = StaticVarGet(WXSG_Prefix+"L_EvidenceBalanceCode");
+        WXSG_L_MixedEvidenceReasonCode = StaticVarGet(WXSG_Prefix+"L_MixedEvidenceReasonCode");
+        WXSG_L_PrimaryRangeLow = StaticVarGet(WXSG_Prefix+"L_PrimaryRangeLow");
+        WXSG_L_PrimaryRangeHigh = StaticVarGet(WXSG_Prefix+"L_PrimaryRangeHigh");
+        WXSG_L_RangeAgeBars = StaticVarGet(WXSG_Prefix+"L_RangeAgeBars");
+        WXSG_U_ContextPresent = StaticVarGet(WXSG_Prefix+"U_ContextPresent");
+        WXSG_U_RangeContextID = StaticVarGet(WXSG_Prefix+"U_RangeContextID");
+        WXSG_U_RangeStatusCode = StaticVarGet(WXSG_Prefix+"U_RangeStatusCode");
+        WXSG_U_PhaseStateCode = StaticVarGet(WXSG_Prefix+"U_PhaseStateCode");
+        WXSG_U_FamilyHypothesisCode = StaticVarGet(WXSG_Prefix+"U_FamilyHypothesisCode");
+        WXSG_U_EvidenceBalanceCode = StaticVarGet(WXSG_Prefix+"U_EvidenceBalanceCode");
+        WXSG_U_MixedEvidenceReasonCode = StaticVarGet(WXSG_Prefix+"U_MixedEvidenceReasonCode");
+        WXSG_U_PrimaryRangeLow = StaticVarGet(WXSG_Prefix+"U_PrimaryRangeLow");
+        WXSG_U_PrimaryRangeHigh = StaticVarGet(WXSG_Prefix+"U_PrimaryRangeHigh");
+        WXSG_U_RangeAgeBars = StaticVarGet(WXSG_Prefix+"U_RangeAgeBars");
+        WXSG_MTF_SnapshotContractValid = StaticVarGet(WXSG_Prefix+"MTF_SnapshotContractValid");
+        WXSG_MTF_DailyValid = StaticVarGet(WXSG_Prefix+"MTF_DailyValid");
+        WXSG_MTF_WeeklyValid = StaticVarGet(WXSG_Prefix+"MTF_WeeklyValid");
+        WXSG_MTF_MonthlyValid = StaticVarGet(WXSG_Prefix+"MTF_MonthlyValid");
+        WXSG_MTF_D_DirectionalContextCode = StaticVarGet(WXSG_Prefix+"MTF_D_DirectionalContextCode");
+        WXSG_MTF_W_DirectionalContextCode = StaticVarGet(WXSG_Prefix+"MTF_W_DirectionalContextCode");
+        WXSG_MTF_M_DirectionalContextCode = StaticVarGet(WXSG_Prefix+"MTF_M_DirectionalContextCode");
+        WXSG_MTF_D_PhaseStateCode = StaticVarGet(WXSG_Prefix+"MTF_D_PhaseStateCode");
+        WXSG_MTF_W_PhaseStateCode = StaticVarGet(WXSG_Prefix+"MTF_W_PhaseStateCode");
+        WXSG_MTF_M_PhaseStateCode = StaticVarGet(WXSG_Prefix+"MTF_M_PhaseStateCode");
+        WXSG_MTF_D_FamilyHypothesisCode = StaticVarGet(WXSG_Prefix+"MTF_D_FamilyHypothesisCode");
+        WXSG_MTF_W_FamilyHypothesisCode = StaticVarGet(WXSG_Prefix+"MTF_W_FamilyHypothesisCode");
+        WXSG_MTF_M_FamilyHypothesisCode = StaticVarGet(WXSG_Prefix+"MTF_M_FamilyHypothesisCode");
+        WXSG_MTF_D_EvidenceBalanceCode = StaticVarGet(WXSG_Prefix+"MTF_D_EvidenceBalanceCode");
+        WXSG_MTF_W_EvidenceBalanceCode = StaticVarGet(WXSG_Prefix+"MTF_W_EvidenceBalanceCode");
+        WXSG_MTF_M_EvidenceBalanceCode = StaticVarGet(WXSG_Prefix+"MTF_M_EvidenceBalanceCode");
+        WXSG_MTF_DirectionalAlignmentCode = StaticVarGet(WXSG_Prefix+"MTF_DirectionalAlignmentCode");
+        WXSG_MTF_EvidenceAlignmentCode = StaticVarGet(WXSG_Prefix+"MTF_EvidenceAlignmentCode");
+        WXSG_MTF_PhaseRelationshipCode = StaticVarGet(WXSG_Prefix+"MTF_PhaseRelationshipCode");
+        WXSG_MTF_ConflictReasonCode = StaticVarGet(WXSG_Prefix+"MTF_ConflictReasonCode");
+        WXSG_MTF_WeeklySnapshotStatusCode = StaticVarGet(WXSG_Prefix+"MTF_WeeklySnapshotStatusCode");
+        WXSG_MTF_MonthlySnapshotStatusCode = StaticVarGet(WXSG_Prefix+"MTF_MonthlySnapshotStatusCode");
+        WXSG_MTF_D_SourceBarDateTime = StaticVarGet(WXSG_Prefix+"MTF_D_SourceBarDateTime");
+        WXSG_MTF_W_SourcePeriodOrdinal = StaticVarGet(WXSG_Prefix+"MTF_W_SourcePeriodOrdinal");
+        WXSG_MTF_M_SourcePeriodOrdinal = StaticVarGet(WXSG_Prefix+"MTF_M_SourcePeriodOrdinal");
+        WXSG_MTF_W_SourceBarDateTime = StaticVarGet(WXSG_Prefix+"MTF_W_SourceBarDateTime");
+        WXSG_MTF_M_SourceBarDateTime = StaticVarGet(WXSG_Prefix+"MTF_M_SourceBarDateTime");
+        WXSG_MTF_W_GenerationID = StaticVarGet(WXSG_Prefix+"MTF_W_GenerationID");
+        WXSG_MTF_M_GenerationID = StaticVarGet(WXSG_Prefix+"MTF_M_GenerationID");
+        WXSG_MTF_W_SchemaMajor = StaticVarGet(WXSG_Prefix+"MTF_W_SchemaMajor");
+        WXSG_MTF_W_SchemaMinor = StaticVarGet(WXSG_Prefix+"MTF_W_SchemaMinor");
+        WXSG_MTF_M_SchemaMajor = StaticVarGet(WXSG_Prefix+"MTF_M_SchemaMajor");
+        WXSG_MTF_M_SchemaMinor = StaticVarGet(WXSG_Prefix+"MTF_M_SchemaMinor");
+        WXSG_GenerationB = StaticVarGet(WXSG_Prefix+"CommittedGenerationID");
+        WXSG_ReadyB = StaticVarGet(WXSG_Prefix+"Ready");
+        WXSG_GenerationID = WXSG_GenerationB;
+
+        WXSG_CompletionValid =
+            WXSG_CompletionBasisCode==1 OR
+            (WXSG_CompletionBasisCode==2 AND WXSG_CompletionDeclarationCode==1) OR
+            (WXSG_CompletionBasisCode==3 AND WXSG_ClockBasisCode==2 AND WCLK_IsReplay);
+        WXSG_ClockBasisValid = WXSG_ClockBasisCode==WCLK_ClockBasisCode;
+        WXSG_CompositeCoreValid = WXSG_CompositePayloadValid==1 AND
+            NOT IsNull(WXSG_ContextMultiplicityCode) AND NOT IsNull(WXSG_DirectionalContextCode) AND
+            NOT IsNull(WXSG_PhaseStateCode) AND NOT IsNull(WXSG_EvidenceBalanceCode) AND
+            NOT IsNull(WXSG_HypothesisAlignmentCode) AND NOT IsNull(WXSG_ProvisionalFlag);
+        WXSG_MTFCoreValid = WXSG_MTFPayloadValid==1 AND WXSG_MTF_SnapshotContractValid==1 AND
+            WXSG_MTF_DailyValid==1 AND WXSG_MTF_WeeklyValid==1 AND WXSG_MTF_MonthlyValid==1 AND
+            NOT IsNull(WXSG_MTF_DirectionalAlignmentCode) AND
+            NOT IsNull(WXSG_MTF_EvidenceAlignmentCode) AND NOT IsNull(WXSG_MTF_PhaseRelationshipCode);
+
+        if (WXSG_ReadyB!=1 OR WXSG_GenerationB!=WXSG_GenerationA OR WXSG_GenerationB<=0)
+            WXSG_StatusCode = 4;
+        else
+        if (WXSG_SchemaMajor!=WXS_ExpectedSchemaMajor OR WXSG_SchemaMinor!=WXS_ExpectedSchemaMinor)
+            WXSG_StatusCode = 5;
+        else
+        if (WXSG_SnapshotSourceSymbol!=WXS_RequestedGroupSymbol)
+            WXSG_StatusCode = 6;
+        else
+        if (WXSG_SourceInterval!=inDaily)
+            WXSG_StatusCode = 7;
+        else
+        if (IsNull(WXSG_SourceBusinessDateKey) OR WXSG_SourceBusinessDateKey<=0 OR IsNull(WXSG_SourceBarDateTime))
+            WXSG_StatusCode = 14;
+        else
+        if (WXSG_SourceBusinessDateKey < WXS_ConsumerBusinessDateKey)
+            WXSG_StatusCode = 8;
+        else
+        if (WXSG_SourceBusinessDateKey > WXS_ConsumerBusinessDateKey)
+            WXSG_StatusCode = 9;
+        else
+        if (WXSG_ProvisionalFlag!=0)
+            WXSG_StatusCode = 10;
+        else
+        if (NOT WXSG_CompletionValid OR NOT WXSG_ClockBasisValid)
+            WXSG_StatusCode = 11;
+        else
+        if (NOT WXSG_CompositeCoreValid)
+            WXSG_StatusCode = 12;
+        else
+        if (NOT WXSG_MTFCoreValid)
+            WXSG_StatusCode = 13;
+        else
+            WXSG_StatusCode = 1;
+    }
+}
+WXSG_Valid = WXSG_StatusCode==1;
+
+WXS_MarketReadExecuted = 1;
+WXS_GroupReadExecuted = 1;
+WXS_MarketStatusCodeScalar = WXSM_StatusCode;
+WXS_GroupStatusCodeScalar = WXSG_StatusCode;
+WXS_MarketValidScalar = WXSM_Valid;
+WXS_GroupValidScalar = WXSG_Valid;
+
 _SECTION_END();
