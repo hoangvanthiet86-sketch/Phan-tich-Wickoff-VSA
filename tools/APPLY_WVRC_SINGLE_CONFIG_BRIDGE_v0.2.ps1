@@ -6,43 +6,8 @@ param(
 $ErrorActionPreference = "Stop"
 $BackupSuffix = ".pre-wvrc-v0.2.bak"
 
-function Get-Path([string]$Name) {
-    Join-Path $IncludeDir $Name
-}
-
-function Backup-Once([string]$Path) {
-    $bak = $Path + $BackupSuffix
-    if (-not (Test-Path $bak)) {
-        Copy-Item -LiteralPath $Path -Destination $bak -Force
-    }
-}
-
-function Replace-RegexOrThrow(
-    [string]$FileName,
-    [string]$Pattern,
-    [string]$Replacement,
-    [string]$Marker
-) {
-    $path = Get-Path $FileName
-    if (-not (Test-Path $path)) {
-        throw "Missing required AFL file: $path"
-    }
-
-    $text = Get-Content -LiteralPath $path -Raw
-    if ($text.Contains($Marker)) {
-        Write-Host "SKIP already bridged: $FileName"
-        return
-    }
-
-    $regex = [regex]::new($Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
-    if (-not $regex.IsMatch($text)) {
-        throw "Expected source block not found in $FileName. No changes written."
-    }
-
-    Backup-Once $path
-    $newText = $regex.Replace($text, $Replacement, 1)
-    Set-Content -LiteralPath $path -Value $newText -Encoding UTF8
-    Write-Host "PATCHED: $FileName"
+function Resolve-AflPath([string]$Name) {
+    return Join-Path $IncludeDir $Name
 }
 
 $files = @(
@@ -56,7 +21,7 @@ $files = @(
 
 if ($Restore) {
     foreach ($name in $files) {
-        $path = Get-Path $name
+        $path = Resolve-AflPath $name
         $bak = $path + $BackupSuffix
         if (Test-Path $bak) {
             Copy-Item -LiteralPath $bak -Destination $path -Force
@@ -68,9 +33,6 @@ if ($Restore) {
     Write-Host "Restore complete."
     exit 0
 }
-
-Write-Host "Applying Wyckoff VSA Runtime v0.2 Single Configuration Authority bridge..."
-Write-Host "Include directory: $IncludeDir"
 
 $coreReplacement = @'
 // WVRC_BRIDGE_V02 CORE
@@ -98,11 +60,6 @@ else
     ShowDebugTitle = ParamToggle("Show Debug Title", "No|Yes", 0);
 }
 '@
-Replace-RegexOrThrow \
-    "WyckoffVSA_Core_v1.0.afl" \
-    'VolumeLookback\s*=\s*Param\("Volume Lookback".*?ShowDebugTitle\s*=\s*ParamToggle\("Show Debug Title".*?\);' \
-    $coreReplacement \
-    "WVRC_BRIDGE_V02 CORE"
 
 $slReplacement = @'
 // WVRC_BRIDGE_V02 STRUCTURE_LOCATION
@@ -124,11 +81,6 @@ else
     SL_PivotRight = Param("SL Pivot Right",3,1,20,1);
 }
 '@
-Replace-RegexOrThrow \
-    "WyckoffVSA_StructureLocation_v1.0.afl" \
-    'SL_S_Lookback\s*=\s*Param\("SL Short Lookback".*?SL_PivotRight\s*=\s*Param\("SL Pivot Right".*?\);' \
-    $slReplacement \
-    "WVRC_BRIDGE_V02 STRUCTURE_LOCATION"
 
 $compositeReplacement = @'
 // WVRC_BRIDGE_V02 COMPOSITE
@@ -138,11 +90,6 @@ if (WVRC_CompositeUseCentralConfig)
 else
     WCI_RuntimeLastBarIsProvisional = ParamToggle("Composite: last bar provisional","No|Yes",0);
 '@
-Replace-RegexOrThrow \
-    "WyckoffVSA_CompositeIndicator_v0.1.afl" \
-    'WCI_RuntimeLastBarIsProvisional\s*=\s*ParamToggle\("Composite: last bar provisional","No\|Yes",0\);' \
-    $compositeReplacement \
-    "WVRC_BRIDGE_V02 COMPOSITE"
 
 $rsReplacement = @'
 // WVRC_BRIDGE_V02 RELATIVE_STRENGTH
@@ -164,11 +111,6 @@ else
     WRS_RuntimeLastBarIsProvisional = ParamToggle("RS: last bar provisional","No|Yes",0);
 }
 '@
-Replace-RegexOrThrow \
-    "WyckoffVSA_RelativeStrengthContext_v0.1.afl" \
-    'WRS_MarketBenchmarkSymbol\s*=\s*ParamStr\("RS Market Benchmark",""\);.*?WRS_RuntimeLastBarIsProvisional\s*=\s*ParamToggle\("RS: last bar provisional","No\|Yes",0\);' \
-    $rsReplacement \
-    "WVRC_BRIDGE_V02 RELATIVE_STRENGTH"
 
 $selectionReplacement = @'
 // WVRC_BRIDGE_V02 CROSS_SYMBOL_SELECTION
@@ -184,11 +126,6 @@ else
     WXS_RequestedGroupSymbol = ParamStr("Selection: Group benchmark symbol","");
 }
 '@
-Replace-RegexOrThrow \
-    "WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl" \
-    'WXS_RequestedMarketSymbol\s*=\s*ParamStr\("Selection: Market benchmark symbol",""\);\s*WXS_RequestedGroupSymbol\s*=\s*ParamStr\("Selection: Group benchmark symbol",""\);' \
-    $selectionReplacement \
-    "WVRC_BRIDGE_V02 CROSS_SYMBOL_SELECTION"
 
 $scannerReplacement = @'
 // WVRC_BRIDGE_V02 MARKET_SCANNER
@@ -198,17 +135,84 @@ if (WVRC_ScannerUseCentralConfig)
 else
     WSCN_RequireFullTopDown = ParamToggle("Scanner: require Full Top-Down profile","No|Yes",0);
 '@
-Replace-RegexOrThrow \
-    "WyckoffVSA_MarketScanner_v0.1.afl" \
-    'WSCN_RequireFullTopDown\s*=\s*ParamToggle\("Scanner: require Full Top-Down profile","No\|Yes",0\);' \
-    $scannerReplacement \
-    "WVRC_BRIDGE_V02 MARKET_SCANNER"
+
+$patches = @(
+    [pscustomobject]@{
+        File = "WyckoffVSA_Core_v1.0.afl"; Marker = "WVRC_BRIDGE_V02 CORE";
+        Pattern = 'VolumeLookback\s*=\s*Param\("Volume Lookback".*?ShowDebugTitle\s*=\s*ParamToggle\("Show Debug Title".*?\);';
+        Replacement = $coreReplacement
+    },
+    [pscustomobject]@{
+        File = "WyckoffVSA_StructureLocation_v1.0.afl"; Marker = "WVRC_BRIDGE_V02 STRUCTURE_LOCATION";
+        Pattern = 'SL_S_Lookback\s*=\s*Param\("SL Short Lookback".*?SL_PivotRight\s*=\s*Param\("SL Pivot Right".*?\);';
+        Replacement = $slReplacement
+    },
+    [pscustomobject]@{
+        File = "WyckoffVSA_CompositeIndicator_v0.1.afl"; Marker = "WVRC_BRIDGE_V02 COMPOSITE";
+        Pattern = 'WCI_RuntimeLastBarIsProvisional\s*=\s*ParamToggle\("Composite: last bar provisional","No\|Yes",0\);';
+        Replacement = $compositeReplacement
+    },
+    [pscustomobject]@{
+        File = "WyckoffVSA_RelativeStrengthContext_v0.1.afl"; Marker = "WVRC_BRIDGE_V02 RELATIVE_STRENGTH";
+        Pattern = 'WRS_MarketBenchmarkSymbol\s*=\s*ParamStr\("RS Market Benchmark",""\);.*?WRS_RuntimeLastBarIsProvisional\s*=\s*ParamToggle\("RS: last bar provisional","No\|Yes",0\);';
+        Replacement = $rsReplacement
+    },
+    [pscustomobject]@{
+        File = "WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl"; Marker = "WVRC_BRIDGE_V02 CROSS_SYMBOL_SELECTION";
+        Pattern = 'WXS_RequestedMarketSymbol\s*=\s*ParamStr\("Selection: Market benchmark symbol",""\);\s*WXS_RequestedGroupSymbol\s*=\s*ParamStr\("Selection: Group benchmark symbol",""\);';
+        Replacement = $selectionReplacement
+    },
+    [pscustomobject]@{
+        File = "WyckoffVSA_MarketScanner_v0.1.afl"; Marker = "WVRC_BRIDGE_V02 MARKET_SCANNER";
+        Pattern = 'WSCN_RequireFullTopDown\s*=\s*ParamToggle\("Scanner: require Full Top-Down profile","No\|Yes",0\);';
+        Replacement = $scannerReplacement
+    }
+)
+
+Write-Host "Applying Wyckoff VSA Runtime v0.2 Single Configuration Authority bridge..."
+Write-Host "Include directory: $IncludeDir"
+
+# Preflight every file and pattern before writing anything.
+foreach ($p in $patches) {
+    $path = Resolve-AflPath $p.File
+    if (-not (Test-Path $path)) {
+        throw "Missing required AFL file: $path"
+    }
+    $text = Get-Content -LiteralPath $path -Raw
+    if ($text.Contains($p.Marker)) {
+        continue
+    }
+    $regex = [regex]::new($p.Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    if (-not $regex.IsMatch($text)) {
+        throw "Preflight failed: expected source block not found in $($p.File). No files were modified."
+    }
+}
+
+foreach ($p in $patches) {
+    $path = Resolve-AflPath $p.File
+    $text = Get-Content -LiteralPath $path -Raw
+    if ($text.Contains($p.Marker)) {
+        Write-Host "SKIP already bridged: $($p.File)"
+        continue
+    }
+
+    $bak = $path + $BackupSuffix
+    if (-not (Test-Path $bak)) {
+        Copy-Item -LiteralPath $path -Destination $bak -Force
+    }
+
+    $regex = [regex]::new($p.Pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    $newText = $regex.Replace($text, $p.Replacement, 1)
+    Set-Content -LiteralPath $path -Value $newText -Encoding UTF8
+    Write-Host "PATCHED: $($p.File)"
+}
 
 Write-Host ""
 Write-Host "Bridge installation complete."
-Write-Host "Original files were backed up once with suffix $BackupSuffix"
-Write-Host "To restore legacy files:"
-Write-Host "  powershell -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Restore"
+Write-Host "Legacy originals are backed up once with suffix: $BackupSuffix"
+Write-Host "The bridge is conditional: Runtime v0.2 consumes WVRC_*; standalone legacy formulas keep legacy Params."
 Write-Host ""
-Write-Host "Next native check: open WyckoffVSA_PerformanceRuntime_CompatibilityHarness_v0.2.afl"
-Write-Host "and verify that only numbered WVRC Parameters are required in runtime mode."
+Write-Host "Restore command:"
+Write-Host "powershell -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Restore"
+Write-Host ""
+Write-Host "Next native check: run WyckoffVSA_PerformanceRuntime_CompatibilityHarness_v0.2.afl on DTP."
