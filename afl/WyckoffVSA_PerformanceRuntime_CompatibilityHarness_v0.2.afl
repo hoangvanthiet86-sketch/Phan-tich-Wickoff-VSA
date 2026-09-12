@@ -14,7 +14,9 @@
     - this is NOT yet the persistent Snapshot/Fast Scanner implementation;
     - legacy module Params still exist and may appear in Parameters;
     - no analytical algorithm is changed here;
-    - configuration mismatch fails closed;
+    - configuration mismatch is diagnostic and cannot be accepted as PASS;
+    - AUDIT / REGRESSION always emits the visible last bar so mismatch
+      diagnostics remain visible instead of silently returning no rows;
     - no NATIVE PASS is claimed by this source file.
 */
 #pragma nocache
@@ -79,8 +81,11 @@ WVRCB_ProvisionalMatch =
     WCI_RuntimeLastBarIsProvisional == WVRC_LastBarProvisional AND
     WRS_RuntimeLastBarIsProvisional == WVRC_LastBarProvisional;
 
-// Declaration text is presentation/provenance only in v0.1 and does not alter
-// Scanner decisions. Result-affecting equivalence is guarded by status code.
+// Free-text declaration is presentation/provenance only in RS v0.1.
+// Analytical validity is controlled by the numeric Adjustment Basis Status.
+WVRCB_RSDeclarationTextMatch =
+    WRS_AdjustmentBasisDeclaration == WVRC_RSAdjustmentBasisDeclaration;
+
 WVRCB_RSMatch =
     WRS_MarketBenchmarkSymbol == WVRC_RSMarketSymbol AND
     WRS_GroupBenchmarkSymbol == WVRC_RSGroupSymbol AND
@@ -106,7 +111,9 @@ WVRCB_ConfigStatusText = "V0.2 CONFIG INVALID\nLEGACY / V0.2 CONFIG MISMATCH\nCO
 _SECTION_END();
 
 _SECTION_BEGIN("92. v0.2 Direct-Compute Scanner Surface");
-WVRCB_IsLastBar = Status("lastbarinrange");
+
+// Robust visible-last-bar selector. This does not alter analytical logic.
+WVRCB_IsLastBar = BarIndex() == LastValue(BarIndex());
 WVRCB_FilterQualified = WSCN_QualifiedCandidateFlag==1;
 WVRCB_FilterDeveloping = WSCN_DevelopingCandidateFlag==1 OR WSCN_QualifiedCandidateFlag==1;
 WVRCB_FilterWatch = WSCN_WatchFlag==1 OR WSCN_DevelopingCandidateFlag==1 OR WSCN_QualifiedCandidateFlag==1;
@@ -120,7 +127,11 @@ WVRCB_FilterSelected = IIf(
     IIf(WVRC_ProductionFilterCode==3,WVRCB_FilterReview,
     IIf(WVRC_ProductionFilterCode==4,WVRCB_FilterAllEligible,0)))));
 
-Filter = WVRCB_IsLastBar AND WVRCB_ConfigEquivalent AND WVRCB_FilterSelected;
+// AUDIT / REGRESSION is diagnostic-first: always show the visible last bar,
+// even when config is mismatched. Other profiles remain fail-closed.
+WVRCB_AuditDiagnosticMode = WVRC_RuntimeProfileCode==2;
+Filter = WVRCB_IsLastBar AND
+    IIf(WVRCB_AuditDiagnosticMode,1,WVRCB_ConfigEquivalent AND WVRCB_FilterSelected);
 
 WVRCB_CandidateClassText = "DATA GATED / INSUFFICIENT\nNOT A CURRENT CANDIDATE\nWATCH\nDEVELOPING BULLISH\nQUALIFIED BULLISH - MARKET ALIGNED\nQUALIFIED BULLISH - FULL TOP-DOWN\nDEVELOPING BEARISH\nQUALIFIED BEARISH - MARKET ALIGNED\nQUALIFIED BEARISH - FULL TOP-DOWN\nREVIEW - CONFLICT / AMBIGUITY";
 WVRCB_CandidateSideText = "NONE / UNRESOLVED\nBULLISH\nBEARISH";
@@ -149,6 +160,13 @@ if(WVRC_ShowDecisionDiagnostics OR WVRC_OutputDetailEffective>=1)
 {
     AddColumn(WSCN_ExclusionReasonMask,"Exclusion Mask",1.0);
     AddColumn(WVRCB_ConfigMismatchMask,"Config Mismatch Mask",1.0);
+    AddColumn(WVRCB_CoreMatch,"Config Match Core",1.0);
+    AddColumn(WVRCB_StructureMatch,"Config Match Structure",1.0);
+    AddColumn(WVRCB_ProvisionalMatch,"Config Match Provisional",1.0);
+    AddColumn(WVRCB_RSMatch,"Config Match RS Analytical",1.0);
+    AddColumn(WVRCB_RSDeclarationTextMatch,"RS Declaration Text Match - Diagnostic Only",1.0);
+    AddColumn(WVRCB_SelectionMatch,"Config Match Selection",1.0);
+    AddColumn(WVRCB_ScannerMatch,"Config Match Scanner",1.0);
     AddColumn(WSCN_QualifiedCandidateFlag,"Qualified",1.0);
     AddColumn(WSCN_DevelopingCandidateFlag,"Developing",1.0);
     AddColumn(WSCN_WatchFlag,"Watch",1.0);
