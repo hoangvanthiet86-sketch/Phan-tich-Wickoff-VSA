@@ -20,15 +20,8 @@
 #pragma nocache
 SetBarsRequired(sbrAll,sbrAll);
 
-// ============================================================================
-// 0. CENTRAL v0.2 CONFIGURATION
-// ============================================================================
 #include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
 
-// ============================================================================
-// 1. EXACT v0.1 ANALYTICAL STACK THROUGH MARKET SCANNER
-//    Order mirrors the AmiBroker 6.20 explicit-order Production Candidate.
-// ============================================================================
 #include_once <WyckoffVSA_Core_v1.0.afl>
 #include_once <WyckoffVSA_Candidate_v1.0.afl>
 #include_once <WyckoffVSA_StructureLocation_v1.0.afl>
@@ -65,11 +58,7 @@ SetBarsRequired(sbrAll,sbrAll);
 // P&F is deliberately NOT included in this fast-path compatibility harness.
 // Market Scanner candidate classes are upstream of P&F in v0.1.
 
-// ============================================================================
-// 2. CONFIGURATION-EQUIVALENCE GUARD
-// ============================================================================
 _SECTION_BEGIN("91. v0.2 Compatibility Guard");
-
 WVRCB_CoreMatch =
     VolumeLookback == WVRC_VolumeLookback AND
     SpreadLookback == WVRC_SpreadLookback AND
@@ -100,8 +89,7 @@ WVRCB_SelectionMatch =
     WXS_RequestedMarketSymbol == WVRC_SelectionMarketSymbol AND
     WXS_RequestedGroupSymbol == WVRC_SelectionGroupSymbol;
 
-WVRCB_ScannerMatch =
-    WSCN_RequireFullTopDown == WVRC_RequireFullTopDown;
+WVRCB_ScannerMatch = WSCN_RequireFullTopDown == WVRC_RequireFullTopDown;
 
 WVRCB_ConfigMismatchMask =
       IIf(WVRCB_CoreMatch,0,1)
@@ -114,14 +102,9 @@ WVRCB_ConfigMismatchMask =
 WVRCB_ConfigEquivalent = WVRC_ConfigValid AND WVRCB_ConfigMismatchMask == 0;
 WVRCB_ConfigStatusCode = IIf(NOT WVRC_ConfigValid,0,IIf(WVRCB_ConfigEquivalent,2,1));
 WVRCB_ConfigStatusText = "V0.2 CONFIG INVALID\nLEGACY / V0.2 CONFIG MISMATCH\nCONFIG EQUIVALENT";
-
 _SECTION_END();
 
-// ============================================================================
-// 3. COMPACT DECISION SURFACE
-// ============================================================================
 _SECTION_BEGIN("92. v0.2 Direct-Compute Scanner Surface");
-
 WVRCB_IsLastBar = Status("lastbarinrange");
 WVRCB_FilterQualified = WSCN_QualifiedCandidateFlag==1;
 WVRCB_FilterDeveloping = WSCN_DevelopingCandidateFlag==1 OR WSCN_QualifiedCandidateFlag==1;
@@ -129,7 +112,6 @@ WVRCB_FilterWatch = WSCN_WatchFlag==1 OR WSCN_DevelopingCandidateFlag==1 OR WSCN
 WVRCB_FilterReview = WSCN_ReviewFlag==1 OR WSCN_DataEligibilityCode==0;
 WVRCB_FilterAllEligible = WSCN_DataEligibilityCode==1;
 
-// Mode 5 is P&F Review and is intentionally unavailable in this no-P&F path.
 WVRCB_FilterSelected = IIf(
     WVRC_ProductionFilterCode==0,WVRCB_FilterQualified,
     IIf(WVRC_ProductionFilterCode==1,WVRCB_FilterDeveloping,
@@ -157,7 +139,7 @@ AddMultiTextColumn(WSCN_CandidateStageCode,WVRCB_CandidateStageText,"Candidate S
 AddMultiTextColumn(WSCN_StockPhaseStateCode,WVRCB_PhaseText,"Phase");
 AddMultiTextColumn(WSCN_StockFamilyHypothesisCode,WVRCB_FamilyText,"Family");
 AddColumn(WSCN_StockRangePosition,"Range Position",1.4);
-AddMultiTextColumn(WSCN_StockMTFAlignmentCode,WVRCB_MTFText,"MTF Alignment");
+AddMultiTextColumn(WSCN_StockMTFDirectionalAlignmentCode,WVRCB_MTFText,"MTF Alignment");
 AddMultiTextColumn(WSCN_StockVsMarketRSStructureCode,WVRCB_RSText,"RS vs Market");
 AddColumn(WSCN_ReviewFlag,"Scanner Review",1.0);
 AddColumn(WSCN_MethodBlockReasonMask,"Method Block Mask",1.0);
@@ -173,5 +155,4 @@ if(WVRC_ShowDecisionDiagnostics OR WVRC_OutputDetailEffective>=1)
     AddColumn(WSCN_CandidateSideCode,"Candidate Side Code",1.0);
     AddColumn(WSCN_CandidateStageCode,"Candidate Stage Code",1.0);
 }
-
 _SECTION_END();
