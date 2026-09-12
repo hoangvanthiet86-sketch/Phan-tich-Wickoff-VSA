@@ -4,6 +4,10 @@
     XS14 compatibility projection. It does not change transported market state;
     it only tightens VALID status when producer versions/sub-schemas do not
     match the explicitly supported v0.1 contract.
+
+    Operational compatibility note:
+    the guard also republishes the stable-generation audit fields expected by
+    the existing Consumer Exploration after the Bar Replay clock patch.
 */
 #include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>
 
@@ -28,6 +32,8 @@ function WXS_ApplyVersionGuard(RolePrefix,ExpectedSymbol,RequestedFlag,PriorStat
     MTFSchemaMinor = Null;
     VersionValid = 0;
     StatusCode = PriorStatus;
+    AuditReady = Null;
+    AuditGeneration = Null;
 
     if (RequestedFlag AND StrLen(ExpectedSymbol)>0)
     {
@@ -39,6 +45,8 @@ function WXS_ApplyVersionGuard(RolePrefix,ExpectedSymbol,RequestedFlag,PriorStat
         CompositeSchemaMinor = StaticVarGet(Prefix+"CompositeSchemaMinor");
         MTFSchemaMajor = StaticVarGet(Prefix+"MTFSchemaMajor");
         MTFSchemaMinor = StaticVarGet(Prefix+"MTFSchemaMinor");
+        AuditReady = StaticVarGet(Prefix+"Ready");
+        AuditGeneration = StaticVarGet(Prefix+"CommittedGenerationID");
 
         VersionValid =
             ContractVersion==WXS_ExpectedContractVersion AND
@@ -61,6 +69,13 @@ function WXS_ApplyVersionGuard(RolePrefix,ExpectedSymbol,RequestedFlag,PriorStat
     VarSet(RolePrefix+"MTFSchemaMajor",MTFSchemaMajor);
     VarSet(RolePrefix+"MTFSchemaMinor",MTFSchemaMinor);
     VarSet(RolePrefix+"ProducerVersionCompatible",VersionValid);
+
+    // Re-expose stable-generation audit fields used by the existing audit UI.
+    VarSet(RolePrefix+"ReadyA",AuditReady);
+    VarSet(RolePrefix+"ReadyB",AuditReady);
+    VarSet(RolePrefix+"GenerationA",AuditGeneration);
+    VarSet(RolePrefix+"GenerationB",AuditGeneration);
+
     VarSet(RolePrefix+"StatusCode",StatusCode);
     VarSet(RolePrefix+"Valid",StatusCode==1);
     return StatusCode;
@@ -74,4 +89,6 @@ WXS_MarketStatusCode = 0*BarIndex() + WXS_MarketStatusCodeScalar;
 WXS_GroupStatusCode = 0*BarIndex() + WXS_GroupStatusCodeScalar;
 WXS_MarketValid = 0*BarIndex() + WXS_MarketValidScalar;
 WXS_GroupValid = 0*BarIndex() + WXS_GroupValidScalar;
+WXS_ConsumerBusinessDateKeyArray = 0*BarIndex() + WXS_ConsumerBusinessDateKey;
+WXS_RoleConfigConflictArray = 0*BarIndex() + WXS_RoleConfigConflict;
 _SECTION_END();
