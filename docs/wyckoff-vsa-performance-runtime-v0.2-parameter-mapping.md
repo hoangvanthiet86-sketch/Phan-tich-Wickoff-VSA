@@ -1,6 +1,6 @@
 # Wyckoff VSA Performance Runtime v0.2 — Parameter Mapping
 
-**Status:** IMPLEMENTATION MAPPING — source-verified, pre-code  
+**Status:** IMPLEMENTATION MAPPING — source-verified, interface decisions locked  
 **Baseline source:** `integration/wyckoff-vsa-production-candidate-v0.1`  
 **Purpose:** map the current AmiBroker Parameter surface into the approved v0.2 hierarchical UX without changing analytical semantics.
 
@@ -12,8 +12,9 @@
 2. A configurable v0.1 value remains configurable in v0.2 unless it is proven to be a non-configurable methodological constant.
 3. DAILY FAST SCAN defaults may differ from legacy UI defaults because they are operational presets. This is **not** analytical drift: equivalence regression always compares explicit equivalent configurations.
 4. Any optimization must reproduce v0.1 outputs under equivalent data/configuration.
-5. Independent legacy controls may be synchronized by a v0.2 profile for ease of use, but Audit mode must retain a route to reproduce legacy configurations when needed.
+5. Standard runtime uses one unified provisional control. Legacy per-module provisional overrides are removed from user-facing Parameters and retained only in regression/native-test harnesses.
 6. Empty Parameter groups must not clutter the normal Parameters window.
+7. Presentation labels must not imply independent verification that the runtime does not actually perform.
 
 ---
 
@@ -56,7 +57,9 @@ Current source: `WyckoffVSA_CompositeIndicator_v0.1.afl`.
 |---|---|---|---|---|
 | 1.3 | Treat Last Bar As Provisional | `WCI_RuntimeLastBarIsProvisional` | No | No |
 
-In standard v0.2 profiles, `1.3` is the primary user-facing provisional control. Audit mode may expose per-module overrides to reproduce unusual legacy mixed settings exactly.
+In standard v0.2 runtime, `1.3` is the only user-facing provisional control. It is propagated consistently to Composite, RS, Scanner/P&F consumers that need the same bar-completion declaration.
+
+Legacy mixed combinations such as Composite=No, RS=Yes, P&F=No are **not valid production Parameters** in v0.2. They remain reproducible only through internal regression/native-test harnesses.
 
 ### 2.4 Relative Strength
 
@@ -66,11 +69,12 @@ Current source: `WyckoffVSA_RelativeStrengthContext_v0.1.afl`.
 |---|---|---|---|---|
 | 6.1 | Market Benchmark | `WRS_MarketBenchmarkSymbol` | blank | `VNINDEX` |
 | 6.2 | Group Benchmark | `WRS_GroupBenchmarkSymbol` | blank | blank |
-| 6.3 | Adjustment Basis Declaration | `WRS_AdjustmentBasisDeclaration` | `NOT VERIFIED` | hidden/advanced; canonical declaration to be locked before code |
-| 6.4 | Adjustment Basis Status | `WRS_AdjustmentBasisStatusScalar` | 0 | 1 = compatible |
-| 1.3 / advanced override | Treat Last Bar As Provisional | `WRS_RuntimeLastBarIsProvisional` | No | No |
+| 6.3 | Adjustment Basis Declaration | `WRS_AdjustmentBasisDeclaration` | `NOT VERIFIED` | `ADJUSTED PRICE` |
+| 6.4 | Adjustment Basis Status | `WRS_AdjustmentBasisStatusScalar` | 0 | `1 = COMPATIBLE - DECLARED` |
 
-The daily profile may synchronize the Composite and RS provisional controls through `1.3`; Audit mode must retain equivalent legacy control if required for regression.
+`COMPATIBLE - DECLARED` means the production configuration declares the stock and benchmark series to use a compatible adjustment basis. It does **not** claim that AmiBroker independently verified the data vendor/feed.
+
+The unified `1.3` control replaces the ordinary user-facing RS-specific provisional toggle.
 
 ### 2.5 Cross-Symbol Market / Group Context
 
@@ -111,12 +115,13 @@ Current source: `WyckoffVSA_PnFConstructionKernel_v0.1.afl`.
 | 9.2 | Fixed Box Size | `WPFK_BoxSizeScalar` | 1 | not executed | 1 |
 | 9.3 | Grid Origin | `WPFK_GridOriginScalar` | 0 | not executed | 0 |
 | 9.4 | Reversal Boxes | `WPFK_ReversalBoxesScalar` | 3 | not executed | 3 |
-| 9.5 | Adjustment Basis Declaration | `WPFK_AdjustmentBasisDeclaration` | `NOT VERIFIED` | not executed | advanced/canonical declaration |
-| 9.6 | Adjustment Basis Status | `WPFK_AdjustmentBasisStatusScalar` | 0 | not executed | 1 for accepted production basis |
-| 1.3 / advanced override | Treat Last Bar As Provisional | `WPFK_RuntimeLastBarIsProvisional` | No | n/a | No |
+| 9.5 | Adjustment Basis Declaration | `WPFK_AdjustmentBasisDeclaration` | `NOT VERIFIED` | not executed | `ADJUSTED PRICE` |
+| 9.6 | Adjustment Basis Status | `WPFK_AdjustmentBasisStatusScalar` | 0 | not executed | `1 = COMPATIBLE - DECLARED` |
 | 90.8 | P&F Source Revision Status | `WPFK_SourceRevisionStatusScalar` | 0 | n/a | 0 unless explicitly assessed |
 
-P&F is deferred in DAILY FAST SCAN because current Market Scanner Candidate Class is upstream of P&F. Deep Review and Audit preserve the complete P&F surface.
+P&F is deferred in DAILY FAST SCAN because current Market Scanner Candidate Class is upstream of P&F. Deep Review and Audit preserve the complete P&F analytical surface.
+
+P&F-specific provisional override is retained only in test harnesses; normal production uses unified `1.3`.
 
 ---
 
@@ -158,7 +163,8 @@ This avoids creating meaningless controls solely to fill numbering gaps.
 - `3.4/3.5 = 3/3`
 - `6.1 = VNINDEX`
 - `6.2 = blank`
-- `6.4 = 1 compatible`
+- `6.3 = ADJUSTED PRICE`
+- `6.4 = 1 = COMPATIBLE - DECLARED`
 - `7.1 = VNINDEX`
 - `7.2 = blank`
 - `8.1 = No`
@@ -171,11 +177,56 @@ Uses the same analytical defaults but enables the full Production Candidate enri
 
 ### Profile 2 — AUDIT / REGRESSION
 
-Exposes full diagnostics and legacy-equivalent controls so v0.1 and v0.2 can be compared under explicitly identical configurations.
+Exposes full diagnostics. Legacy module-specific provisional combinations remain available only via dedicated regression/native-test harnesses, not ordinary user Parameters.
 
 ---
 
-## 6. Equivalence gate for implementation
+## 6. DAILY FAST SCAN compact output contract
+
+The default DAILY FAST SCAN surface is fixed at 14 decision-oriented columns:
+
+1. `Symbol`
+2. `As-Of Date`
+3. `Snapshot Status`
+4. `Data Eligible`
+5. `Candidate Class`
+6. `Candidate Side`
+7. `Candidate Stage`
+8. `Phase`
+9. `Family`
+10. `Range Position`
+11. `MTF Alignment`
+12. `RS vs Market`
+13. `Scanner Review`
+14. `Method Block Mask`
+
+`Scanner Exclusion Mask` is shown when diagnostics are enabled and must always remain available to Audit/Regression output. Fast Scanner may additionally surface it automatically for a data-ineligible diagnostic mode, but the standard Watch+ daily surface remains the 14 columns above.
+
+The compact surface is presentation-only. It does not authorize dropping analytical fields required for classification, snapshot validation, or regression.
+
+---
+
+## 7. Provisional-control contract
+
+### PRV01 — Single production declaration
+
+`1.3 Treat Last Bar As Provisional` is the only user-facing production provisional control.
+
+### PRV02 — Consistent propagation
+
+All runtime modules that depend on completion state consume the same production declaration unless they consume an already-authoritative completed snapshot.
+
+### PRV03 — No mixed production states
+
+Production runtime must not expose independent Composite/RS/P&F provisional toggles that permit contradictory completion assumptions.
+
+### PRV04 — Regression-only legacy overrides
+
+Module-specific legacy overrides may exist only in dedicated test harnesses for exact v0.1 reproduction, bug isolation and native acceptance. They are not ordinary Parameters and must not affect the production profile unless the harness explicitly invokes them.
+
+---
+
+## 8. Equivalence gate for implementation
 
 Parameter reorganization is accepted only when the following hold:
 
@@ -194,15 +245,16 @@ Parameter reorganization is accepted only when the following hold:
    - Scanner Method Block Mask
 4. Any difference is treated as a defect until proven to be an approved correctness correction.
 5. Default-profile differences are tested separately from analytical-equivalence tests.
+6. Compact output is not accepted as evidence of equivalence by itself; Audit output must preserve the full comparison surface.
 
 ---
 
-## 7. Pre-code unresolved items
+## 9. Pre-code status
 
-Before implementation starts, only the following configuration-interface details remain to be locked:
+All previously unresolved configuration-interface items are now locked:
 
-1. Exact canonical user-facing text for accepted adjustment-basis declaration. The analytical status code remains authoritative; no new semantics may be introduced by presentation text.
-2. Exact compact-output column set for DAILY FAST SCAN.
-3. Whether legacy per-module provisional overrides are visible only in Audit mode or moved entirely to an internal regression harness.
+1. Accepted production adjustment-basis status text: `COMPATIBLE - DECLARED`; declaration text: `ADJUSTED PRICE` for the accepted adjusted-price production basis.
+2. DAILY FAST SCAN compact output: 14 columns defined in Section 6.
+3. Legacy per-module provisional overrides: internal regression/native-test harness only.
 
-None of these unresolved interface details authorizes analytical result changes.
+No item in this document authorizes analytical result changes outside the approved correctness-exception process.
