@@ -8,9 +8,15 @@
     publishes the previous calendar-completed higher-period Composite state
     into persistent scalar StaticVars.
 
-    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    Operational clock correction:
+    - live mode uses system clock through WCLK;
+    - Bar Replay mode uses GetPlaybackDateTime() through WCLK;
+    - all period ordinals and publish provenance use the same causal as-of.
+
+    SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
     No trading signal. No MTF alignment logic.
 */
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
 #include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>
 
 _SECTION_BEGIN("90. Timeframe Snapshot Publisher contract");
@@ -18,13 +24,13 @@ WTS_SchemaMajor = 1;
 WTS_SchemaMinor = 0;
 WTS_CompositeVersion = "0.1";
 WTS_ContractVersion = "0.1";
-WTS_CompletionBasisCode = 1; // CALENDAR PERIOD ROLLED OVER
-WTS_ClockBasisCode = 1;      // LOCAL SYSTEM
-WTS_Now = Now(5);
-WTS_WeekEpoch = _DT("2000-01-03 00:00:00"); // Monday epoch
+WTS_CompletionBasisCode = 1; // CALENDAR PERIOD ROLLED OVER relative to WCLK as-of
+WTS_ClockBasisCode = WCLK_ClockBasisCode; // 1 LIVE_SYSTEM, 2 BAR_REPLAY
+WTS_Now = WCLK_AsOfDateTime;
+WTS_WeekEpoch = WCLK_WeekEpoch;
 
-WTS_CurrentWeeklyOrdinal = Floor(DateTimeDiff(WTS_Now,WTS_WeekEpoch)/604800);
-WTS_CurrentMonthlyOrdinal = Now(8)*12 + Now(7);
+WTS_CurrentWeeklyOrdinal = WCLK_CurrentWeeklyOrdinal;
+WTS_CurrentMonthlyOrdinal = WCLK_CurrentMonthlyOrdinal;
 
 WTS_IsWeekly = Interval()==inWeekly;
 WTS_IsMonthly = Interval()==inMonthly;
@@ -37,14 +43,14 @@ if (WTS_IsWeekly)
 {
     WTS_TFCode = "W";
     WTS_CurrentPeriodOrdinal = WTS_CurrentWeeklyOrdinal;
-    WTS_ExpectedCompletedOrdinal = WTS_CurrentWeeklyOrdinal - 1;
+    WTS_ExpectedCompletedOrdinal = WCLK_ExpectedCompletedWeeklyOrdinal;
 }
 else
 if (WTS_IsMonthly)
 {
     WTS_TFCode = "M";
     WTS_CurrentPeriodOrdinal = WTS_CurrentMonthlyOrdinal;
-    WTS_ExpectedCompletedOrdinal = WTS_CurrentMonthlyOrdinal - 1;
+    WTS_ExpectedCompletedOrdinal = WCLK_ExpectedCompletedMonthlyOrdinal;
 }
 
 WTS_SourceDateTimeArray = DateTime();
@@ -59,10 +65,15 @@ WTS_SelectedSourceDateTime = Null;
 // 1 COMMITTED
 // 2 INVALID INTERVAL
 // 3 EXPECTED PERIOD NOT FOUND
-// 4 INVALID SOURCE PAYLOAD
+// 4 INVALID SOURCE PAYLOAD / CLOCK
 // 5 COMMIT MARKER VERIFY FAILED
 WTS_PublisherStatus = 0;
 
+if (NOT WCLK_ClockValid)
+{
+    WTS_PublisherStatus = 4;
+}
+else
 if (NOT WTS_IntervalValid)
 {
     WTS_PublisherStatus = 2;
@@ -174,7 +185,7 @@ else
     }
 }
 
-WTS_PublisherStatusText = "NOT RUN / INSUFFICIENT\nCOMMITTED\nINVALID INTERVAL\nEXPECTED PERIOD NOT FOUND\nINVALID SOURCE PAYLOAD\nCOMMIT MARKER VERIFY FAILED";
+WTS_PublisherStatusText = "NOT RUN / INSUFFICIENT\nCOMMITTED\nINVALID INTERVAL\nEXPECTED PERIOD NOT FOUND\nINVALID SOURCE PAYLOAD / CLOCK\nCOMMIT MARKER VERIFY FAILED";
 WTS_PublisherStatusArray = 0*BarIndex()+WTS_PublisherStatus;
 WTS_CurrentPeriodOrdinalArray = 0*BarIndex()+WTS_CurrentPeriodOrdinal;
 WTS_ExpectedCompletedOrdinalArray = 0*BarIndex()+WTS_ExpectedCompletedOrdinal;
@@ -191,4 +202,6 @@ AddColumn(WTS_SelectedSourceOrdinalArray,"WTS_SelectedSourceOrdinal",1.0);
 AddColumn(WTS_SelectedSourceDateTimeArray,"WTS_SelectedSourceDateTime",formatDateTime);
 AddColumn(0*BarIndex()+WTS_ClockBasisCode,"WTS_ClockBasisCode",1.0);
 AddColumn(0*BarIndex()+WTS_CompletionBasisCode,"WTS_CompletionBasisCode",1.0);
+AddColumn(0*BarIndex()+WCLK_IsReplay,"WTS_BarReplayActive",1.0);
+AddColumn(0*BarIndex()+WCLK_AsOfDateTime,"WTS_AsOfDateTime",formatDateTime);
 _SECTION_END();
