@@ -17,6 +17,7 @@ Filter = WSCN_IsLastBar AND IIf(WSCN_FilterModeCode==0,WSCN_FilterQualified,
 WSCN_RSStructureText = "INSUFFICIENT\nRISING\nFALLING\nMIXED";
 WSCN_LeadershipText = "INSUFFICIENT / NOT REQUESTED\nNESTED RELATIVE LEADERSHIP\nNESTED RELATIVE WEAKNESS\nGROUP WEAK / STOCK STRONG VS GROUP\nGROUP STRONG / STOCK WEAK VS GROUP\nMIXED LEADERSHIP CHAIN";
 WSCN_PriceRSRelationshipText = "INSUFFICIENT\nPRICE + RS RISING IN GEAR\nPRICE RISING / RS NON-CONFIRMING\nPRICE FALLING / RS NON-CONFIRMING\nPRICE + RS FALLING IN GEAR\nMIXED / COMPLEX PRICE-RS";
+WSCN_RangeStatusText = "NO RANGE CONTEXT\nACTIVE RANGE CONTEXT\nPHASE-E TERMINAL CONTEXT\nINVALIDATED CONTEXT";
 
 // Provenance / data health.
 AddTextColumn(Name(),"Symbol");
@@ -58,7 +59,7 @@ AddMultiTextColumn(WSCN_CandidateStageCode,WSCN_CandidateStageText,"Candidate St
 
 // MS41 A/B Watch range-location diagnostics.
 AddColumn(WSCN_StockRangeStatusCode,"Stock RangeStatusCode",1.0);
-AddMultiTextColumn(WSCN_StockRangeStatusCode,WPCP_RangeStatusText,"Stock Range Status");
+AddMultiTextColumn(WSCN_StockRangeStatusCode,WSCN_RangeStatusText,"Stock Range Status");
 AddColumn(WSCN_StockRangePositionValid,"Stock RangePositionValid",1.0);
 AddColumn(WSCN_StockRangePosition,"Stock RangePosition",1.4);
 AddColumn(WSCN_StockRangeUsableActive,"Stock Range Usable Active",1.0);
