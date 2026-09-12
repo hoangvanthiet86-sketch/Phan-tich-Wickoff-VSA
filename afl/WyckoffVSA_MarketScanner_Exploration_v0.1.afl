@@ -55,6 +55,16 @@ AddColumn(WSCN_StockPhaseStateCode,"Stock PhaseStateCode",1.0);
 AddMultiTextColumn(WSCN_StockPhaseStateCode,WPC_PhaseText,"Stock Phase");
 AddColumn(WSCN_CandidateStageCode,"CandidateStageCode",1.0);
 AddMultiTextColumn(WSCN_CandidateStageCode,WSCN_CandidateStageText,"Candidate Stage");
+
+// MS41 A/B Watch range-location diagnostics.
+AddColumn(WSCN_StockRangeStatusCode,"Stock RangeStatusCode",1.0);
+AddMultiTextColumn(WSCN_StockRangeStatusCode,WPCP_RangeStatusText,"Stock Range Status");
+AddColumn(WSCN_StockRangePositionValid,"Stock RangePositionValid",1.0);
+AddColumn(WSCN_StockRangePosition,"Stock RangePosition",1.4);
+AddColumn(WSCN_StockRangeUsableActive,"Stock Range Usable Active",1.0);
+AddColumn(WSCN_RangeLocationCoherent,"A/B Range Location Coherent",1.0);
+AddColumn(WSCN_RangeLocationConflict,"A/B Range Location Conflict",1.0);
+
 AddColumn(WSCN_StockFamilyHypothesisCode,"Stock FamilyHypothesisCode",1.0);
 AddMultiTextColumn(WSCN_StockFamilyHypothesisCode,WPC_FamilyText,"Stock Family Hypothesis");
 AddColumn(WSCN_StockEvidenceBalanceCode,"Stock EvidenceBalanceCode",1.0);
