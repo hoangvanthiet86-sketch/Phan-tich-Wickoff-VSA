@@ -8,8 +8,15 @@
     Serialization only: canonical Composite + MTF public outputs are written
     to persistent scalar StaticVars. No selection interpretation or ranking.
 
-    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    Operational clock correction:
+    - live mode uses system as-of through WCLK;
+    - Bar Replay mode uses playback position through WCLK;
+    - replayed historical Daily bars receive explicit replay-completed
+      provenance instead of being compared to the real computer date.
+
+    SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
 */
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
 #include_once <WyckoffVSA_MultiTimeframeContext_SelectionSnapshotPublic_v0.1.afl>
 
 _SECTION_BEGIN("110. Cross-Symbol Selection Context Publisher");
@@ -22,9 +29,12 @@ WXS_SourceSymbol = Name();
 WXS_SourceInterval = Interval();
 WXS_SourceBarDateTime = LastValue(DateTime());
 WXS_SourceBusinessDateKey = LastValue(Year()*10000 + Month()*100 + Day());
-WXS_CurrentCalendarBusinessDateKey = Now(8)*10000 + Now(7)*100 + Now(6);
-WXS_PublishedAtDateTime = Now(5);
+WXS_CurrentCalendarBusinessDateKey = WCLK_AsOfBusinessDateKey;
+WXS_PublishedAtDateTime = WCLK_AsOfDateTime;
+WXS_ClockBasisCode = WCLK_ClockBasisCode;
 WXS_DailyCompletionDeclaration = ParamToggle("Selection snapshot: current Daily bar completed","Not declared|Completed",0);
+WXS_ReplayCompletionActive = WCLK_IsReplay AND WXS_SourceBusinessDateKey<=WXS_CurrentCalendarBusinessDateKey;
+WXS_EffectiveCompletionDeclaration = IIf(WXS_ReplayCompletionActive,1,WXS_DailyCompletionDeclaration);
 
 WXS_Prefix = "WVSA_SELCTX_v01_" + WXS_SourceSymbol + "_";
 WXS_WriterLockName = WXS_Prefix + "WriterLock";
@@ -43,9 +53,9 @@ WXS_CompletionBasisCode = 0;
 // 6 INVALID PAYLOAD
 // 7 WRITER BUSY
 // 8 COMMIT VERIFY FAILED
-// 9 INVALID SOURCE DATETIME / DATE KEY
+// 9 INVALID SOURCE DATETIME / DATE KEY / CLOCK
 WXS_PublisherStatusCode = 0;
-WXS_PublisherStatusText = "NOT RUN / INSUFFICIENT\nCOMMITTED\nINVALID INTERVAL\nUPSTREAM NOT READY\nSOURCE COMPLETION NOT DECLARED\nFUTURE SOURCE BUSINESS DATE\nINVALID PAYLOAD\nWRITER BUSY\nCOMMIT VERIFY FAILED\nINVALID SOURCE DATETIME / DATE KEY";
+WXS_PublisherStatusText = "NOT RUN / INSUFFICIENT\nCOMMITTED\nINVALID INTERVAL\nUPSTREAM NOT READY\nSOURCE COMPLETION NOT DECLARED\nFUTURE SOURCE BUSINESS DATE\nINVALID PAYLOAD\nWRITER BUSY\nCOMMIT VERIFY FAILED\nINVALID SOURCE DATETIME / DATE KEY / CLOCK";
 
 // XS24: canonical Composite singleton payload.
 WXS_ContextMultiplicityCode = LastValue(WCI_ContextMultiplicityCode);
@@ -123,7 +133,7 @@ WXS_MTF_W_SchemaMinor = LastValue(WMTF_W_SchemaMinor);
 WXS_MTF_M_SchemaMajor = LastValue(WMTF_M_SchemaMajor);
 WXS_MTF_M_SchemaMinor = LastValue(WMTF_M_SchemaMinor);
 
-WXS_SourceDateValid = NOT IsNull(WXS_SourceBarDateTime) AND NOT IsNull(WXS_SourceBusinessDateKey) AND WXS_SourceBusinessDateKey>0;
+WXS_SourceDateValid = WCLK_ClockValid AND NOT IsNull(WXS_SourceBarDateTime) AND NOT IsNull(WXS_SourceBusinessDateKey) AND WXS_SourceBusinessDateKey>0;
 WXS_CompositeCoreValid =
     NOT IsNull(WXS_ContextMultiplicityCode) AND
     NOT IsNull(WXS_ContextAmbiguous) AND
@@ -168,7 +178,12 @@ WXS_UpstreamReady =
 
 if (WXS_SourceBusinessDateKey < WXS_CurrentCalendarBusinessDateKey)
 {
-    WXS_CompletionBasisCode = 1; // CALENDAR DAY ROLLED OVER
+    WXS_CompletionBasisCode = 1; // CALENDAR DAY ROLLED OVER relative to WCLK as-of
+}
+else
+if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WCLK_IsReplay)
+{
+    WXS_CompletionBasisCode = 3; // BAR REPLAY POSITION: historical bar is replay-visible/completed
 }
 else
 if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WXS_DailyCompletionDeclaration==1)
@@ -176,14 +191,14 @@ if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WXS_Dail
     WXS_CompletionBasisCode = 2; // OPERATOR EOD COMPLETION DECLARATION
 }
 
-if (WXS_SourceInterval!=inDaily)
-{
-    WXS_PublisherStatusCode = 2;
-}
-else
 if (NOT WXS_SourceDateValid)
 {
     WXS_PublisherStatusCode = 9;
+}
+else
+if (WXS_SourceInterval!=inDaily)
+{
+    WXS_PublisherStatusCode = 2;
 }
 else
 if (WXS_SourceBusinessDateKey > WXS_CurrentCalendarBusinessDateKey)
@@ -191,7 +206,7 @@ if (WXS_SourceBusinessDateKey > WXS_CurrentCalendarBusinessDateKey)
     WXS_PublisherStatusCode = 5;
 }
 else
-if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WXS_DailyCompletionDeclaration!=1)
+if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND NOT WCLK_IsReplay AND WXS_DailyCompletionDeclaration!=1)
 {
     WXS_PublisherStatusCode = 4;
 }
@@ -295,46 +310,43 @@ else
         StaticVarSet(WXS_Prefix+"MTF_M_SchemaMajor",WXS_MTF_M_SchemaMajor,True);
         StaticVarSet(WXS_Prefix+"MTF_M_SchemaMinor",WXS_MTF_M_SchemaMinor,True);
 
-        // Schema/provenance after payload, then commit marker and Ready last.
+        // Publication provenance.
         StaticVarSet(WXS_Prefix+"SchemaMajor",WXS_SchemaMajor,True);
         StaticVarSet(WXS_Prefix+"SchemaMinor",WXS_SchemaMinor,True);
-        StaticVarSetText(WXS_Prefix+"ProducerContractVersion",WXS_ContractVersion,True);
-        StaticVarSetText(WXS_Prefix+"ProducerCompositeVersion",WXS_CompositeVersion,True);
-        StaticVarSetText(WXS_Prefix+"ProducerMTFVersion",WXS_MTFVersion,True);
         StaticVarSetText(WXS_Prefix+"SourceSymbol",WXS_SourceSymbol,True);
         StaticVarSet(WXS_Prefix+"SourceInterval",WXS_SourceInterval,True);
         StaticVarSet(WXS_Prefix+"SourceBusinessDateKey",WXS_SourceBusinessDateKey,True);
         StaticVarSet(WXS_Prefix+"SourceBarDateTime",WXS_SourceBarDateTime,True);
         StaticVarSet(WXS_Prefix+"PublishedAtDateTime",WXS_PublishedAtDateTime,True);
         StaticVarSet(WXS_Prefix+"CompletionBasisCode",WXS_CompletionBasisCode,True);
-        StaticVarSet(WXS_Prefix+"CompletionDeclarationCode",WXS_DailyCompletionDeclaration,True);
+        StaticVarSet(WXS_Prefix+"CompletionDeclarationCode",WXS_EffectiveCompletionDeclaration,True);
+        StaticVarSet(WXS_Prefix+"ClockBasisCode",WXS_ClockBasisCode,True);
         StaticVarSet(WXS_Prefix+"CompositePayloadValid",WXS_CompositePayloadValid,True);
         StaticVarSet(WXS_Prefix+"MTFPayloadValid",WXS_MTFPayloadValid,True);
-        StaticVarSet(WXS_Prefix+"CompositeSchemaMajor",WCI_PublicSchemaMajor,True);
-        StaticVarSet(WXS_Prefix+"CompositeSchemaMinor",WCI_PublicSchemaMinor,True);
-        StaticVarSet(WXS_Prefix+"MTFSchemaMajor",WMTF_PublicSchemaMajor,True);
-        StaticVarSet(WXS_Prefix+"MTFSchemaMinor",WMTF_PublicSchemaMinor,True);
 
         StaticVarSet(WXS_Prefix+"CommittedGenerationID",WXS_NewGeneration,True);
         StaticVarSet(WXS_Prefix+"Ready",1,True);
 
         WXS_VerifyGeneration = StaticVarGet(WXS_Prefix+"CommittedGenerationID");
         WXS_VerifyReady = StaticVarGet(WXS_Prefix+"Ready");
-        WXS_PublisherStatusCode = IIf(WXS_VerifyReady==1 AND WXS_VerifyGeneration==WXS_NewGeneration,1,8);
+        WXS_PublisherStatusCode = IIf(
+            WXS_VerifyReady==1 AND WXS_VerifyGeneration==WXS_NewGeneration,
+            1,8);
 
-        // Writer semaphore is intentionally non-persistent.
-        StaticVarSet(WXS_WriterLockName,0);
+        StaticVarSet(WXS_WriterLockName,0,True);
     }
 }
 
-WXS_PublisherStatus = 0*BarIndex() + WXS_PublisherStatusCode;
-WXS_PublisherWriterLockAcquired = 0*BarIndex() + WXS_WriterLockAcquired;
-WXS_PublisherSourceBusinessDateKey = 0*BarIndex() + WXS_SourceBusinessDateKey;
-WXS_PublisherCurrentCalendarBusinessDateKey = 0*BarIndex() + WXS_CurrentCalendarBusinessDateKey;
-WXS_PublisherCompletionBasisCode = 0*BarIndex() + WXS_CompletionBasisCode;
-WXS_PublisherCompletionDeclarationCode = 0*BarIndex() + WXS_DailyCompletionDeclaration;
-WXS_PublisherPreviousGeneration = 0*BarIndex() + WXS_PreviousGeneration;
-WXS_PublisherNewGeneration = 0*BarIndex() + WXS_NewGeneration;
-WXS_PublisherCompositePayloadValid = 0*BarIndex() + WXS_CompositePayloadValid;
-WXS_PublisherMTFPayloadValid = 0*BarIndex() + WXS_MTFPayloadValid;
+WXS_PublisherStatusArray = 0*BarIndex()+WXS_PublisherStatusCode;
+WXS_CompletionBasisArray = 0*BarIndex()+WXS_CompletionBasisCode;
+WXS_ClockBasisArray = 0*BarIndex()+WXS_ClockBasisCode;
+WXS_AsOfDateTimeArray = 0*BarIndex()+WCLK_AsOfDateTime;
+
+AddTextColumn(Name(),"WXS_SourceSymbol");
+AddColumn(WXS_PublisherStatusArray,"WXS_PublisherStatusCode",1.0);
+AddMultiTextColumn(WXS_PublisherStatusArray,WXS_PublisherStatusText,"WXS_PublisherStatus");
+AddColumn(WXS_CompletionBasisArray,"WXS_CompletionBasisCode",1.0);
+AddColumn(WXS_ClockBasisArray,"WXS_ClockBasisCode",1.0);
+AddColumn(0*BarIndex()+WCLK_IsReplay,"WXS_BarReplayActive",1.0);
+AddColumn(WXS_AsOfDateTimeArray,"WXS_AsOfDateTime",formatDateTime);
 _SECTION_END();
