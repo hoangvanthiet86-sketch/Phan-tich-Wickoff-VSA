@@ -1,0 +1,58 @@
+/*
+    Wyckoff VSA Operational Selection-Context Publisher v0.1
+    AmiBroker 6.20 explicit-order wrapper.
+
+    Run at native Daily interval on the chosen Market benchmark symbol.
+    Optional Group benchmark publication uses the same formula on that symbol.
+    Weekly and Monthly snapshots for the symbol must already be committed.
+
+    On a same-day completed bar, set:
+    "Selection snapshot: current Daily bar completed" = Completed.
+
+    No analytical methodology is changed here.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_Core_v1.0.afl>
+#include_once <WyckoffVSA_Candidate_v1.0.afl>
+#include_once <WyckoffVSA_StructureLocation_v1.0.afl>
+#include_once <WyckoffVSA_Confirmation_v1.0.afl>
+
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_v0.1.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_v1.0.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_v0.1.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_v0.1.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_v0.1.afl>
+
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_v0.1.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_v0.1.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_v0.1.afl>
+
+#include_once <WyckoffVSA_PhaseContext_InputFacade_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_v0.1.afl>
+
+#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>
+#include_once <WyckoffVSA_MultiTimeframeContext_SelectionSnapshotPublic_v0.1.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Publisher_v0.1.afl>
+
+_SECTION_BEGIN("151. Operational selection-context publisher");
+WOPSEL_DailyIntervalValid = Interval()==inDaily;
+WOPSEL_WeeklySnapshotValid = WTSC_W_StatusCode==1;
+WOPSEL_MonthlySnapshotValid = WTSC_M_StatusCode==1;
+WOPSEL_MTFValid = LastValue(WMTF_SnapshotContractValid)==1;
+WOPSEL_Published = WXS_PublisherStatusCode==1;
+Filter = Status("lastbarinrange");
+
+AddColumn(0*BarIndex()+WOPSEL_DailyIntervalValid,"OP Daily Interval",1.0);
+AddColumn(0*BarIndex()+WTSC_W_StatusCode,"OP Weekly Snapshot Status",1.0);
+AddColumn(0*BarIndex()+WTSC_M_StatusCode,"OP Monthly Snapshot Status",1.0);
+AddColumn(0*BarIndex()+WOPSEL_MTFValid,"OP MTF Valid",1.0);
+AddColumn(0*BarIndex()+WXS_PublisherStatusCode,"OP Selection Publisher Status",1.0);
+AddColumn(0*BarIndex()+WOPSEL_Published,"OP Selection Context Ready",1.0);
+_SECTION_END();
