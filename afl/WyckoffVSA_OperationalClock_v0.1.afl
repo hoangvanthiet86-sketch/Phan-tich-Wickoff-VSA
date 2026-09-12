@@ -21,6 +21,13 @@ WCLK_IsReplay = WCLK_PlaybackDateTime > 0;
 WCLK_ModeCode = IIf(WCLK_IsReplay,2,1); // 1 LIVE_SYSTEM, 2 BAR_REPLAY
 WCLK_ModeText = "INSUFFICIENT\nLIVE SYSTEM\nBAR REPLAY";
 
+// Keep replay-published persistent state isolated from live persistent state.
+WCLK_Namespace = "L";
+if (WCLK_IsReplay)
+{
+    WCLK_Namespace = "R";
+}
+
 WCLK_AsOfDateTime = IIf(WCLK_IsReplay,WCLK_PlaybackDateTime,Now(5));
 WCLK_AsOfDateNum = DateTimeConvert(0,WCLK_AsOfDateTime);
 
