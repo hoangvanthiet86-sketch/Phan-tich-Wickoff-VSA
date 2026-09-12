@@ -1,0 +1,208 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Daily Stock Snapshot Consumer Probe.
+
+    PRE-NATIVE-TEST IMPLEMENTATION.
+    Reads persistent Daily Publisher state only; it does not run the heavy
+    Wyckoff/VSA analytical stack.
+
+    Fail-closed guards:
+    - Ready / WriteComplete / stable generation
+    - schema / runtime / contract version
+    - symbol identity
+    - exact config fingerprint
+    - same canonical DateNum business date
+    - required decision payload present
+*/
+#pragma nocache
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_DailySnapshotContract_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+
+_SECTION_BEGIN("Performance Runtime v0.2 Daily Snapshot Consumer Probe");
+
+WDSC_GenerationBefore = Nz(StaticVarGet(WDS_Prefix+"CommittedGenerationID"),0);
+WDSC_Ready = Nz(StaticVarGet(WDS_Prefix+"Ready"),0);
+WDSC_WriteComplete = Nz(StaticVarGet(WDS_Prefix+"WriteComplete"),0);
+WDSC_SchemaMajor = Nz(StaticVarGet(WDS_Prefix+"SchemaMajor"),0);
+WDSC_SchemaMinor = Nz(StaticVarGet(WDS_Prefix+"SchemaMinor"),0);
+WDSC_SnapshotSymbol = StaticVarGetText(WDS_Prefix+"Symbol");
+WDSC_RuntimeVersion = StaticVarGetText(WDS_Prefix+"RuntimeVersion");
+WDSC_ContractVersion = StaticVarGetText(WDS_Prefix+"ContractVersion");
+WDSC_ConfigFingerprint = StaticVarGetText(WDS_Prefix+"ConfigFingerprint");
+WDSC_BusinessDateKey = Nz(StaticVarGet(WDS_Prefix+"BusinessDateKey"),0);
+WDSC_SourceDateTime = StaticVarGet(WDS_Prefix+"SourceDateTime");
+WDSC_SourceBarIndex = StaticVarGet(WDS_Prefix+"SourceBarIndex");
+
+// Raw decision payload.
+WDSC_RawDataEligible = StaticVarGet(WDS_Prefix+"DataEligible");
+WDSC_RawCandidateClass = StaticVarGet(WDS_Prefix+"CandidateClass");
+WDSC_RawSide = StaticVarGet(WDS_Prefix+"Side");
+WDSC_RawStage = StaticVarGet(WDS_Prefix+"Stage");
+WDSC_RawQualified = StaticVarGet(WDS_Prefix+"Qualified");
+WDSC_RawDeveloping = StaticVarGet(WDS_Prefix+"Developing");
+WDSC_RawWatch = StaticVarGet(WDS_Prefix+"Watch");
+WDSC_RawReview = StaticVarGet(WDS_Prefix+"Review");
+WDSC_RawExclusionMask = StaticVarGet(WDS_Prefix+"ExclusionMask");
+WDSC_RawMethodBlockMask = StaticVarGet(WDS_Prefix+"MethodBlockMask");
+
+// Compact diagnostics.
+WDSC_RawContextMultiplicity = StaticVarGet(WDS_Prefix+"ContextMultiplicity");
+WDSC_RawContextAmbiguous = StaticVarGet(WDS_Prefix+"ContextAmbiguous");
+WDSC_RawCurrentRangeContextID = StaticVarGet(WDS_Prefix+"CurrentRangeContextID");
+WDSC_RawRangeStatus = StaticVarGet(WDS_Prefix+"RangeStatus");
+WDSC_RawRangePositionValid = StaticVarGet(WDS_Prefix+"RangePositionValid");
+WDSC_RawRangePosition = StaticVarGet(WDS_Prefix+"RangePosition");
+WDSC_RawRangeLocationCoherent = StaticVarGet(WDS_Prefix+"RangeLocationCoherent");
+WDSC_RawRangeLocationConflict = StaticVarGet(WDS_Prefix+"RangeLocationConflict");
+WDSC_RawPhaseState = StaticVarGet(WDS_Prefix+"PhaseState");
+WDSC_RawFamilyHypothesis = StaticVarGet(WDS_Prefix+"FamilyHypothesis");
+WDSC_RawDirectionalContext = StaticVarGet(WDS_Prefix+"DirectionalContext");
+WDSC_RawMTFDirectionalAlignment = StaticVarGet(WDS_Prefix+"MTFDirectionalAlignment");
+WDSC_RawRSStockVsMarketStructure = StaticVarGet(WDS_Prefix+"RSStockVsMarketStructure");
+WDSC_RawRSPriceRelationship = StaticVarGet(WDS_Prefix+"RSPriceRelationship");
+WDSC_RawSelectionMarketValid = StaticVarGet(WDS_Prefix+"SelectionMarketValid");
+WDSC_RawSelectionMarketStatus = StaticVarGet(WDS_Prefix+"SelectionMarketStatus");
+WDSC_RawSelectionGroupValid = StaticVarGet(WDS_Prefix+"SelectionGroupValid");
+WDSC_RawSelectionGroupStatus = StaticVarGet(WDS_Prefix+"SelectionGroupStatus");
+
+WDSC_GenerationAfter = Nz(StaticVarGet(WDS_Prefix+"CommittedGenerationID"),0);
+WDSC_GenerationStable =
+    WDSC_GenerationBefore>0 AND
+    WDSC_GenerationBefore==WDSC_GenerationAfter;
+
+WDSC_RequiredPayloadValid =
+    NOT IsNull(WDSC_RawDataEligible) AND
+    NOT IsNull(WDSC_RawCandidateClass) AND
+    NOT IsNull(WDSC_RawSide) AND
+    NOT IsNull(WDSC_RawStage) AND
+    NOT IsNull(WDSC_RawQualified) AND
+    NOT IsNull(WDSC_RawDeveloping) AND
+    NOT IsNull(WDSC_RawWatch) AND
+    NOT IsNull(WDSC_RawReview) AND
+    NOT IsNull(WDSC_RawExclusionMask) AND
+    NOT IsNull(WDSC_RawMethodBlockMask) AND
+    NOT IsNull(WDSC_RawPhaseState) AND
+    NOT IsNull(WDSC_RawFamilyHypothesis) AND
+    NOT IsNull(WDSC_RawDirectionalContext) AND
+    NOT IsNull(WDSC_RawMTFDirectionalAlignment) AND
+    NOT IsNull(WDSC_RawRSStockVsMarketStructure) AND
+    NOT IsNull(WDSC_RawRSPriceRelationship) AND
+    NOT IsNull(WDSC_RawSelectionMarketValid) AND
+    NOT IsNull(WDSC_RawSelectionMarketStatus) AND
+    NOT IsNull(WDSC_RawSelectionGroupValid) AND
+    NOT IsNull(WDSC_RawSelectionGroupStatus);
+
+WDSC_AsOfBusinessDateKey = WCLK_AsOfBusinessDateKey;
+
+// Consumer status:
+// 0 NO SNAPSHOT
+// 1 VALID
+// 2 WRITE NOT COMPLETE / GENERATION UNSTABLE
+// 3 SCHEMA OR VERSION MISMATCH
+// 4 SYMBOL MISMATCH
+// 5 CONFIG FINGERPRINT MISMATCH
+// 6 STALE SNAPSHOT DATE
+// 7 FUTURE SNAPSHOT DATE
+// 8 REQUIRED PAYLOAD INVALID
+// 9 OPERATIONAL CLOCK INVALID
+WDSC_StatusCode = 0;
+WDSC_StatusText =
+    "NO SNAPSHOT\nVALID\nWRITE NOT COMPLETE / GENERATION UNSTABLE\nSCHEMA OR VERSION MISMATCH\nSYMBOL MISMATCH\nCONFIG FINGERPRINT MISMATCH\nSTALE SNAPSHOT DATE\nFUTURE SNAPSHOT DATE\nREQUIRED PAYLOAD INVALID\nOPERATIONAL CLOCK INVALID";
+
+if (NOT WCLK_ClockValid)
+{
+    WDSC_StatusCode = 9;
+}
+else
+if (WDSC_GenerationBefore<=0)
+{
+    WDSC_StatusCode = 0;
+}
+else
+if (WDSC_Ready!=1 OR WDSC_WriteComplete!=1 OR NOT WDSC_GenerationStable)
+{
+    WDSC_StatusCode = 2;
+}
+else
+if (WDSC_SchemaMajor!=WDS_SchemaMajor OR
+    WDSC_SchemaMinor!=WDS_SchemaMinor OR
+    WDSC_RuntimeVersion!=WDS_RuntimeVersion OR
+    WDSC_ContractVersion!=WDS_ContractVersion)
+{
+    WDSC_StatusCode = 3;
+}
+else
+if (WDSC_SnapshotSymbol!=Name())
+{
+    WDSC_StatusCode = 4;
+}
+else
+if (WDSC_ConfigFingerprint!=WDS_ConfigFingerprint)
+{
+    WDSC_StatusCode = 5;
+}
+else
+if (WDSC_BusinessDateKey<WDSC_AsOfBusinessDateKey)
+{
+    WDSC_StatusCode = 6;
+}
+else
+if (WDSC_BusinessDateKey>WDSC_AsOfBusinessDateKey)
+{
+    WDSC_StatusCode = 7;
+}
+else
+if (NOT WDSC_RequiredPayloadValid)
+{
+    WDSC_StatusCode = 8;
+}
+else
+{
+    WDSC_StatusCode = 1;
+}
+
+WDSC_Valid = WDSC_StatusCode==1;
+
+// Fail-closed public decision surface.
+WDSC_DataEligible = IIf(WDSC_Valid,WDSC_RawDataEligible,0);
+WDSC_CandidateClass = IIf(WDSC_Valid,WDSC_RawCandidateClass,0);
+WDSC_Side = IIf(WDSC_Valid,WDSC_RawSide,0);
+WDSC_Stage = IIf(WDSC_Valid,WDSC_RawStage,0);
+WDSC_Qualified = IIf(WDSC_Valid,WDSC_RawQualified,0);
+WDSC_Developing = IIf(WDSC_Valid,WDSC_RawDeveloping,0);
+WDSC_Watch = IIf(WDSC_Valid,WDSC_RawWatch,0);
+WDSC_Review = IIf(WDSC_Valid,WDSC_RawReview,0);
+WDSC_ExclusionMask = IIf(WDSC_Valid,WDSC_RawExclusionMask,0);
+WDSC_MethodBlockMask = IIf(WDSC_Valid,WDSC_RawMethodBlockMask,0);
+
+WDSC_LastVisibleBar = BarIndex()==LastValue(BarIndex());
+Filter = WDSC_LastVisibleBar;
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of Date",formatDateTime);
+AddColumn(0*BarIndex()+WDSC_StatusCode,"Snapshot Status",1.0);
+AddMultiTextColumn(0*BarIndex()+WDSC_StatusCode,WDSC_StatusText,"Snapshot Status Text");
+AddColumn(0*BarIndex()+WDSC_GenerationAfter,"Generation",1.0);
+AddColumn(0*BarIndex()+WDSC_BusinessDateKey,"Snapshot Business DateNum",1.0);
+AddColumn(0*BarIndex()+WDSC_AsOfBusinessDateKey,"Current Business DateNum",1.0);
+AddColumn(0*BarIndex()+WDSC_DataEligible,"Data Eligible",1.0);
+AddColumn(0*BarIndex()+WDSC_CandidateClass,"Candidate Class",1.0);
+AddColumn(0*BarIndex()+WDSC_Side,"Side",1.0);
+AddColumn(0*BarIndex()+WDSC_Stage,"Stage",1.0);
+AddColumn(0*BarIndex()+WDSC_Qualified,"Qualified",1.0);
+AddColumn(0*BarIndex()+WDSC_Developing,"Developing",1.0);
+AddColumn(0*BarIndex()+WDSC_Watch,"Watch",1.0);
+AddColumn(0*BarIndex()+WDSC_Review,"Review",1.0);
+AddColumn(0*BarIndex()+WDSC_ExclusionMask,"Exclusion Mask",1.0);
+AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"Method Block Mask",1.0);
+AddColumn(0*BarIndex()+WDSC_RawPhaseState,"Phase",1.0);
+AddColumn(0*BarIndex()+WDSC_RawFamilyHypothesis,"Family",1.0);
+AddColumn(0*BarIndex()+WDSC_RawRangePosition,"Range Position",1.4);
+AddColumn(0*BarIndex()+WDSC_RawMTFDirectionalAlignment,"MTF Alignment",1.0);
+AddColumn(0*BarIndex()+WDSC_RawRSStockVsMarketStructure,"RS vs Market",1.0);
+AddTextColumn(WDSC_RuntimeVersion,"Snapshot Runtime Version");
+AddTextColumn("DAILY_SNAPSHOT_CONSUMER_PROBE_V02_20260912_A","Probe Version");
+
+_SECTION_END();
