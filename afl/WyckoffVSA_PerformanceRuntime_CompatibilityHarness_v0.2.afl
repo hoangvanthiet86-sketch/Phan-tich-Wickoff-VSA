@@ -1,0 +1,177 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Direct-compute compatibility harness — PRE-NATIVE-TEST.
+
+    Purpose:
+    - load the approved v0.2 RuntimeConfig first;
+    - execute the exact v0.1 analytical stack through Market Scanner;
+    - intentionally defer P&F in the fast path;
+    - verify that v0.2 requested configuration is equivalent to the actual
+      legacy module configuration before comparing analytical outputs;
+    - expose a compact scanner surface for native DTP/FRT/SNZ equivalence tests.
+
+    IMPORTANT:
+    - this is NOT yet the persistent Snapshot/Fast Scanner implementation;
+    - legacy module Params still exist and may appear in Parameters;
+    - no analytical algorithm is changed here;
+    - configuration mismatch fails closed;
+    - no NATIVE PASS is claimed by this source file.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+// ============================================================================
+// 0. CENTRAL v0.2 CONFIGURATION
+// ============================================================================
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+
+// ============================================================================
+// 1. EXACT v0.1 ANALYTICAL STACK THROUGH MARKET SCANNER
+//    Order mirrors the AmiBroker 6.20 explicit-order Production Candidate.
+// ============================================================================
+#include_once <WyckoffVSA_Core_v1.0.afl>
+#include_once <WyckoffVSA_Candidate_v1.0.afl>
+#include_once <WyckoffVSA_StructureLocation_v1.0.afl>
+#include_once <WyckoffVSA_Confirmation_v1.0.afl>
+
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_v0.1.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_v1.0.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_v0.1.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_v0.1.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_v0.1.afl>
+
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_v0.1.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_v0.1.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_v0.1.afl>
+
+#include_once <WyckoffVSA_PhaseContext_InputFacade_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_v0.1.afl>
+
+#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>
+
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>
+
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+#include_once <WyckoffVSA_RelativeStrengthContext_v0.1.afl>
+
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>
+#include_once <WyckoffVSA_MarketScanner_v0.1.afl>
+
+// P&F is deliberately NOT included in this fast-path compatibility harness.
+// Market Scanner candidate classes are upstream of P&F in v0.1.
+
+// ============================================================================
+// 2. CONFIGURATION-EQUIVALENCE GUARD
+// ============================================================================
+_SECTION_BEGIN("91. v0.2 Compatibility Guard");
+
+WVRCB_CoreMatch =
+    VolumeLookback == WVRC_VolumeLookback AND
+    SpreadLookback == WVRC_SpreadLookback AND
+    ATRPeriod == WVRC_ATRPeriod AND
+    HighEffortThreshold == WVRC_HighEffortRVOL AND
+    LowEffortThreshold == WVRC_LowEffortRVOL AND
+    LowDirectionalResultThreshold == WVRC_LowDirectionalResultATR AND
+    HighDirectionalResultThreshold == WVRC_HighDirectionalResultATR;
+
+WVRCB_StructureMatch =
+    SL_S_Lookback == WVRC_ShortLookback AND
+    SL_M_Lookback == WVRC_MediumLookback AND
+    SL_L_Lookback == WVRC_LongLookback AND
+    SL_PivotLeft == WVRC_PivotLeft AND
+    SL_PivotRight == WVRC_PivotRight;
+
+WVRCB_ProvisionalMatch =
+    WCI_RuntimeLastBarIsProvisional == WVRC_LastBarProvisional AND
+    WRS_RuntimeLastBarIsProvisional == WVRC_LastBarProvisional;
+
+WVRCB_RSMatch =
+    WRS_MarketBenchmarkSymbol == WVRC_RSMarketSymbol AND
+    WRS_GroupBenchmarkSymbol == WVRC_RSGroupSymbol AND
+    WRS_AdjustmentBasisDeclaration == WVRC_RSAdjustmentBasisDeclaration AND
+    WRS_AdjustmentBasisStatusScalar == WVRC_RSAdjustmentBasisStatus;
+
+WVRCB_SelectionMatch =
+    WXS_RequestedMarketSymbol == WVRC_SelectionMarketSymbol AND
+    WXS_RequestedGroupSymbol == WVRC_SelectionGroupSymbol;
+
+WVRCB_ScannerMatch =
+    WSCN_RequireFullTopDown == WVRC_RequireFullTopDown;
+
+WVRCB_ConfigMismatchMask =
+      IIf(WVRCB_CoreMatch,0,1)
+    + IIf(WVRCB_StructureMatch,0,2)
+    + IIf(WVRCB_ProvisionalMatch,0,4)
+    + IIf(WVRCB_RSMatch,0,8)
+    + IIf(WVRCB_SelectionMatch,0,16)
+    + IIf(WVRCB_ScannerMatch,0,32);
+
+WVRCB_ConfigEquivalent = WVRC_ConfigValid AND WVRCB_ConfigMismatchMask == 0;
+WVRCB_ConfigStatusCode = IIf(NOT WVRC_ConfigValid,0,IIf(WVRCB_ConfigEquivalent,2,1));
+WVRCB_ConfigStatusText = "V0.2 CONFIG INVALID\nLEGACY / V0.2 CONFIG MISMATCH\nCONFIG EQUIVALENT";
+
+_SECTION_END();
+
+// ============================================================================
+// 3. COMPACT DECISION SURFACE
+// ============================================================================
+_SECTION_BEGIN("92. v0.2 Direct-Compute Scanner Surface");
+
+WVRCB_IsLastBar = Status("lastbarinrange");
+WVRCB_FilterQualified = WSCN_QualifiedCandidateFlag==1;
+WVRCB_FilterDeveloping = WSCN_DevelopingCandidateFlag==1 OR WSCN_QualifiedCandidateFlag==1;
+WVRCB_FilterWatch = WSCN_WatchFlag==1 OR WSCN_DevelopingCandidateFlag==1 OR WSCN_QualifiedCandidateFlag==1;
+WVRCB_FilterReview = WSCN_ReviewFlag==1 OR WSCN_DataEligibilityCode==0;
+WVRCB_FilterAllEligible = WSCN_DataEligibilityCode==1;
+
+// Mode 5 is P&F Review and is intentionally unavailable in this no-P&F path.
+WVRCB_FilterSelected = IIf(
+    WVRC_ProductionFilterCode==0,WVRCB_FilterQualified,
+    IIf(WVRC_ProductionFilterCode==1,WVRCB_FilterDeveloping,
+    IIf(WVRC_ProductionFilterCode==2,WVRCB_FilterWatch,
+    IIf(WVRC_ProductionFilterCode==3,WVRCB_FilterReview,
+    IIf(WVRC_ProductionFilterCode==4,WVRCB_FilterAllEligible,0)))));
+
+Filter = WVRCB_IsLastBar AND WVRCB_ConfigEquivalent AND WVRCB_FilterSelected;
+
+WVRCB_CandidateClassText = "DATA GATED / INSUFFICIENT\nNOT A CURRENT CANDIDATE\nWATCH\nDEVELOPING BULLISH\nQUALIFIED BULLISH - MARKET ALIGNED\nQUALIFIED BULLISH - FULL TOP-DOWN\nDEVELOPING BEARISH\nQUALIFIED BEARISH - MARKET ALIGNED\nQUALIFIED BEARISH - FULL TOP-DOWN\nREVIEW - CONFLICT / AMBIGUITY";
+WVRCB_CandidateSideText = "NONE / UNRESOLVED\nBULLISH\nBEARISH";
+WVRCB_CandidateStageText = "NONE / INSUFFICIENT\nWATCH - RANGE FORMATION / DEVELOPMENT\nDEVELOPING - FINAL TEST\nDIRECTIONAL DEVELOPMENT\nTREND EXPANSION\nTERMINAL / SUPERSEDED";
+WVRCB_PhaseText = "INSUFFICIENT CONTEXT\nPHASE-A-LIKE\nPHASE-B-LIKE\nPHASE-C-CANDIDATE\nPHASE-C-LIKE\nPHASE-D-LIKE\nPHASE-E-LIKE\nRANGE INVALIDATED / SUPERSEDED";
+WVRCB_FamilyText = "INSUFFICIENT\nUNRESOLVED LOWER RANGE\nUNRESOLVED UPPER RANGE\nACCUMULATION-HYPOTHESIS\nREDISTRIBUTION-HYPOTHESIS\nDISTRIBUTION-HYPOTHESIS\nREACCUMULATION-HYPOTHESIS\nMIXED / CONFLICTING EVIDENCE";
+WVRCB_MTFText = "INSUFFICIENT MTF DATA\nUNRESOLVED / NON-DIRECTIONAL\nBULLISH ALIGNMENT\nBEARISH ALIGNMENT\nBASE COUNTER TO HIGHER CONTEXT\nHIGHER TIMEFRAMES CONFLICT\nMIXED / COMPLEX MTF CONTEXT";
+WVRCB_RSText = "INSUFFICIENT\nRS IMPROVING / BULLISH STRUCTURE\nRS DETERIORATING / BEARISH STRUCTURE\nRS MIXED / NON-DIRECTIONAL";
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of Date",formatDateTime);
+AddMultiTextColumn(WVRCB_ConfigStatusCode,WVRCB_ConfigStatusText,"Runtime Config Status");
+AddColumn(WSCN_DataEligibilityCode,"Data Eligible",1.0);
+AddMultiTextColumn(WSCN_CandidateClassCode,WVRCB_CandidateClassText,"Candidate Class");
+AddMultiTextColumn(WSCN_CandidateSideCode,WVRCB_CandidateSideText,"Candidate Side");
+AddMultiTextColumn(WSCN_CandidateStageCode,WVRCB_CandidateStageText,"Candidate Stage");
+AddMultiTextColumn(WSCN_StockPhaseStateCode,WVRCB_PhaseText,"Phase");
+AddMultiTextColumn(WSCN_StockFamilyHypothesisCode,WVRCB_FamilyText,"Family");
+AddColumn(WSCN_StockRangePosition,"Range Position",1.4);
+AddMultiTextColumn(WSCN_StockMTFAlignmentCode,WVRCB_MTFText,"MTF Alignment");
+AddMultiTextColumn(WSCN_StockVsMarketRSStructureCode,WVRCB_RSText,"RS vs Market");
+AddColumn(WSCN_ReviewFlag,"Scanner Review",1.0);
+AddColumn(WSCN_MethodBlockReasonMask,"Method Block Mask",1.0);
+
+if(WVRC_ShowDecisionDiagnostics OR WVRC_OutputDetailEffective>=1)
+{
+    AddColumn(WSCN_ExclusionReasonMask,"Exclusion Mask",1.0);
+    AddColumn(WVRCB_ConfigMismatchMask,"Config Mismatch Mask",1.0);
+    AddColumn(WSCN_QualifiedCandidateFlag,"Qualified",1.0);
+    AddColumn(WSCN_DevelopingCandidateFlag,"Developing",1.0);
+    AddColumn(WSCN_WatchFlag,"Watch",1.0);
+    AddColumn(WSCN_CandidateClassCode,"Candidate Class Code",1.0);
+    AddColumn(WSCN_CandidateSideCode,"Candidate Side Code",1.0);
+    AddColumn(WSCN_CandidateStageCode,"Candidate Stage Code",1.0);
+}
+
+_SECTION_END();
