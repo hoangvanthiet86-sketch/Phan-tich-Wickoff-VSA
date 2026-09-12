@@ -13,9 +13,14 @@
 
     IMPORTANT:
     - this file does not calculate Wyckoff/VSA events, phase, scanner class or P&F;
-    - no existing analytical engine consumes WVRC_* yet;
-    - legacy module-specific provisional overrides are not exposed here.
+    - legacy module-specific provisional overrides are not exposed here;
+    - when this file is included first, WVRC_UseCentralConfig=1 tells compatible
+      runtime modules to consume WVRC_* values instead of declaring duplicate
+      legacy Params. Standalone legacy formulas remain unchanged when the flag
+      is absent.
 */
+
+WVRC_UseCentralConfig = 1;
 
 _SECTION_BEGIN("01. RUN MODE");
 WVRC_RuntimeProfileCode = Param(
