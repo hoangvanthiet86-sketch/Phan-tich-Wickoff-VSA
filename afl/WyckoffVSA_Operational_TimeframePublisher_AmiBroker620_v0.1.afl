@@ -6,11 +6,10 @@
     1) native Weekly interval over the required universe;
     2) native Monthly interval over the same universe.
 
-    Live mode uses the system clock. During Bar Replay the underlying snapshot
-    publisher automatically uses GetPlaybackDateTime() through WCLK.
+    The operational clock is the last quotation visible to AFL. In Bar Replay,
+    future quotations are hidden by AmiBroker, so the same formula naturally
+    evaluates relative to the replay position.
 
-    It publishes only the previous calendar-completed higher-period Composite
-    state relative to the active operational as-of.
     No analytical methodology is changed here.
 */
 #pragma nocache
@@ -46,12 +45,9 @@ WOPTF_ReadyCode = IIf(WTS_PublisherStatus==1,1,0);
 Filter = Status("lastbarinrange");
 
 AddColumn(0*BarIndex()+WCLK_ModeCode,"OP Clock Mode",1.0);
-AddColumn(0*BarIndex()+WCLK_IsReplay,"OP Bar Replay Active",1.0);
-AddColumn(0*BarIndex()+WCLK_AsOfDateTime,"OP As-Of DateTime",formatDateTime);
+AddColumn(0*BarIndex()+WCLK_AsOfDateTime,"OP Visible-Data As-Of",formatDateTime);
+AddColumn(0*BarIndex()+WCLK_AsOfBusinessDateKey,"OP As-Of Business Date",1.0);
 AddColumn(0*BarIndex()+WOPTF_IsSupportedInterval,"OP Supported Interval",1.0);
-AddColumn(0*BarIndex()+WTS_CurrentPeriodOrdinal,"OP Current Period Ordinal",1.0);
-AddColumn(0*BarIndex()+WTS_ExpectedCompletedOrdinal,"OP Expected Completed Ordinal",1.0);
-AddColumn(0*BarIndex()+WTS_SelectedSourceOrdinal,"OP Selected Source Ordinal",1.0);
 AddColumn(0*BarIndex()+WTS_PublisherStatus,"OP Publisher Status",1.0);
 AddColumn(0*BarIndex()+WOPTF_ReadyCode,"OP Snapshot Ready",1.0);
 _SECTION_END();
