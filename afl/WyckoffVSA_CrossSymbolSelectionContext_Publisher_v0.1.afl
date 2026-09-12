@@ -183,7 +183,7 @@ if (WXS_SourceBusinessDateKey < WXS_CurrentCalendarBusinessDateKey)
 else
 if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WCLK_IsReplay)
 {
-    WXS_CompletionBasisCode = 3; // BAR REPLAY POSITION: historical bar is replay-visible/completed
+    WXS_CompletionBasisCode = 3; // BAR REPLAY POSITION: replay-visible historical Daily bar
 }
 else
 if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WXS_DailyCompletionDeclaration==1)
@@ -232,10 +232,8 @@ else
         WXS_PreviousGeneration = Nz(StaticVarGet(WXS_Prefix+"CommittedGenerationID"),0);
         WXS_NewGeneration = WXS_PreviousGeneration + 1;
 
-        // XS21 transaction protocol: Ready low before bundle writes.
         StaticVarSet(WXS_Prefix+"Ready",0,True);
 
-        // Composite payload.
         StaticVarSet(WXS_Prefix+"ContextMultiplicityCode",WXS_ContextMultiplicityCode,True);
         StaticVarSet(WXS_Prefix+"ContextAmbiguous",WXS_ContextAmbiguous,True);
         StaticVarSet(WXS_Prefix+"CurrentRangeContextID",WXS_CurrentRangeContextID,True);
@@ -275,7 +273,6 @@ else
         StaticVarSet(WXS_Prefix+"U_PrimaryRangeHigh",WXS_U_PrimaryRangeHigh,True);
         StaticVarSet(WXS_Prefix+"U_RangeAgeBars",WXS_U_RangeAgeBars,True);
 
-        // MTF payload and provenance.
         StaticVarSet(WXS_Prefix+"MTF_SnapshotContractValid",WXS_MTF_SnapshotContractValid,True);
         StaticVarSet(WXS_Prefix+"MTF_DailyValid",WXS_MTF_DailyValid,True);
         StaticVarSet(WXS_Prefix+"MTF_WeeklyValid",WXS_MTF_WeeklyValid,True);
@@ -310,9 +307,12 @@ else
         StaticVarSet(WXS_Prefix+"MTF_M_SchemaMajor",WXS_MTF_M_SchemaMajor,True);
         StaticVarSet(WXS_Prefix+"MTF_M_SchemaMinor",WXS_MTF_M_SchemaMinor,True);
 
-        // Publication provenance.
+        // Preserve original producer-version/sub-schema contract.
         StaticVarSet(WXS_Prefix+"SchemaMajor",WXS_SchemaMajor,True);
         StaticVarSet(WXS_Prefix+"SchemaMinor",WXS_SchemaMinor,True);
+        StaticVarSetText(WXS_Prefix+"ProducerContractVersion",WXS_ContractVersion,True);
+        StaticVarSetText(WXS_Prefix+"ProducerCompositeVersion",WXS_CompositeVersion,True);
+        StaticVarSetText(WXS_Prefix+"ProducerMTFVersion",WXS_MTFVersion,True);
         StaticVarSetText(WXS_Prefix+"SourceSymbol",WXS_SourceSymbol,True);
         StaticVarSet(WXS_Prefix+"SourceInterval",WXS_SourceInterval,True);
         StaticVarSet(WXS_Prefix+"SourceBusinessDateKey",WXS_SourceBusinessDateKey,True);
@@ -323,30 +323,34 @@ else
         StaticVarSet(WXS_Prefix+"ClockBasisCode",WXS_ClockBasisCode,True);
         StaticVarSet(WXS_Prefix+"CompositePayloadValid",WXS_CompositePayloadValid,True);
         StaticVarSet(WXS_Prefix+"MTFPayloadValid",WXS_MTFPayloadValid,True);
+        StaticVarSet(WXS_Prefix+"CompositeSchemaMajor",WCI_PublicSchemaMajor,True);
+        StaticVarSet(WXS_Prefix+"CompositeSchemaMinor",WCI_PublicSchemaMinor,True);
+        StaticVarSet(WXS_Prefix+"MTFSchemaMajor",WMTF_PublicSchemaMajor,True);
+        StaticVarSet(WXS_Prefix+"MTFSchemaMinor",WMTF_PublicSchemaMinor,True);
 
         StaticVarSet(WXS_Prefix+"CommittedGenerationID",WXS_NewGeneration,True);
         StaticVarSet(WXS_Prefix+"Ready",1,True);
 
         WXS_VerifyGeneration = StaticVarGet(WXS_Prefix+"CommittedGenerationID");
         WXS_VerifyReady = StaticVarGet(WXS_Prefix+"Ready");
-        WXS_PublisherStatusCode = IIf(
-            WXS_VerifyReady==1 AND WXS_VerifyGeneration==WXS_NewGeneration,
-            1,8);
+        WXS_PublisherStatusCode = IIf(WXS_VerifyReady==1 AND WXS_VerifyGeneration==WXS_NewGeneration,1,8);
 
-        StaticVarSet(WXS_WriterLockName,0,True);
+        // Writer semaphore remains non-persistent as in the original contract.
+        StaticVarSet(WXS_WriterLockName,0);
     }
 }
 
-WXS_PublisherStatusArray = 0*BarIndex()+WXS_PublisherStatusCode;
-WXS_CompletionBasisArray = 0*BarIndex()+WXS_CompletionBasisCode;
-WXS_ClockBasisArray = 0*BarIndex()+WXS_ClockBasisCode;
-WXS_AsOfDateTimeArray = 0*BarIndex()+WCLK_AsOfDateTime;
-
-AddTextColumn(Name(),"WXS_SourceSymbol");
-AddColumn(WXS_PublisherStatusArray,"WXS_PublisherStatusCode",1.0);
-AddMultiTextColumn(WXS_PublisherStatusArray,WXS_PublisherStatusText,"WXS_PublisherStatus");
-AddColumn(WXS_CompletionBasisArray,"WXS_CompletionBasisCode",1.0);
-AddColumn(WXS_ClockBasisArray,"WXS_ClockBasisCode",1.0);
-AddColumn(0*BarIndex()+WCLK_IsReplay,"WXS_BarReplayActive",1.0);
-AddColumn(WXS_AsOfDateTimeArray,"WXS_AsOfDateTime",formatDateTime);
+WXS_PublisherStatus = 0*BarIndex() + WXS_PublisherStatusCode;
+WXS_PublisherWriterLockAcquired = 0*BarIndex() + WXS_WriterLockAcquired;
+WXS_PublisherSourceBusinessDateKey = 0*BarIndex() + WXS_SourceBusinessDateKey;
+WXS_PublisherCurrentCalendarBusinessDateKey = 0*BarIndex() + WXS_CurrentCalendarBusinessDateKey;
+WXS_PublisherCompletionBasisCode = 0*BarIndex() + WXS_CompletionBasisCode;
+WXS_PublisherCompletionDeclarationCode = 0*BarIndex() + WXS_EffectiveCompletionDeclaration;
+WXS_PublisherPreviousGeneration = 0*BarIndex() + WXS_PreviousGeneration;
+WXS_PublisherNewGeneration = 0*BarIndex() + WXS_NewGeneration;
+WXS_PublisherCompositePayloadValid = 0*BarIndex() + WXS_CompositePayloadValid;
+WXS_PublisherMTFPayloadValid = 0*BarIndex() + WXS_MTFPayloadValid;
+WXS_PublisherClockBasisCode = 0*BarIndex() + WXS_ClockBasisCode;
+WXS_PublisherBarReplayActive = 0*BarIndex() + WCLK_IsReplay;
+WXS_PublisherAsOfDateTime = 0*BarIndex() + WCLK_AsOfDateTime;
 _SECTION_END();
