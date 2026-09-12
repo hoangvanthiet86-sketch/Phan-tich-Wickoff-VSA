@@ -15,6 +15,10 @@
 #pragma nocache
 SetBarsRequired(sbrAll,sbrAll);
 
+WOPSEL_DailyCompletionDeclarationInput =
+    ParamToggle("Selection snapshot: current Daily bar completed",
+                "Not declared|Completed",0);
+
 #include_once <WyckoffVSA_Core_v1.0.afl>
 #include_once <WyckoffVSA_Candidate_v1.0.afl>
 #include_once <WyckoffVSA_StructureLocation_v1.0.afl>
@@ -48,12 +52,14 @@ WOPSEL_WeeklySnapshotValid = WTSC_W_StatusCode==1;
 WOPSEL_MonthlySnapshotValid = WTSC_M_StatusCode==1;
 WOPSEL_MTFValid = LastValue(WMTF_SnapshotContractValid)==1;
 WOPSEL_Published = WXS_PublisherStatusCode==1;
-Filter = Status("lastbarinrange");
+
+WOPSEL_LastVisibleBarIndex = LastValue(BarIndex());
+Filter = BarIndex()==WOPSEL_LastVisibleBarIndex;
 
 AddColumn(0*BarIndex()+WCLK_ModeCode,"OP Clock Mode",1.0);
 AddColumn(0*BarIndex()+WCLK_AsOfDateTime,"OP Visible-Data As-Of",formatDateTime);
-AddColumn(0*BarIndex()+WXS_SourceBusinessDateKey,"OP Source Business Date",1.0);
-AddColumn(0*BarIndex()+WXS_CurrentCalendarBusinessDateKey,"OP Clock Business Date",1.0);
+AddColumn(0*BarIndex()+WXS_SourceBusinessDateKey,"OP Source Business DateNum Key",1.0);
+AddColumn(0*BarIndex()+WXS_CurrentCalendarBusinessDateKey,"OP Clock Business DateNum Key",1.0);
 AddColumn(0*BarIndex()+WXS_CompletionBasisCode,"OP Completion Basis",1.0);
 AddColumn(0*BarIndex()+WOPSEL_DailyIntervalValid,"OP Daily Interval",1.0);
 AddColumn(0*BarIndex()+WTSC_W_StatusCode,"OP Weekly Snapshot Status",1.0);
