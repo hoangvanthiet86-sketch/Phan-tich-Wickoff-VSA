@@ -11,13 +11,15 @@
 _SECTION_BEGIN("89.1 Operational Clock Exploration");
 
 // Deterministic one-row Exploration filter.
-// Status("lastbarinrange") can be false in some Analysis/Range combinations,
-// so select the actual last visible bar explicitly.
 WCLK_LastVisibleBarIndex = LastValue(BarIndex());
 Filter = BarIndex()==WCLK_LastVisibleBarIndex;
 
 WCLK_ModeArray = 0*BarIndex()+WCLK_ModeCode;
 WCLK_AsOfArray = 0*BarIndex()+WCLK_AsOfDateTime;
+WCLK_DateNumArray = 0*BarIndex()+WCLK_AsOfDateNum;
+WCLK_YearArray = 0*BarIndex()+WCLK_Year;
+WCLK_MonthArray = 0*BarIndex()+WCLK_Month;
+WCLK_DayArray = 0*BarIndex()+WCLK_Day;
 WCLK_BusinessDateArray = 0*BarIndex()+WCLK_AsOfBusinessDateKey;
 WCLK_CurrentWeeklyArray = 0*BarIndex()+WCLK_CurrentWeeklyOrdinal;
 WCLK_ExpectedWeeklyArray = 0*BarIndex()+WCLK_ExpectedCompletedWeeklyOrdinal;
@@ -32,6 +34,10 @@ AddColumn(WCLK_ModeArray,"Clock Mode Code",1.0);
 AddMultiTextColumn(WCLK_ModeArray,WCLK_ModeText,"Clock Mode");
 AddColumn(WCLK_AsOfArray,"Operational As-Of",formatDateTime);
 AddColumn(WCLK_EqualsVisibleLast,"As-Of = Visible Last Bar",1.0);
+AddColumn(WCLK_DateNumArray,"Visible DateNum",1.0);
+AddColumn(WCLK_YearArray,"Parsed Year",1.0);
+AddColumn(WCLK_MonthArray,"Parsed Month",1.0);
+AddColumn(WCLK_DayArray,"Parsed Day",1.0);
 AddColumn(WCLK_BusinessDateArray,"As-Of Business Date",1.0);
 AddColumn(WCLK_CurrentWeeklyArray,"Current Weekly Ordinal",1.0);
 AddColumn(WCLK_ExpectedWeeklyArray,"Expected Completed Weekly",1.0);
