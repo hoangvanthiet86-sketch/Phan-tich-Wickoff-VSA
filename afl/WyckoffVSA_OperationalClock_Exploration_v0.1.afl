@@ -27,6 +27,7 @@ WCLK_CurrentMonthlyArray = 0*BarIndex()+WCLK_CurrentMonthlyOrdinal;
 WCLK_ExpectedMonthlyArray = 0*BarIndex()+WCLK_ExpectedCompletedMonthlyOrdinal;
 WCLK_ValidArray = 0*BarIndex()+WCLK_ClockValid;
 WCLK_EqualsVisibleLast = 0*BarIndex() + (WCLK_AsOfDateTime==LastValue(DateTime()));
+WCLK_KeyEqualsDateNum = 0*BarIndex() + (WCLK_AsOfBusinessDateKey==WCLK_AsOfDateNum);
 
 AddTextColumn(Name(),"Symbol");
 AddColumn(DateTime(),"Visible Last Bar",formatDateTime);
@@ -38,7 +39,8 @@ AddColumn(WCLK_DateNumArray,"Visible DateNum",1.0);
 AddColumn(WCLK_YearArray,"Parsed Year",1.0);
 AddColumn(WCLK_MonthArray,"Parsed Month",1.0);
 AddColumn(WCLK_DayArray,"Parsed Day",1.0);
-AddColumn(WCLK_BusinessDateArray,"As-Of Business Date",1.0);
+AddColumn(WCLK_BusinessDateArray,"As-Of Business DateNum Key",1.0);
+AddColumn(WCLK_KeyEqualsDateNum,"Business Key = DateNum",1.0);
 AddColumn(WCLK_CurrentWeeklyArray,"Current Weekly Ordinal",1.0);
 AddColumn(WCLK_ExpectedWeeklyArray,"Expected Completed Weekly",1.0);
 AddColumn(WCLK_CurrentMonthlyArray,"Current Monthly Ordinal",1.0);
