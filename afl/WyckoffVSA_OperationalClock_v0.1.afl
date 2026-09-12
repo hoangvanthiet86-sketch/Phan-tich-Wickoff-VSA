@@ -20,14 +20,12 @@ WCLK_PlaybackDateTime = GetPlaybackDateTime();
 WCLK_IsReplay = WCLK_PlaybackDateTime != 0;
 WCLK_ModeCode = 1; // LIVE_SYSTEM
 WCLK_ModeText = "INSUFFICIENT\nLIVE SYSTEM\nBAR REPLAY";
-WCLK_Namespace = "L";
 WCLK_AsOfDateTime = Now(5);
 
 // Use ordinary scalar control flow instead of IIf so DateTime remains scalar.
 if (WCLK_IsReplay)
 {
     WCLK_ModeCode = 2;
-    WCLK_Namespace = "R";
     WCLK_AsOfDateTime = WCLK_PlaybackDateTime;
 }
 
