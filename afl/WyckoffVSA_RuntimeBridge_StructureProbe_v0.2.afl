@@ -1,0 +1,33 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    STRUCTURE bridge isolation probe — PRE-NATIVE-TEST.
+
+    Diagnostic only. Loads RuntimeConfig + bridged Core/Candidate/Structure and
+    emits every Analysis bar. No methodology or analytical logic change.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+WVRC_UseCentralConfig = 1;
+#include_once <WyckoffVSA_Core_v1.0.afl>
+#include_once <WyckoffVSA_Candidate_v1.0.afl>
+#include_once <WyckoffVSA_StructureLocation_v1.0.afl>
+
+Filter = 1;
+
+WVSP_BridgeCore = Nz(VarGet("WVRC_CoreUseCentralConfig"),0);
+WVSP_BridgeStructure = Nz(VarGet("WVRC_SLUseCentralConfig"),0);
+AddTextColumn(Name(),"PROBE Symbol");
+AddColumn(DateTime(),"PROBE Date",formatDateTime);
+AddColumn(BarIndex(),"PROBE BarIndex",1.0);
+AddColumn(WVRC_UseCentralConfig,"Central Config Flag",1.0);
+AddColumn(WVSP_BridgeCore,"Bridge Core Active",1.0);
+AddColumn(WVSP_BridgeStructure,"Bridge Structure Active",1.0);
+AddColumn(SL_S_Lookback,"SL Short Lookback",1.0);
+AddColumn(SL_M_Lookback,"SL Medium Lookback",1.0);
+AddColumn(SL_L_Lookback,"SL Long Lookback",1.0);
+AddColumn(SL_PivotLeft,"SL Pivot Left",1.0);
+AddColumn(SL_PivotRight,"SL Pivot Right",1.0);
+AddColumn(SL_ConfigValid,"SL Config Valid",1.0);
+AddTextColumn("STRUCTURE_BRIDGE_PROBE_20260912_A","PROBE VERSION");
