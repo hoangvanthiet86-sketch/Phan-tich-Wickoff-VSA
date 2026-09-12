@@ -42,11 +42,15 @@ SetBarsRequired(sbrAll,sbrAll);
 _SECTION_BEGIN("150. Operational higher-timeframe publisher");
 WOPTF_IsSupportedInterval = Interval()==inWeekly OR Interval()==inMonthly;
 WOPTF_ReadyCode = IIf(WTS_PublisherStatus==1,1,0);
-Filter = Status("lastbarinrange");
+
+// Deterministic one-row audit output. Status("lastbarinrange") can be false
+// under some AmiBroker 6.20 Analysis/Range combinations.
+WOPTF_LastVisibleBarIndex = LastValue(BarIndex());
+Filter = BarIndex()==WOPTF_LastVisibleBarIndex;
 
 AddColumn(0*BarIndex()+WCLK_ModeCode,"OP Clock Mode",1.0);
 AddColumn(0*BarIndex()+WCLK_AsOfDateTime,"OP Visible-Data As-Of",formatDateTime);
-AddColumn(0*BarIndex()+WCLK_AsOfBusinessDateKey,"OP As-Of Business Date",1.0);
+AddColumn(0*BarIndex()+WCLK_AsOfBusinessDateKey,"OP As-Of Business DateNum Key",1.0);
 AddColumn(0*BarIndex()+WOPTF_IsSupportedInterval,"OP Supported Interval",1.0);
 AddColumn(0*BarIndex()+WTS_PublisherStatus,"OP Publisher Status",1.0);
 AddColumn(0*BarIndex()+WOPTF_ReadyCode,"OP Snapshot Ready",1.0);
