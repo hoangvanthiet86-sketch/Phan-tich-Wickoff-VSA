@@ -1,0 +1,48 @@
+/*
+    Wyckoff VSA Operational Higher-Timeframe Publisher v0.1
+    AmiBroker 6.20 explicit-order wrapper.
+
+    Run this same formula twice:
+    1) native Weekly interval over the required universe;
+    2) native Monthly interval over the same universe.
+
+    It publishes only the previous calendar-completed higher-period Composite
+    state through the locked Timeframe Snapshot contract.
+    No analytical methodology is changed here.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_Core_v1.0.afl>
+#include_once <WyckoffVSA_Candidate_v1.0.afl>
+#include_once <WyckoffVSA_StructureLocation_v1.0.afl>
+#include_once <WyckoffVSA_Confirmation_v1.0.afl>
+
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_v0.1.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_v1.0.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_v0.1.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_v0.1.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_v0.1.afl>
+
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_v0.1.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_v0.1.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_v0.1.afl>
+
+#include_once <WyckoffVSA_PhaseContext_InputFacade_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_v0.1.afl>
+
+#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>
+#include_once <WyckoffVSA_TimeframeSnapshot_Publisher_v0.1.afl>
+
+_SECTION_BEGIN("150. Operational higher-timeframe publisher");
+WOPTF_IsSupportedInterval = Interval()==inWeekly OR Interval()==inMonthly;
+WOPTF_ReadyCode = IIf(WTS_PublisherStatus==1,1,0);
+Filter = Status("lastbarinrange");
+
+AddColumn(0*BarIndex()+WOPTF_IsSupportedInterval,"OP Supported Interval",1.0);
+AddColumn(0*BarIndex()+WTS_PublisherStatus,"OP Publisher Status",1.0);
+AddColumn(0*BarIndex()+WOPTF_ReadyCode,"OP Snapshot Ready",1.0);
+_SECTION_END();
