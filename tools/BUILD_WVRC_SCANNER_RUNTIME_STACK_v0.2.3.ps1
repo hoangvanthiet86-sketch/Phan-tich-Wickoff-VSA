@@ -74,12 +74,9 @@ if (-not (Test-Path -LiteralPath $FormulaDir)) {
     New-Item -ItemType Directory -Path $FormulaDir -Force | Out-Null
 }
 
-# Native-validated runtime base and Phase/Composite runtime stack must already exist.
 Require-File "WyckoffVSA_RuntimeConfig_v0.2.afl"
 Require-File "WyckoffVSA_StructureLocation_Runtime_v0.2.afl"
 Require-File "WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl"
-
-# Canonical downstream sources are read only.
 Require-File "WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl"
 Require-File "WyckoffVSA_MultiTimeframeContext_v0.1.afl"
 Require-File "WyckoffVSA_RelativeStrengthContext_v0.1.afl"
@@ -87,66 +84,49 @@ Require-File "WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl"
 Require-File "WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl"
 Require-File "WyckoffVSA_MarketScanner_v0.1.afl"
 
-Build-RuntimeFile \
-    "WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl" \
-    "WyckoffVSA_CompositeIndicator_SnapshotPublic_Runtime_v0.2.afl" \
-    @{
-        '#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>' = '#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>'
-    } \
-    @('<WyckoffVSA_CompositeIndicator_v0.1.afl>')
+$R1 = @{
+    '#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>' = '#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>'
+}
+Build-RuntimeFile "WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl" "WyckoffVSA_CompositeIndicator_SnapshotPublic_Runtime_v0.2.afl" $R1 @('<WyckoffVSA_CompositeIndicator_v0.1.afl>')
 
-Build-RuntimeFile \
-    "WyckoffVSA_MultiTimeframeContext_v0.1.afl" \
-    "WyckoffVSA_MultiTimeframeContext_Runtime_v0.2.afl" \
-    @{
-        '#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>' = '#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_Runtime_v0.2.afl>'
-    } \
-    @('<WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>')
+$R2 = @{
+    '#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>' = '#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_Runtime_v0.2.afl>'
+}
+Build-RuntimeFile "WyckoffVSA_MultiTimeframeContext_v0.1.afl" "WyckoffVSA_MultiTimeframeContext_Runtime_v0.2.afl" $R2 @('<WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>')
 
-Build-RuntimeFile \
-    "WyckoffVSA_RelativeStrengthContext_v0.1.afl" \
-    "WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl" \
-    @{
-        '#include_once <WyckoffVSA_StructureLocation_v1.0.afl>' = '#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>';
-        'WRS_MarketBenchmarkSymbol = ParamStr("RS Market Benchmark","");' = 'WRS_MarketBenchmarkSymbol = WVRC_RSMarketSymbol;';
-        'WRS_GroupBenchmarkSymbol = ParamStr("RS Group Benchmark","");' = 'WRS_GroupBenchmarkSymbol = WVRC_RSGroupSymbol;';
-        'WRS_AdjustmentBasisDeclaration = ParamStr("RS Adjustment Basis","NOT VERIFIED");' = 'WRS_AdjustmentBasisDeclaration = WVRC_RSAdjustmentBasisDeclaration;';
-        'WRS_AdjustmentBasisStatusScalar = Param("RS Adjustment Basis Status: 0=unverified 1=compatible 2=incompatible",0,0,2,1);' = 'WRS_AdjustmentBasisStatusScalar = WVRC_RSAdjustmentBasisStatus;';
-        'WRS_RuntimeLastBarIsProvisional = ParamToggle("RS: last bar provisional","No|Yes",0);' = 'WRS_RuntimeLastBarIsProvisional = WVRC_LastBarProvisional;'
-    } \
-    @('<WyckoffVSA_StructureLocation_v1.0.afl>')
+$R3 = @{
+    '#include_once <WyckoffVSA_StructureLocation_v1.0.afl>' = '#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>';
+    'WRS_MarketBenchmarkSymbol = ParamStr("RS Market Benchmark","");' = 'WRS_MarketBenchmarkSymbol = WVRC_RSMarketSymbol;';
+    'WRS_GroupBenchmarkSymbol = ParamStr("RS Group Benchmark","");' = 'WRS_GroupBenchmarkSymbol = WVRC_RSGroupSymbol;';
+    'WRS_AdjustmentBasisDeclaration = ParamStr("RS Adjustment Basis","NOT VERIFIED");' = 'WRS_AdjustmentBasisDeclaration = WVRC_RSAdjustmentBasisDeclaration;';
+    'WRS_AdjustmentBasisStatusScalar = Param("RS Adjustment Basis Status: 0=unverified 1=compatible 2=incompatible",0,0,2,1);' = 'WRS_AdjustmentBasisStatusScalar = WVRC_RSAdjustmentBasisStatus;';
+    'WRS_RuntimeLastBarIsProvisional = ParamToggle("RS: last bar provisional","No|Yes",0);' = 'WRS_RuntimeLastBarIsProvisional = WVRC_LastBarProvisional;'
+}
+Build-RuntimeFile "WyckoffVSA_RelativeStrengthContext_v0.1.afl" "WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl" $R3 @('<WyckoffVSA_StructureLocation_v1.0.afl>')
 
-Build-RuntimeFile \
-    "WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl" \
-    "WyckoffVSA_CrossSymbolSelectionContext_Consumer_Runtime_v0.2.afl" \
-    @{
-        'WXS_RequestedMarketSymbol = ParamStr("Selection: Market benchmark symbol","");' = 'WXS_RequestedMarketSymbol = WVRC_SelectionMarketSymbol;';
-        'WXS_RequestedGroupSymbol = ParamStr("Selection: Group benchmark symbol","");' = 'WXS_RequestedGroupSymbol = WVRC_SelectionGroupSymbol;'
-    } \
-    @()
+$R4 = @{
+    'WXS_RequestedMarketSymbol = ParamStr("Selection: Market benchmark symbol","");' = 'WXS_RequestedMarketSymbol = WVRC_SelectionMarketSymbol;';
+    'WXS_RequestedGroupSymbol = ParamStr("Selection: Group benchmark symbol","");' = 'WXS_RequestedGroupSymbol = WVRC_SelectionGroupSymbol;'
+}
+Build-RuntimeFile "WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl" "WyckoffVSA_CrossSymbolSelectionContext_Consumer_Runtime_v0.2.afl" $R4 @()
 
-Build-RuntimeFile \
-    "WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl" \
-    "WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_Runtime_v0.2.afl" \
-    @{
-        '#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>' = '#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_Runtime_v0.2.afl>'
-    } \
-    @('<WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>')
+$R5 = @{
+    '#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>' = '#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_Runtime_v0.2.afl>'
+}
+Build-RuntimeFile "WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl" "WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_Runtime_v0.2.afl" $R5 @('<WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>')
 
-Build-RuntimeFile \
-    "WyckoffVSA_MarketScanner_v0.1.afl" \
-    "WyckoffVSA_MarketScanner_Runtime_v0.2.afl" \
-    @{
-        '#include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>' = '#include_once <WyckoffVSA_MultiTimeframeContext_Runtime_v0.2.afl>';
-        '#include_once <WyckoffVSA_RelativeStrengthContext_v0.1.afl>' = '#include_once <WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl>';
-        '#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>' = '#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_Runtime_v0.2.afl>';
-        'WSCN_RequireFullTopDown = ParamToggle("Scanner: require Full Top-Down profile","No|Yes",0);' = 'WSCN_RequireFullTopDown = WVRC_RequireFullTopDown;'
-    } \
-    @(
-        '<WyckoffVSA_MultiTimeframeContext_v0.1.afl>',
-        '<WyckoffVSA_RelativeStrengthContext_v0.1.afl>',
-        '<WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>'
-    )
+$R6 = @{
+    '#include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>' = '#include_once <WyckoffVSA_MultiTimeframeContext_Runtime_v0.2.afl>';
+    '#include_once <WyckoffVSA_RelativeStrengthContext_v0.1.afl>' = '#include_once <WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl>';
+    '#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>' = '#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_Runtime_v0.2.afl>';
+    'WSCN_RequireFullTopDown = ParamToggle("Scanner: require Full Top-Down profile","No|Yes",0);' = 'WSCN_RequireFullTopDown = WVRC_RequireFullTopDown;'
+}
+$F6 = @(
+    '<WyckoffVSA_MultiTimeframeContext_v0.1.afl>',
+    '<WyckoffVSA_RelativeStrengthContext_v0.1.afl>',
+    '<WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>'
+)
+Build-RuntimeFile "WyckoffVSA_MarketScanner_v0.1.afl" "WyckoffVSA_MarketScanner_Runtime_v0.2.afl" $R6 $F6
 
 $probe = @'
 /* Wyckoff VSA Runtime v0.2 Scanner equivalence probe. Diagnostic only. */
@@ -166,28 +146,23 @@ AddTextColumn(WVRC_RSGroupSymbol,"Runtime RS Group");
 AddTextColumn(WVRC_SelectionMarketSymbol,"Runtime Selection Market");
 AddTextColumn(WVRC_SelectionGroupSymbol,"Runtime Selection Group");
 AddColumn(WVRC_RequireFullTopDown,"Runtime Full Top-Down",1.0);
-
 AddColumn(WCI_ContextMultiplicityCode,"Composite Multiplicity",1.0);
 AddColumn(WCI_PhaseStateCode,"Composite Phase",1.0);
 AddColumn(WCI_FamilyHypothesisCode,"Composite Family",1.0);
 AddColumn(WCI_RangePosition,"Composite Range Position",1.4);
-
 AddColumn(WMTF_SnapshotContractValid,"MTF Contract Valid",1.0);
 AddColumn(WMTF_WeeklySnapshotStatusCode,"MTF Weekly Status",1.0);
 AddColumn(WMTF_MonthlySnapshotStatusCode,"MTF Monthly Status",1.0);
 AddColumn(WMTF_DirectionalAlignmentCode,"MTF Directional Alignment",1.0);
-
 AddColumn(WRS_ContextValid,"RS Context Valid",1.0);
 AddColumn(WRS_ContextStatusCode,"RS Context Status",1.0);
 AddColumn(WRS_MarketBenchmarkStatusCode,"RS Market Benchmark Status",1.0);
 AddColumn(WRS_StockVsMarketRSStructureCode,"RS Stock vs Market Structure",1.0);
 AddColumn(WRS_PriceRSRelationshipCode,"Price RS Relationship",1.0);
-
 AddColumn(WXS_MarketValid,"Selection Market Valid",1.0);
 AddColumn(WXS_MarketStatusCode,"Selection Market Status",1.0);
 AddColumn(WXS_GroupValid,"Selection Group Valid",1.0);
 AddColumn(WXS_GroupStatusCode,"Selection Group Status",1.0);
-
 AddColumn(WSCN_DataEligibilityCode,"Data Eligibility",1.0);
 AddColumn(WSCN_ExclusionReasonMask,"Exclusion Mask",1.0);
 AddColumn(WSCN_CandidateClassCode,"Candidate Class",1.0);
