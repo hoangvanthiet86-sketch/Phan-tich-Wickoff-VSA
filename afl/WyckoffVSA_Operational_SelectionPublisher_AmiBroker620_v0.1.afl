@@ -6,8 +6,9 @@
     Optional Group benchmark publication uses the same formula on that symbol.
     Weekly and Monthly snapshots for the symbol must already be committed.
 
-    On a same-day completed bar, set:
-    "Selection snapshot: current Daily bar completed" = Completed.
+    Live mode: a same-day completed bar still requires the explicit operator
+    completion declaration. Bar Replay mode derives as-of from playback time
+    and automatically uses replay completion provenance.
 
     No analytical methodology is changed here.
 */
@@ -49,6 +50,12 @@ WOPSEL_MTFValid = LastValue(WMTF_SnapshotContractValid)==1;
 WOPSEL_Published = WXS_PublisherStatusCode==1;
 Filter = Status("lastbarinrange");
 
+AddColumn(0*BarIndex()+WCLK_ModeCode,"OP Clock Mode",1.0);
+AddColumn(0*BarIndex()+WCLK_IsReplay,"OP Bar Replay Active",1.0);
+AddColumn(0*BarIndex()+WCLK_AsOfDateTime,"OP As-Of DateTime",formatDateTime);
+AddColumn(0*BarIndex()+WXS_SourceBusinessDateKey,"OP Source Business Date",1.0);
+AddColumn(0*BarIndex()+WXS_CurrentCalendarBusinessDateKey,"OP Clock Business Date",1.0);
+AddColumn(0*BarIndex()+WXS_CompletionBasisCode,"OP Completion Basis",1.0);
 AddColumn(0*BarIndex()+WOPSEL_DailyIntervalValid,"OP Daily Interval",1.0);
 AddColumn(0*BarIndex()+WTSC_W_StatusCode,"OP Weekly Snapshot Status",1.0);
 AddColumn(0*BarIndex()+WTSC_M_StatusCode,"OP Monthly Snapshot Status",1.0);
