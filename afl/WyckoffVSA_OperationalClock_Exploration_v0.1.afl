@@ -9,7 +9,12 @@
 #include_once <WyckoffVSA_OperationalClock_v0.1.afl>
 
 _SECTION_BEGIN("89.1 Operational Clock Exploration");
-Filter = Status("lastbarinrange");
+
+// Deterministic one-row Exploration filter.
+// Status("lastbarinrange") can be false in some Analysis/Range combinations,
+// so select the actual last visible bar explicitly.
+WCLK_LastVisibleBarIndex = LastValue(BarIndex());
+Filter = BarIndex()==WCLK_LastVisibleBarIndex;
 
 WCLK_ModeArray = 0*BarIndex()+WCLK_ModeCode;
 WCLK_AsOfArray = 0*BarIndex()+WCLK_AsOfDateTime;
