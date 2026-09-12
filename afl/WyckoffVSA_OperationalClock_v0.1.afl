@@ -5,7 +5,7 @@
 
     Clock modes:
     - LIVE_SYSTEM: GetPlaybackDateTime() == 0, use Now(5).
-    - BAR_REPLAY:  GetPlaybackDateTime() > 0, use replay playback position.
+    - BAR_REPLAY:  GetPlaybackDateTime() != 0, use replay playback position.
 
     This file does not change Wyckoff/VSA analytical methodology. It only
     provides a single causal "as-of" clock for snapshot/publisher contracts.
@@ -17,18 +17,20 @@ WCLK_SchemaMajor = 1;
 WCLK_SchemaMinor = 0;
 
 WCLK_PlaybackDateTime = GetPlaybackDateTime();
-WCLK_IsReplay = WCLK_PlaybackDateTime > 0;
-WCLK_ModeCode = IIf(WCLK_IsReplay,2,1); // 1 LIVE_SYSTEM, 2 BAR_REPLAY
+WCLK_IsReplay = WCLK_PlaybackDateTime != 0;
+WCLK_ModeCode = 1; // LIVE_SYSTEM
 WCLK_ModeText = "INSUFFICIENT\nLIVE SYSTEM\nBAR REPLAY";
-
-// Keep replay-published persistent state isolated from live persistent state.
 WCLK_Namespace = "L";
+WCLK_AsOfDateTime = Now(5);
+
+// Use ordinary scalar control flow instead of IIf so DateTime remains scalar.
 if (WCLK_IsReplay)
 {
+    WCLK_ModeCode = 2;
     WCLK_Namespace = "R";
+    WCLK_AsOfDateTime = WCLK_PlaybackDateTime;
 }
 
-WCLK_AsOfDateTime = IIf(WCLK_IsReplay,WCLK_PlaybackDateTime,Now(5));
 WCLK_AsOfDateNum = DateTimeConvert(0,WCLK_AsOfDateTime);
 
 // DateNum format is 10000*(year-1900)+100*month+day.
@@ -47,5 +49,5 @@ WCLK_ExpectedCompletedMonthlyOrdinal = WCLK_CurrentMonthlyOrdinal - 1;
 
 // Clock-basis provenance stored with snapshots.
 WCLK_ClockBasisCode = WCLK_ModeCode;
-WCLK_ClockValid = NOT IsNull(WCLK_AsOfDateTime) AND WCLK_AsOfDateTime > 0;
+WCLK_ClockValid = WCLK_AsOfDateTime != 0;
 _SECTION_END();
