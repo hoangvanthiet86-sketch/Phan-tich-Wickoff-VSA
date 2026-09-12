@@ -1,0 +1,60 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    PRE-RS bridge isolation probe — PRE-NATIVE-TEST.
+
+    Purpose:
+    - verify that RuntimeConfig + bridged Core/Structure/Composite path executes;
+    - stop BEFORE MTF/RS/Cross-Symbol/Scanner;
+    - emit one row for Apply to Current + Range = 1 recent bar(s);
+    - isolate whether the post-bridge blank-output problem is before or after RS.
+
+    No analytical result is changed. This is diagnostic only.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+WVRC_UseCentralConfig = 1;
+
+#include_once <WyckoffVSA_Core_v1.0.afl>
+#include_once <WyckoffVSA_Candidate_v1.0.afl>
+#include_once <WyckoffVSA_StructureLocation_v1.0.afl>
+#include_once <WyckoffVSA_Confirmation_v1.0.afl>
+
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_v0.1.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_v1.0.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_v0.1.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_v0.1.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_v0.1.afl>
+
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_v0.1.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_v0.1.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_v0.1.afl>
+
+#include_once <WyckoffVSA_PhaseContext_InputFacade_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_v0.1.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_v0.1.afl>
+
+#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_v0.1.afl>
+
+Filter = 1;
+
+WVPR_BridgeCore = Nz(VarGet("WVRC_CoreUseCentralConfig"),0);
+WVPR_BridgeStructure = Nz(VarGet("WVRC_SLUseCentralConfig"),0);
+WVPR_BridgeComposite = Nz(VarGet("WVRC_CompositeUseCentralConfig"),0);
+
+AddTextColumn(Name(),"PROBE Symbol");
+AddColumn(DateTime(),"PROBE Date",formatDateTime);
+AddColumn(BarIndex(),"PROBE BarIndex",1.0);
+AddColumn(WVRC_UseCentralConfig,"Central Config Flag",1.0);
+AddColumn(WVPR_BridgeCore,"Bridge Core Active",1.0);
+AddColumn(WVPR_BridgeStructure,"Bridge Structure Active",1.0);
+AddColumn(WVPR_BridgeComposite,"Bridge Composite Active",1.0);
+AddColumn(WVRC_ConfigValid,"Runtime Config Valid",1.0);
+AddColumn(WCI_ContextMultiplicityCode,"Composite Multiplicity",1.0);
+AddColumn(WCI_PhaseStateCode,"Composite Phase",1.0);
+AddColumn(WCI_FamilyHypothesisCode,"Composite Family",1.0);
+AddColumn(WCI_DirectionalContextCode,"Composite Direction",1.0);
+AddTextColumn("PRE_RS_PROBE_20260912_A","PROBE VERSION");
