@@ -8,21 +8,27 @@
     snapshots. It does not compute MTF alignment and never substitutes one
     timeframe for another.
 
-    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    Operational clock correction:
+    - live mode validates against system as-of;
+    - Bar Replay validates against replay playback position;
+    - snapshot clock basis must match the current operational clock basis.
+
+    SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
 */
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
 
 _SECTION_BEGIN("91. Timeframe Snapshot Consumer contract");
 WTSC_ExpectedSchemaMajor = 1;
 WTSC_ExpectedSchemaMinor = 0;
 WTSC_ExpectedCompositeVersion = "0.1";
 WTSC_ExpectedContractVersion = "0.1";
-WTSC_ClockBasisCode = 1; // LOCAL SYSTEM
-WTSC_Now = Now(5);
-WTSC_WeekEpoch = _DT("2000-01-03 00:00:00");
-WTSC_CurrentWeeklyOrdinal = Floor(DateTimeDiff(WTSC_Now,WTSC_WeekEpoch)/604800);
-WTSC_CurrentMonthlyOrdinal = Now(8)*12 + Now(7);
-WTSC_ExpectedWeeklyOrdinal = WTSC_CurrentWeeklyOrdinal - 1;
-WTSC_ExpectedMonthlyOrdinal = WTSC_CurrentMonthlyOrdinal - 1;
+WTSC_ClockBasisCode = WCLK_ClockBasisCode;
+WTSC_Now = WCLK_AsOfDateTime;
+WTSC_WeekEpoch = WCLK_WeekEpoch;
+WTSC_CurrentWeeklyOrdinal = WCLK_CurrentWeeklyOrdinal;
+WTSC_CurrentMonthlyOrdinal = WCLK_CurrentMonthlyOrdinal;
+WTSC_ExpectedWeeklyOrdinal = WCLK_ExpectedCompletedWeeklyOrdinal;
+WTSC_ExpectedMonthlyOrdinal = WCLK_ExpectedCompletedMonthlyOrdinal;
 WTSC_ConsumerIntervalValid = Interval()==inDaily;
 WTSC_Symbol = Name();
 
@@ -109,7 +115,8 @@ WTSC_W_PayloadValid =
     WTSC_W_EvidenceBalanceCode>=0 AND WTSC_W_EvidenceBalanceCode<=3 AND
     WTSC_W_HypothesisAlignmentCode>=0 AND WTSC_W_HypothesisAlignmentCode<=3 AND
     WTSC_W_CurrentEventMask>=0 AND
-    WTSC_W_CompletionBasisCode==1 AND WTSC_W_SourceClockBasisCode==1 AND
+    WTSC_W_CompletionBasisCode==1 AND
+    WTSC_W_SourceClockBasisCode==WTSC_ClockBasisCode AND
     NOT IsNull(WTSC_W_SourceBarDateTime) AND
     (WTSC_W_ContextMultiplicityCode!=1 OR NOT IsNull(WTSC_W_CurrentRangeContextID)) AND
     (WTSC_W_ContextMultiplicityCode!=2 OR (WTSC_W_L_ContextPresent==1 AND WTSC_W_U_ContextPresent==1));
@@ -210,7 +217,8 @@ WTSC_M_PayloadValid =
     WTSC_M_EvidenceBalanceCode>=0 AND WTSC_M_EvidenceBalanceCode<=3 AND
     WTSC_M_HypothesisAlignmentCode>=0 AND WTSC_M_HypothesisAlignmentCode<=3 AND
     WTSC_M_CurrentEventMask>=0 AND
-    WTSC_M_CompletionBasisCode==1 AND WTSC_M_SourceClockBasisCode==1 AND
+    WTSC_M_CompletionBasisCode==1 AND
+    WTSC_M_SourceClockBasisCode==WTSC_ClockBasisCode AND
     NOT IsNull(WTSC_M_SourceBarDateTime) AND
     (WTSC_M_ContextMultiplicityCode!=1 OR NOT IsNull(WTSC_M_CurrentRangeContextID)) AND
     (WTSC_M_ContextMultiplicityCode!=2 OR (WTSC_M_L_ContextPresent==1 AND WTSC_M_U_ContextPresent==1));
@@ -230,42 +238,6 @@ if (WTSC_ConsumerIntervalValid)
 }
 WTSC_M_Valid = WTSC_M_StatusCode==1;
 
-// S23/S19: validity and payload remain separate by timeframe. No fallback and
-// no OR of higher-timeframe EventMask into the Daily event stream.
-WTSC_AuthoritativeHigherSnapshotCount = WTSC_W_Valid + WTSC_M_Valid;
-
-WTSC_W_StatusArray = 0*BarIndex()+WTSC_W_StatusCode;
-WTSC_M_StatusArray = 0*BarIndex()+WTSC_M_StatusCode;
-AddTextColumn(Name(),"WTSC_Symbol");
-AddColumn(0*BarIndex()+WTSC_ConsumerIntervalValid,"WTSC_DailyConsumerIntervalValid",1.0);
-AddColumn(0*BarIndex()+WTSC_CurrentWeeklyOrdinal,"WTSC_CurrentWeeklyOrdinal",1.0);
-AddColumn(0*BarIndex()+WTSC_ExpectedWeeklyOrdinal,"WTSC_ExpectedWeeklyOrdinal",1.0);
-AddColumn(WTSC_W_StatusArray,"WTSC_W_StatusCode",1.0);
-AddMultiTextColumn(WTSC_W_StatusArray,WTSC_StatusText,"WTSC_W_Status");
-AddColumn(0*BarIndex()+WTSC_W_SourcePeriodOrdinal,"WTSC_W_SourcePeriodOrdinal",1.0);
-AddColumn(0*BarIndex()+WTSC_W_SourceBarDateTime,"WTSC_W_SourceBarDateTime",formatDateTime);
-AddColumn(0*BarIndex()+WTSC_W_PublishedAtDateTime,"WTSC_W_PublishedAtDateTime",formatDateTime);
-AddColumn(0*BarIndex()+WTSC_W_GenerationB,"WTSC_W_GenerationID",1.0);
-AddColumn(0*BarIndex()+WTSC_W_ContextMultiplicityCode,"WTSC_W_ContextMultiplicityCode",1.0);
-AddColumn(0*BarIndex()+WTSC_W_PhaseStateCode,"WTSC_W_PhaseStateCode",1.0);
-AddColumn(0*BarIndex()+WTSC_W_FamilyHypothesisCode,"WTSC_W_FamilyHypothesisCode",1.0);
-AddColumn(0*BarIndex()+WTSC_W_DirectionalContextCode,"WTSC_W_DirectionalContextCode",1.0);
-AddColumn(0*BarIndex()+WTSC_W_EvidenceBalanceCode,"WTSC_W_EvidenceBalanceCode",1.0);
-AddColumn(0*BarIndex()+WTSC_W_CurrentEventMask,"WTSC_W_CurrentEventMask",1.0);
-
-AddColumn(0*BarIndex()+WTSC_CurrentMonthlyOrdinal,"WTSC_CurrentMonthlyOrdinal",1.0);
-AddColumn(0*BarIndex()+WTSC_ExpectedMonthlyOrdinal,"WTSC_ExpectedMonthlyOrdinal",1.0);
-AddColumn(WTSC_M_StatusArray,"WTSC_M_StatusCode",1.0);
-AddMultiTextColumn(WTSC_M_StatusArray,WTSC_StatusText,"WTSC_M_Status");
-AddColumn(0*BarIndex()+WTSC_M_SourcePeriodOrdinal,"WTSC_M_SourcePeriodOrdinal",1.0);
-AddColumn(0*BarIndex()+WTSC_M_SourceBarDateTime,"WTSC_M_SourceBarDateTime",formatDateTime);
-AddColumn(0*BarIndex()+WTSC_M_PublishedAtDateTime,"WTSC_M_PublishedAtDateTime",formatDateTime);
-AddColumn(0*BarIndex()+WTSC_M_GenerationB,"WTSC_M_GenerationID",1.0);
-AddColumn(0*BarIndex()+WTSC_M_ContextMultiplicityCode,"WTSC_M_ContextMultiplicityCode",1.0);
-AddColumn(0*BarIndex()+WTSC_M_PhaseStateCode,"WTSC_M_PhaseStateCode",1.0);
-AddColumn(0*BarIndex()+WTSC_M_FamilyHypothesisCode,"WTSC_M_FamilyHypothesisCode",1.0);
-AddColumn(0*BarIndex()+WTSC_M_DirectionalContextCode,"WTSC_M_DirectionalContextCode",1.0);
-AddColumn(0*BarIndex()+WTSC_M_EvidenceBalanceCode,"WTSC_M_EvidenceBalanceCode",1.0);
-AddColumn(0*BarIndex()+WTSC_M_CurrentEventMask,"WTSC_M_CurrentEventMask",1.0);
-AddColumn(0*BarIndex()+WTSC_AuthoritativeHigherSnapshotCount,"WTSC_AuthoritativeHigherSnapshotCount",1.0);
+WTSC_SnapshotContractValid = WTSC_ConsumerIntervalValid AND WTSC_W_Valid AND WTSC_M_Valid;
+WTSC_AuthoritativeHigherSnapshotCount = IIf(WTSC_W_Valid,1,0) + IIf(WTSC_M_Valid,1,0);
 _SECTION_END();
