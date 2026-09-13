@@ -1,0 +1,37 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Native per-symbol benchmark: SNAPSHOT-ONLY fast path.
+
+    PURPOSE
+    - measure execution time of the headless persistent Daily Snapshot consumer;
+    - do not execute the heavy Wyckoff/VSA analytical stack;
+    - emit one row for each valid, data-eligible snapshot for offline comparison
+      with the full Runtime benchmark.
+
+    Measurement uses AmiBroker GetPerformanceCounter(), which reports elapsed
+    milliseconds inside this formula instance. This is a computational
+    per-symbol benchmark, not Analysis-window wall-clock time.
+*/
+SetBarsRequired(1,0);
+
+// Reset high-resolution formula-local counter immediately before the fast path.
+GetPerformanceCounter(1);
+
+#include_once <WyckoffVSA_DailySnapshotConsumer_v0.2.afl>
+
+WVBS_ElapsedMs = GetPerformanceCounter();
+WVBS_LastBar = BarIndex()==LastValue(BarIndex());
+WVBS_Eligible = WDSC_Valid AND WDSC_DataEligible==1;
+Filter = WVBS_LastBar AND WVBS_Eligible;
+
+AddTextColumn(Name(),"BM_Symbol");
+AddColumn(0*BarIndex()+WDSC_SourceDateTime,"BM_Date",formatDateTime);
+AddColumn(0*BarIndex()+WVBS_ElapsedMs,"BM_FastSnapshot_ms",1.3);
+AddColumn(0*BarIndex()+WDSC_StatusCode,"BM_SnapshotStatus",1.0);
+AddColumn(0*BarIndex()+WDSC_DataEligible,"BM_DataEligible",1.0);
+AddColumn(0*BarIndex()+WDSC_CandidateClass,"BM_CandidateClass",1.0);
+AddColumn(0*BarIndex()+WDSC_Stage,"BM_Stage",1.0);
+AddColumn(0*BarIndex()+WDSC_Watch,"BM_Watch",1.0);
+AddColumn(0*BarIndex()+WDSC_Review,"BM_Review",1.0);
+AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"BM_MethodBlockMask",1.0);
+AddTextColumn("PERF_BENCH_FAST_SNAPSHOT_V02_20260913_A","BM_ProbeVersion");
