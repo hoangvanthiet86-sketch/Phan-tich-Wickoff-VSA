@@ -10,6 +10,11 @@
 
     P&F Review (Production Filter 5) is intentionally NOT executed here.
     P&F remains deferred to Deep Review / enrichment by architecture contract.
+
+    PRESENTATION-ONLY UPDATE:
+    - Vietnamese human-readable Exploration surface;
+    - canonical numeric decision fields and filter logic are unchanged;
+    - raw numeric codes remain available when decision diagnostics are enabled.
 */
 SetBarsRequired(1,0);
 
@@ -78,24 +83,159 @@ WFS_DiagnosticFailureRow =
 Filter = WFS_LastVisibleBar AND
     ((WFS_Ready AND WFS_SelectedByProductionFilter) OR WFS_DiagnosticFailureRow);
 
-// Approved compact DAILY FAST SCAN surface (~14 columns).
-AddTextColumn(Name(),"Symbol");
-AddColumn(0*BarIndex()+WDSC_SourceDateTime,"As-Of Date",formatDateTime);
-AddColumn(0*BarIndex()+WDSC_StatusCode,"Snapshot Status",1.0);
-AddColumn(0*BarIndex()+WDSC_DataEligible,"Data Eligible",1.0);
-AddColumn(0*BarIndex()+WDSC_CandidateClass,"Candidate Class",1.0);
-AddColumn(0*BarIndex()+WDSC_Side,"Candidate Side",1.0);
-AddColumn(0*BarIndex()+WDSC_Stage,"Candidate Stage",1.0);
-AddColumn(0*BarIndex()+WDSC_PhaseState,"Phase",1.0);
-AddColumn(0*BarIndex()+WDSC_FamilyHypothesis,"Family",1.0);
-AddColumn(0*BarIndex()+WDSC_RangePosition,"Range Position",1.4);
-AddColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,"MTF Alignment",1.0);
-AddColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,"RS vs Market",1.0);
-AddColumn(0*BarIndex()+WDSC_Review,"Scanner Review",1.0);
-AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"Method Block Mask",1.0);
+// -----------------------------------------------------------------------------
+// Vietnamese presentation layer only. These text enums DO NOT change any
+// canonical code, filter, eligibility rule, decision flag or snapshot value.
+// -----------------------------------------------------------------------------
+WFS_VI_SnapshotStatusText =
+    "Không có dữ liệu snapshot\nHợp lệ\nGhi dữ liệu chưa hoàn tất / thế hệ không ổn định\nSai lược đồ hoặc phiên bản\nSai mã cổ phiếu\nSai cấu hình\nSnapshot đã cũ\nSnapshot có ngày ở tương lai\nThiếu dữ liệu bắt buộc\nLỗi đồng hồ vận hành";
 
+WFS_VI_DataEligibleText =
+    "Không đủ điều kiện dữ liệu\nĐủ điều kiện dữ liệu";
+
+WFS_VI_CandidateClassText =
+    "Bị chặn do dữ liệu\nKhông phải ứng viên hiện tại\nTheo dõi\nĐang phát triển - tăng\nĐủ điều kiện - tăng, phù hợp thị trường\nĐủ điều kiện - tăng, đầy đủ từ trên xuống\nĐang phát triển - giảm\nĐủ điều kiện - giảm, phù hợp thị trường\nĐủ điều kiện - giảm, đầy đủ từ trên xuống\nCần rà soát - xung đột / mơ hồ";
+
+WFS_VI_CandidateSideText =
+    "Chưa xác định\nTăng\nGiảm";
+
+WFS_VI_CandidateStageText =
+    "Chưa đủ điều kiện\nTheo dõi - vùng đang hình thành / phát triển\nĐang phát triển - chờ kiểm định cuối\nPhát triển có hướng\nMở rộng xu hướng\nKết thúc / bị thay thế";
+
+WFS_VI_PhaseText =
+    "Chưa đủ bối cảnh\nPha A\nPha B\nỨng viên Pha C\nPha C\nPha D\nPha E\nVùng bị vô hiệu / thay thế";
+
+WFS_VI_FamilyText =
+    "Chưa đủ dữ liệu\nVùng dưới chưa xác nhận\nVùng trên chưa xác nhận\nGiả thuyết tích lũy\nGiả thuyết tái phân phối\nGiả thuyết phân phối\nGiả thuyết tái tích lũy\nBằng chứng hỗn hợp / xung đột";
+
+WFS_VI_MTFText =
+    "Chưa đủ dữ liệu đa khung\nChưa xác định / phi hướng\nĐồng thuận tăng\nĐồng thuận giảm\nKhung ngày ngược khung lớn\nKhung tuần và tháng xung đột\nĐa khung hỗn hợp / phức tạp";
+
+WFS_VI_RSMarketText =
+    "Chưa đủ dữ liệu\nTăng - mạnh hơn thị trường\nGiảm - yếu hơn thị trường\nHỗn hợp";
+
+WFS_VI_ReviewText =
+    "Không\nCó - cần rà soát";
+
+// Decode MethodBlockMask into plain Vietnamese. This is display-only.
+WFS_VI_BlockMaskScalar = LastValue(WDSC_MethodBlockMask);
+WFS_VI_BlockRemain = WFS_VI_BlockMaskScalar;
+WFS_VI_BlockCount = 0;
+WFS_VI_BlockText = "";
+
+if (WFS_VI_BlockRemain>=1024)
+{
+    WFS_VI_BlockText = "Vị trí trong vùng Pha A/B không hợp lý";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 1024;
+}
+if (WFS_VI_BlockRemain>=512)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Xung đột cấu hình thị trường / nhóm";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 512;
+}
+if (WFS_VI_BlockRemain>=256)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Có nhiều vùng giao dịch cùng lúc";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 256;
+}
+if (WFS_VI_BlockRemain>=128)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Dẫn dắt nhóm ngành xung đột / chưa đủ";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 128;
+}
+if (WFS_VI_BlockRemain>=64)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Giá và sức mạnh tương đối chưa xác nhận nhau";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 64;
+}
+if (WFS_VI_BlockRemain>=32)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Bằng chứng VSA xung đột / hỗn hợp";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 32;
+}
+if (WFS_VI_BlockRemain>=16)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Sức mạnh tương đối chưa rõ / hỗn hợp";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 16;
+}
+if (WFS_VI_BlockRemain>=8)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Đa khung thời gian xung đột";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 8;
+}
+if (WFS_VI_BlockRemain>=4)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Hướng cổ phiếu chưa rõ";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 4;
+}
+if (WFS_VI_BlockRemain>=2)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Pha còn quá sớm";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 2;
+}
+if (WFS_VI_BlockRemain>=1)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Bối cảnh thị trường chưa thuận / chưa rõ";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 1;
+}
+if (WFS_VI_BlockCount==0)
+{
+    WFS_VI_BlockText = "Không có rào cản phương pháp";
+}
+
+// Human-readable DAILY FAST SCAN surface.
+AddTextColumn(Name(),"Mã cổ phiếu");
+AddColumn(0*BarIndex()+WDSC_SourceDateTime,"Dữ liệu đến ngày",formatDateTime);
+AddMultiTextColumn(0*BarIndex()+WDSC_StatusCode,WFS_VI_SnapshotStatusText,"Trạng thái dữ liệu");
+AddMultiTextColumn(0*BarIndex()+WDSC_DataEligible,WFS_VI_DataEligibleText,"Đủ dữ liệu");
+AddMultiTextColumn(0*BarIndex()+WDSC_CandidateClass,WFS_VI_CandidateClassText,"Phân loại");
+AddMultiTextColumn(0*BarIndex()+WDSC_Side,WFS_VI_CandidateSideText,"Hướng");
+AddMultiTextColumn(0*BarIndex()+WDSC_Stage,WFS_VI_CandidateStageText,"Giai đoạn ứng viên");
+AddMultiTextColumn(0*BarIndex()+WDSC_PhaseState,WFS_VI_PhaseText,"Pha Wyckoff");
+AddMultiTextColumn(0*BarIndex()+WDSC_FamilyHypothesis,WFS_VI_FamilyText,"Giả thuyết cấu trúc");
+AddColumn(100*(0*BarIndex()+WDSC_RangePosition),"Vị trí trong vùng (%)",1.1);
+AddMultiTextColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,WFS_VI_MTFText,"Đồng thuận Ngày/Tuần/Tháng");
+AddMultiTextColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,WFS_VI_RSMarketText,"Sức mạnh tương đối so với thị trường");
+AddMultiTextColumn(0*BarIndex()+WDSC_Review,WFS_VI_ReviewText,"Cần rà soát");
+AddTextColumn(WFS_VI_BlockText,"Lý do chưa được nâng hạng");
+
+// Raw numeric audit surface remains available on demand.
 if (WVRC_ShowDecisionDiagnostics==1)
 {
+    AddColumn(0*BarIndex()+WDSC_StatusCode,"Mã Snapshot Status",1.0);
+    AddColumn(0*BarIndex()+WDSC_DataEligible,"Mã Data Eligible",1.0);
+    AddColumn(0*BarIndex()+WDSC_CandidateClass,"Mã Candidate Class",1.0);
+    AddColumn(0*BarIndex()+WDSC_Side,"Mã Candidate Side",1.0);
+    AddColumn(0*BarIndex()+WDSC_Stage,"Mã Candidate Stage",1.0);
+    AddColumn(0*BarIndex()+WDSC_PhaseState,"Mã Phase",1.0);
+    AddColumn(0*BarIndex()+WDSC_FamilyHypothesis,"Mã Family",1.0);
+    AddColumn(0*BarIndex()+WDSC_RangePosition,"Range Position gốc",1.4);
+    AddColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,"Mã MTF Alignment",1.0);
+    AddColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,"Mã RS vs Market",1.0);
+    AddColumn(0*BarIndex()+WDSC_Review,"Mã Scanner Review",1.0);
+    AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"Method Block Mask",1.0);
+
     AddColumn(0*BarIndex()+WFS_RuntimeStatusCode,"Fast Scanner Status",1.0);
     AddMultiTextColumn(0*BarIndex()+WFS_RuntimeStatusCode,WFS_RuntimeStatusText,"Fast Scanner Status Text");
     AddColumn(0*BarIndex()+WDSC_GenerationAfter,"Snapshot Generation",1.0);
@@ -110,6 +250,7 @@ if (WVRC_ShowDecisionDiagnostics==1)
     AddColumn(0*BarIndex()+WDSC_RangeLocationConflict,"Range Location Conflict",1.0);
 }
 
-AddTextColumn("FAST_SCANNER_V02_20260913_A","Fast Scanner Version");
+AddTextColumn("FAST_SCANNER_V02_20260913_A","Phiên bản bộ lọc");
+AddTextColumn("VIETNAMESE_DISPLAY_V02_20260913_A","Phiên bản hiển thị");
 
 _SECTION_END();
