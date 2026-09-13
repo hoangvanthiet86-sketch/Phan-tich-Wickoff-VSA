@@ -1,0 +1,74 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    VN STOCKS ONLY - watchlist builder.
+
+    Classification contract is locked from native metadata audit 2026-09-13.
+    No ticker-pattern heuristics are used.
+
+    IMPORTANT:
+    - Run on Apply to: All quotations
+    - Periodicity: Daily
+    - Range: 1 recent bar
+    - This formula CREATES/UPDATES watchlist: VN STOCKS ONLY
+    - It does NOT modify Market/Group/Sector/Industry assignments.
+*/
+#pragma nocache
+
+U_WatchlistName = "VN STOCKS ONLY";
+U_FullName = FullName();
+U_FullNameUpper = StrToUpper( U_FullName );
+U_MarketID = MarketID();
+U_GroupID = GroupID();
+U_SectorID = SectorID();
+
+U_AllowedMarket = ( U_MarketID == 1 ) || ( U_MarketID == 2 ) || ( U_MarketID == 3 );
+U_EquityGroup = U_GroupID == 1;
+U_HasFullName = StrLen( U_FullName ) > 0;
+U_FundMetadata = ( U_SectorID == 0 ) && U_HasFullName && ( StrFind( U_FullNameUpper, "QUY" ) > 0 );
+U_UnresolvedMetadata = ( U_SectorID == 0 ) && ( ! U_HasFullName );
+U_EquityMetadata = ( U_SectorID > 0 ) || ( ( U_SectorID == 0 ) && U_HasFullName && ( ! U_FundMetadata ) );
+U_IsStock = U_AllowedMarket && U_EquityGroup && U_EquityMetadata;
+
+U_WatchlistID = CategoryFind( U_WatchlistName, categoryWatchlist );
+if( U_WatchlistID < 0 )
+{
+    U_WatchlistID = CategoryCreate( U_WatchlistName, categoryWatchlist );
+}
+
+if( U_IsStock )
+{
+    CategoryAddSymbol( "", categoryWatchlist, U_WatchlistID );
+}
+else
+{
+    CategoryRemoveSymbol( "", categoryWatchlist, U_WatchlistID );
+}
+
+U_MemberAfter = InWatchListName( U_WatchlistName );
+U_ContractMatch = U_MemberAfter == U_IsStock;
+
+U_Reason = "INCLUDED - STOCK METADATA";
+if( ! U_AllowedMarket ) U_Reason = "EXCLUDED - MARKET";
+else
+if( ! U_EquityGroup ) U_Reason = "EXCLUDED - NON-STOCK GROUP";
+else
+if( U_FundMetadata ) U_Reason = "EXCLUDED - FUND/ETF METADATA";
+else
+if( U_UnresolvedMetadata ) U_Reason = "EXCLUDED - UNRESOLVED METADATA";
+
+U_LastBar = BarIndex() == LastValue( BarIndex() );
+Filter = U_LastBar && U_IsStock;
+
+AddTextColumn( Name(), "U_Symbol" );
+AddTextColumn( U_FullName, "U_FullName" );
+AddColumn( U_MarketID, "U_MarketID", 1.0 );
+AddTextColumn( MarketID( 1 ), "U_MarketName" );
+AddColumn( U_GroupID, "U_GroupID", 1.0 );
+AddTextColumn( GroupID( 1 ), "U_GroupName" );
+AddColumn( U_SectorID, "U_SectorID", 1.0 );
+AddTextColumn( SectorID( 1 ), "U_SectorName" );
+AddColumn( U_IsStock, "U_ExpectedStock", 1.0 );
+AddColumn( U_MemberAfter, "U_WatchlistMemberAfter", 1.0 );
+AddColumn( U_ContractMatch, "U_ContractMatch", 1.0 );
+AddTextColumn( U_Reason, "U_Reason" );
+AddTextColumn( "VN_STOCKS_ONLY_WATCHLIST_BUILDER_V02_20260913_A", "U_ProbeVersion" );
