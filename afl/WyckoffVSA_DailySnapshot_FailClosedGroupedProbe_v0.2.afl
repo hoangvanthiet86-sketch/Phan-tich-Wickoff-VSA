@@ -1,0 +1,212 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Grouped fail-closed native probe for Daily Snapshot Consumer.
+
+    PURPOSE
+    - one Analysis run exercises multiple snapshot-contract failure modes;
+    - uses a dedicated test StaticVar namespace only;
+    - does NOT modify production WVSA_DAILY_v02_* snapshots;
+    - does NOT execute the heavy Wyckoff/VSA analytical stack.
+
+    Test symbols / expected consumer status:
+      DTP = VALID                         -> 1
+      FRT = NO SNAPSHOT                   -> 0
+      SNZ = WRITE NOT COMPLETE            -> 2
+      HCM = SCHEMA MISMATCH               -> 3
+      ABB = SYMBOL MISMATCH               -> 4
+      VOS = CONFIG FINGERPRINT MISMATCH   -> 5
+      SHB = STALE SNAPSHOT DATE           -> 6
+      HSG = FUTURE SNAPSHOT DATE          -> 7
+      VNM = REQUIRED PAYLOAD INVALID      -> 8
+
+    Status 9 (operational clock invalid) is not injected here because WCLK is
+    an upstream causal-clock dependency already covered by its native tests.
+*/
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_DailySnapshotContract_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+
+_SECTION_BEGIN("Performance Runtime v0.2 Grouped Fail-Closed Probe");
+
+FC_Symbol = Name();
+FC_CaseCode = -1;
+FC_ExpectedStatus = -1;
+FC_CaseText = "NOT SELECTED";
+
+if (FC_Symbol=="DTP") { FC_CaseCode=1; FC_ExpectedStatus=1; FC_CaseText="VALID"; }
+else if (FC_Symbol=="FRT") { FC_CaseCode=2; FC_ExpectedStatus=0; FC_CaseText="NO SNAPSHOT"; }
+else if (FC_Symbol=="SNZ") { FC_CaseCode=3; FC_ExpectedStatus=2; FC_CaseText="WRITE NOT COMPLETE"; }
+else if (FC_Symbol=="HCM") { FC_CaseCode=4; FC_ExpectedStatus=3; FC_CaseText="SCHEMA MISMATCH"; }
+else if (FC_Symbol=="ABB") { FC_CaseCode=5; FC_ExpectedStatus=4; FC_CaseText="SYMBOL MISMATCH"; }
+else if (FC_Symbol=="VOS") { FC_CaseCode=6; FC_ExpectedStatus=5; FC_CaseText="CONFIG FINGERPRINT MISMATCH"; }
+else if (FC_Symbol=="SHB") { FC_CaseCode=7; FC_ExpectedStatus=6; FC_CaseText="STALE SNAPSHOT DATE"; }
+else if (FC_Symbol=="HSG") { FC_CaseCode=8; FC_ExpectedStatus=7; FC_CaseText="FUTURE SNAPSHOT DATE"; }
+else if (FC_Symbol=="VNM") { FC_CaseCode=9; FC_ExpectedStatus=8; FC_CaseText="REQUIRED PAYLOAD INVALID"; }
+
+FC_Selected = FC_CaseCode>0;
+FC_TestPrefix = "WVSA_DAILY_FC_TEST_v02_" + FC_Symbol + "_";
+
+// Always begin from a clean dedicated test namespace. Production prefix is untouched.
+if (FC_Selected)
+{
+    StaticVarRemove(FC_TestPrefix+"*");
+}
+
+// Redirect only the consumer under test to the dedicated test namespace.
+WDS_Prefix = FC_TestPrefix;
+
+// Seed a fully valid compact snapshot for every selected case except NO SNAPSHOT.
+if (FC_Selected AND FC_CaseCode!=2)
+{
+    StaticVarSet(WDS_Prefix+"Ready",1,True);
+    StaticVarSet(WDS_Prefix+"WriteComplete",1,True);
+    StaticVarSet(WDS_Prefix+"CommittedGenerationID",1,True);
+    StaticVarSet(WDS_Prefix+"SchemaMajor",WDS_SchemaMajor,True);
+    StaticVarSet(WDS_Prefix+"SchemaMinor",WDS_SchemaMinor,True);
+    StaticVarSetText(WDS_Prefix+"Symbol",FC_Symbol,True);
+    StaticVarSetText(WDS_Prefix+"RuntimeVersion",WDS_RuntimeVersion,True);
+    StaticVarSetText(WDS_Prefix+"ContractVersion",WDS_ContractVersion,True);
+    StaticVarSetText(WDS_Prefix+"ConfigFingerprint",WDS_ConfigFingerprint,True);
+    StaticVarSet(WDS_Prefix+"BusinessDateKey",WCLK_AsOfBusinessDateKey,True);
+    StaticVarSet(WDS_Prefix+"SourceDateTime",LastValue(DateTime()),True);
+    StaticVarSet(WDS_Prefix+"SourceBarIndex",LastValue(BarIndex()),True);
+
+    // Valid seed decision surface.
+    StaticVarSet(WDS_Prefix+"DataEligible",1,True);
+    StaticVarSet(WDS_Prefix+"CandidateClass",2,True);
+    StaticVarSet(WDS_Prefix+"Side",1,True);
+    StaticVarSet(WDS_Prefix+"Stage",1,True);
+    StaticVarSet(WDS_Prefix+"Qualified",0,True);
+    StaticVarSet(WDS_Prefix+"Developing",0,True);
+    StaticVarSet(WDS_Prefix+"Watch",1,True);
+    StaticVarSet(WDS_Prefix+"Review",0,True);
+    StaticVarSet(WDS_Prefix+"ExclusionMask",0,True);
+    StaticVarSet(WDS_Prefix+"MethodBlockMask",7,True);
+
+    // Required compact diagnostics.
+    StaticVarSet(WDS_Prefix+"ContextMultiplicity",1,True);
+    StaticVarSet(WDS_Prefix+"ContextAmbiguous",0,True);
+    StaticVarSet(WDS_Prefix+"CurrentRangeContextID",1000000000,True);
+    StaticVarSet(WDS_Prefix+"RangeStatus",1,True);
+    StaticVarSet(WDS_Prefix+"RangePositionValid",1,True);
+    StaticVarSet(WDS_Prefix+"RangePosition",0.35,True);
+    StaticVarSet(WDS_Prefix+"RangeLocationCoherent",1,True);
+    StaticVarSet(WDS_Prefix+"RangeLocationConflict",0,True);
+    StaticVarSet(WDS_Prefix+"PhaseState",2,True);
+    StaticVarSet(WDS_Prefix+"FamilyHypothesis",1,True);
+    StaticVarSet(WDS_Prefix+"DirectionalContext",1,True);
+    StaticVarSet(WDS_Prefix+"EvidenceBalance",1,True);
+    StaticVarSet(WDS_Prefix+"CurrentEventMask",0,True);
+    StaticVarSet(WDS_Prefix+"MTFContractValid",1,True);
+    StaticVarSet(WDS_Prefix+"MTFDirectionalAlignment",1,True);
+    StaticVarSet(WDS_Prefix+"MTFEvidenceAlignment",1,True);
+    StaticVarSet(WDS_Prefix+"MTFPhaseRelationship",1,True);
+    StaticVarSet(WDS_Prefix+"MTFWeeklyStatus",1,True);
+    StaticVarSet(WDS_Prefix+"MTFMonthlyStatus",1,True);
+    StaticVarSet(WDS_Prefix+"RSContextValid",1,True);
+    StaticVarSet(WDS_Prefix+"RSContextStatus",1,True);
+    StaticVarSet(WDS_Prefix+"RSMarketBenchmarkStatus",1,True);
+    StaticVarSet(WDS_Prefix+"RSStockVsMarketStructure",2,True);
+    StaticVarSet(WDS_Prefix+"RSPriceRelationship",1,True);
+    StaticVarSet(WDS_Prefix+"SelectionMarketValid",1,True);
+    StaticVarSet(WDS_Prefix+"SelectionMarketStatus",1,True);
+    StaticVarSet(WDS_Prefix+"SelectionGroupValid",0,True);
+    StaticVarSet(WDS_Prefix+"SelectionGroupStatus",0,True);
+}
+
+// Inject exactly one failure after the valid seed.
+if (FC_CaseCode==3)
+{
+    StaticVarSet(WDS_Prefix+"WriteComplete",0,True);
+}
+else if (FC_CaseCode==4)
+{
+    StaticVarSet(WDS_Prefix+"SchemaMajor",WDS_SchemaMajor+1,True);
+}
+else if (FC_CaseCode==5)
+{
+    StaticVarSetText(WDS_Prefix+"Symbol","__WRONG_SYMBOL__",True);
+}
+else if (FC_CaseCode==6)
+{
+    StaticVarSetText(WDS_Prefix+"ConfigFingerprint",WDS_ConfigFingerprint+"MISMATCH",True);
+}
+else if (FC_CaseCode==7)
+{
+    StaticVarSet(WDS_Prefix+"BusinessDateKey",WCLK_AsOfBusinessDateKey-1,True);
+}
+else if (FC_CaseCode==8)
+{
+    StaticVarSet(WDS_Prefix+"BusinessDateKey",WCLK_AsOfBusinessDateKey+1,True);
+}
+else if (FC_CaseCode==9)
+{
+    StaticVarRemove(WDS_Prefix+"CandidateClass");
+}
+
+// Execute the exact production headless consumer logic against the test namespace.
+#include_once <WyckoffVSA_DailySnapshotConsumer_v0.2.afl>
+
+FC_InvalidCase = FC_ExpectedStatus!=1;
+FC_FailClosedDecisionZero =
+    WDSC_DataEligible==0 AND
+    WDSC_CandidateClass==0 AND
+    WDSC_Side==0 AND
+    WDSC_Stage==0 AND
+    WDSC_Qualified==0 AND
+    WDSC_Developing==0 AND
+    WDSC_Watch==0 AND
+    WDSC_Review==0 AND
+    WDSC_ExclusionMask==0 AND
+    WDSC_MethodBlockMask==0;
+
+FC_ValidDecisionPreserved =
+    WDSC_DataEligible==1 AND
+    WDSC_CandidateClass==2 AND
+    WDSC_Side==1 AND
+    WDSC_Stage==1 AND
+    WDSC_Qualified==0 AND
+    WDSC_Developing==0 AND
+    WDSC_Watch==1 AND
+    WDSC_Review==0 AND
+    WDSC_ExclusionMask==0 AND
+    WDSC_MethodBlockMask==7;
+
+FC_StatusMatches = WDSC_StatusCode==FC_ExpectedStatus;
+FC_CasePass =
+    FC_Selected AND
+    FC_StatusMatches AND
+    IIf(FC_InvalidCase,FC_FailClosedDecisionZero,FC_ValidDecisionPreserved);
+
+FC_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = FC_LastBar AND FC_Selected;
+
+AddTextColumn(Name(),"Symbol");
+AddTextColumn(FC_CaseText,"Injected Case");
+AddColumn(FC_ExpectedStatus,"Expected Status",1.0);
+AddColumn(WDSC_StatusCode,"Actual Status",1.0);
+AddColumn(FC_StatusMatches,"Status Match",1.0);
+AddColumn(WDSC_Valid,"Consumer Valid",1.0);
+AddColumn(WDSC_DataEligible,"Public Data Eligible",1.0);
+AddColumn(WDSC_CandidateClass,"Public Candidate Class",1.0);
+AddColumn(WDSC_Side,"Public Side",1.0);
+AddColumn(WDSC_Stage,"Public Stage",1.0);
+AddColumn(WDSC_Qualified,"Public Qualified",1.0);
+AddColumn(WDSC_Developing,"Public Developing",1.0);
+AddColumn(WDSC_Watch,"Public Watch",1.0);
+AddColumn(WDSC_Review,"Public Review",1.0);
+AddColumn(WDSC_ExclusionMask,"Public Exclusion Mask",1.0);
+AddColumn(WDSC_MethodBlockMask,"Public Method Block Mask",1.0);
+AddColumn(FC_FailClosedDecisionZero,"Fail-Closed Zero Surface",1.0);
+AddColumn(FC_ValidDecisionPreserved,"Valid Surface Preserved",1.0);
+AddColumn(FC_CasePass,"CASE PASS",1.0);
+AddTextColumn("DAILY_SNAPSHOT_FAILCLOSED_GROUPED_V02_20260913_A","Probe Version");
+
+// Clean the dedicated test namespace after all consumer values have been captured.
+if (FC_Selected)
+{
+    StaticVarRemove(FC_TestPrefix+"*");
+}
+
+_SECTION_END();
