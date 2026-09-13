@@ -1,0 +1,60 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    VN STOCKS ONLY - post-build watchlist audit.
+
+    Purpose:
+    - recompute the locked metadata classification contract;
+    - compare expected stock membership with actual VN STOCKS ONLY membership;
+    - output ONLY mismatches;
+    - zero Exploration rows = membership matches contract across scanned universe.
+
+    This formula is READ-ONLY with respect to watchlists.
+*/
+#pragma nocache
+
+U_WatchlistName = "VN STOCKS ONLY";
+U_FullName = FullName();
+U_FullNameUpper = StrToUpper( U_FullName );
+U_MarketID = MarketID();
+U_GroupID = GroupID();
+U_SectorID = SectorID();
+
+U_AllowedMarket = ( U_MarketID == 1 ) || ( U_MarketID == 2 ) || ( U_MarketID == 3 );
+U_EquityGroup = U_GroupID == 1;
+U_HasFullName = StrLen( U_FullName ) > 0;
+U_FundMetadata = ( U_SectorID == 0 ) && U_HasFullName && ( StrFind( U_FullNameUpper, "QUY" ) > 0 );
+U_UnresolvedMetadata = ( U_SectorID == 0 ) && ( ! U_HasFullName );
+U_EquityMetadata = ( U_SectorID > 0 ) || ( ( U_SectorID == 0 ) && U_HasFullName && ( ! U_FundMetadata ) );
+U_IsStock = U_AllowedMarket && U_EquityGroup && U_EquityMetadata;
+
+U_WatchlistID = CategoryFind( U_WatchlistName, categoryWatchlist );
+U_WatchlistExists = U_WatchlistID >= 0;
+U_Member = InWatchListName( U_WatchlistName );
+U_Mismatch = ( ! U_WatchlistExists ) || ( U_Member != U_IsStock );
+
+U_Reason = "EXPECTED INCLUDED";
+if( ! U_AllowedMarket ) U_Reason = "EXPECTED EXCLUDED - MARKET";
+else
+if( ! U_EquityGroup ) U_Reason = "EXPECTED EXCLUDED - NON-STOCK GROUP";
+else
+if( U_FundMetadata ) U_Reason = "EXPECTED EXCLUDED - FUND/ETF METADATA";
+else
+if( U_UnresolvedMetadata ) U_Reason = "EXPECTED EXCLUDED - UNRESOLVED METADATA";
+
+U_LastBar = BarIndex() == LastValue( BarIndex() );
+Filter = U_LastBar && U_Mismatch;
+
+AddTextColumn( Name(), "U_Symbol" );
+AddTextColumn( U_FullName, "U_FullName" );
+AddColumn( U_MarketID, "U_MarketID", 1.0 );
+AddTextColumn( MarketID( 1 ), "U_MarketName" );
+AddColumn( U_GroupID, "U_GroupID", 1.0 );
+AddTextColumn( GroupID( 1 ), "U_GroupName" );
+AddColumn( U_SectorID, "U_SectorID", 1.0 );
+AddTextColumn( SectorID( 1 ), "U_SectorName" );
+AddColumn( U_WatchlistExists, "U_WatchlistExists", 1.0 );
+AddColumn( U_IsStock, "U_ExpectedStock", 1.0 );
+AddColumn( U_Member, "U_ActualMember", 1.0 );
+AddColumn( U_Mismatch, "U_Mismatch", 1.0 );
+AddTextColumn( U_Reason, "U_ExpectedReason" );
+AddTextColumn( "VN_STOCKS_ONLY_WATCHLIST_AUDIT_V02_20260913_A", "U_ProbeVersion" );
