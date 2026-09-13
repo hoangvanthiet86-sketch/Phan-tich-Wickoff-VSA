@@ -42,10 +42,10 @@ echo.
 echo ONE-RUN NATIVE CHECKPOINT:
 echo   Formula: WyckoffVSA_DailySnapshot_FailClosedGroupedProbe_v0.2.afl
 echo   Apply to: All quotations
-necho   Periodicity: Daily
-necho   Range: 1 recent bar
-necho   Explore
-necho.
+echo   Periodicity: Daily
+echo   Range: 1 recent bar
+echo   Explore
+echo.
 echo Expected output: exactly 9 selected test symbols.
 echo Every row must show CASE PASS = 1.
 echo Invalid cases must show Fail-Closed Zero Surface = 1.
