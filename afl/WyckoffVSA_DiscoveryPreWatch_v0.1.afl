@@ -1,0 +1,153 @@
+/*
+    Wyckoff VSA Discovery / Pre-Watch v0.1
+
+    RESEARCH-ONLY / NON-PRODUCTION.
+
+    Purpose:
+    - read the existing Daily Snapshot only;
+    - surface early Stage-1 structures that are near Production Watch;
+    - keep Production Scanner decisions unchanged;
+    - do not write snapshots or modify any upstream state.
+
+    No Buy/Sell/Short/Cover. No PositionScore. No probability/confidence.
+    AmiBroker 6.20 presentation uses Vietnamese ASCII (no diacritics).
+*/
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_DailySnapshotConsumer_v0.2.afl>
+
+_SECTION_BEGIN("Discovery / Pre-Watch v0.1");
+
+function WDPW_HasBit(maskValue, bitValue)
+{
+    local q1, q2;
+    q1 = Int(maskValue / bitValue);
+    q2 = Int(maskValue / (2 * bitValue));
+    return q1 - 2 * q2;
+}
+
+WDPW_Zero = 0 * BarIndex();
+WDPW_LastVisibleBar = BarIndex()==LastValue(BarIndex());
+WDPW_AuditMode = ParamToggle("Discovery: che do hien thi","Chi Pre-Watch Near|Tat ca Discovery",0);
+
+// Snapshot scalars. Discovery consumes published state only.
+WDPW_BlockMaskS = Nz(LastValue(WDSC_MethodBlockMask),0);
+WDPW_MTFS = Nz(LastValue(WDSC_MTFDirectionalAlignment),0);
+WDPW_RSS = Nz(LastValue(WDSC_RSStockVsMarketStructure),0);
+WDPW_StageS = Nz(LastValue(WDSC_Stage),0);
+WDPW_ProductionWatchS = Nz(LastValue(WDSC_Watch),0)==1;
+
+// Method-block bit decomposition. Diagnostic only; never a score.
+WDPW_Bit1    = WDPW_HasBit(WDPW_BlockMaskS,1);
+WDPW_Bit2    = WDPW_HasBit(WDPW_BlockMaskS,2);
+WDPW_Bit4    = WDPW_HasBit(WDPW_BlockMaskS,4);
+WDPW_Bit8    = WDPW_HasBit(WDPW_BlockMaskS,8);
+WDPW_Bit16   = WDPW_HasBit(WDPW_BlockMaskS,16);
+WDPW_Bit32   = WDPW_HasBit(WDPW_BlockMaskS,32);
+WDPW_Bit64   = WDPW_HasBit(WDPW_BlockMaskS,64);
+WDPW_Bit128  = WDPW_HasBit(WDPW_BlockMaskS,128);
+WDPW_Bit256  = WDPW_HasBit(WDPW_BlockMaskS,256);
+WDPW_Bit512  = WDPW_HasBit(WDPW_BlockMaskS,512);
+WDPW_Bit1024 = WDPW_HasBit(WDPW_BlockMaskS,1024);
+
+// Spec v0.1: hard concerns cannot be PRE_WATCH_NEAR.
+WDPW_HardMethodConcern =
+    WDPW_Bit16 OR WDPW_Bit32 OR WDPW_Bit64 OR
+    WDPW_Bit128 OR WDPW_Bit512 OR WDPW_Bit1024;
+WDPW_HardMTFConcern = WDPW_MTFS==4 OR WDPW_MTFS==5;
+WDPW_HardConcern = WDPW_HardMethodConcern OR WDPW_HardMTFConcern;
+
+// Discovery base: valid data, Stage 1, and directional RS structure available.
+WDPW_DiscoveryBase =
+    WDSC_Valid AND
+    WDSC_DataEligible==1 AND
+    WDPW_StageS==1 AND
+    (WDPW_RSS==1 OR WDPW_RSS==2);
+
+// Enum, NOT a ranking:
+// 0 DISCOVERY_NONE
+// 1 PRE_WATCH_NEAR
+// 2 DISCOVERY_REVIEW_ONLY
+// 3 PRODUCTION_WATCH_REFERENCE
+WDPW_DiscoveryStatusS = IIf(
+    NOT WDPW_DiscoveryBase,0,
+    IIf(WDPW_ProductionWatchS,3,
+    IIf(WDPW_HardConcern,2,1)));
+
+WDPW_StatusText =
+    "Khong thuoc Discovery\nPre-Watch Near\nDiscovery Review Only\nProduction Watch - doi chieu";
+WDPW_YesNoText = "Khong\nCo";
+WDPW_CandidateClassText =
+    "Khong du du lieu\nKhong phai ung vien hien tai\nTheo doi\nDang phat trien tang\nDu dieu kien tang - dong thuan thi truong\nDu dieu kien tang - day du top-down\nDang phat trien giam\nDu dieu kien giam - dong thuan thi truong\nDu dieu kien giam - day du top-down\nReview - xung dot / mo ho";
+WDPW_StageText =
+    "Khong co / khong du\nTheo doi - dang hinh thanh / phat trien vung\nDang phat trien - final test\nPhat trien co huong\nMo rong xu huong\nKet thuc / bi thay the";
+WDPW_PhaseText =
+    "Khong du boi canh\nPha A\nPha B\nPha C - ung vien\nPha C\nPha D\nPha E\nVung vo hieu / bi thay the";
+WDPW_FamilyText =
+    "Khong du du lieu\nVung duoi chua xac nhan\nVung tren chua xac nhan\nGia thuyet tich luy\nGia thuyet tai phan phoi\nGia thuyet phan phoi\nGia thuyet tai tich luy\nBang chung hon hop / xung dot";
+WDPW_MTFText =
+    "Chua du du lieu da khung\nChua xac dinh / khong co huong\nDong thuan tang\nDong thuan giam\nKhung co so nguoc khung cao\nKhung cao xung dot\nDa khung hon hop / phuc tap";
+WDPW_RSText =
+    "Chua du du lieu\nTang - manh hon thi truong\nGiam - yeu hon thi truong\nHon hop";
+WDPW_MultiplicityText = "Khong co vung\nMot vung\nNhieu vung";
+
+// Human-readable reason strings are presentation only.
+WDPW_SoftText = "";
+if (WDPW_Bit1)
+    WDPW_SoftText = WDPW_SoftText + "Thi truong chua thuan / chua ro; ";
+if (WDPW_Bit2)
+    WDPW_SoftText = WDPW_SoftText + "Pha con som; ";
+if (WDPW_Bit4)
+    WDPW_SoftText = WDPW_SoftText + "Huong co phieu chua ro; ";
+if (WDPW_Bit8 AND NOT WDPW_HardMTFConcern)
+    WDPW_SoftText = WDPW_SoftText + "MTF phuc tap / ambiguity; ";
+if (WDPW_Bit256)
+    WDPW_SoftText = WDPW_SoftText + "Nhieu range context; ";
+if (StrLen(WDPW_SoftText)==0)
+    WDPW_SoftText = "Khong co ambiguity mem";
+
+WDPW_HardText = "";
+if (WDPW_Bit16)
+    WDPW_HardText = WDPW_HardText + "RS chua du / hon hop; ";
+if (WDPW_Bit32)
+    WDPW_HardText = WDPW_HardText + "VSA hon hop / xung dot; ";
+if (WDPW_Bit64)
+    WDPW_HardText = WDPW_HardText + "Gia va RS khong xac nhan; ";
+if (WDPW_Bit128)
+    WDPW_HardText = WDPW_HardText + "Dan dat nhom xung dot; ";
+if (WDPW_Bit512)
+    WDPW_HardText = WDPW_HardText + "Xung dot cau hinh Market/Group; ";
+if (WDPW_Bit1024)
+    WDPW_HardText = WDPW_HardText + "Vi tri range A/B xung dot; ";
+if (WDPW_MTFS==4)
+    WDPW_HardText = WDPW_HardText + "Khung co so nguoc khung cao; ";
+if (WDPW_MTFS==5)
+    WDPW_HardText = WDPW_HardText + "Khung cao xung dot; ";
+if (StrLen(WDPW_HardText)==0)
+    WDPW_HardText = "Khong co concern cung";
+
+WDPW_ReasonText = IIf(WDPW_ProductionWatchS,"Da la Production Watch",WDPW_SoftText + " | " + WDPW_HardText);
+
+// Default view: only PRE_WATCH_NEAR. Audit mode: all DiscoveryBase rows.
+Filter = WDPW_LastVisibleBar AND
+    IIf(WDPW_AuditMode==1,WDPW_DiscoveryStatusS>0,WDPW_DiscoveryStatusS==1);
+
+AddMultiTextColumn(WDPW_Zero+WDPW_DiscoveryStatusS,WDPW_StatusText,"Trang thai Discovery");
+AddMultiTextColumn(WDPW_Zero+WDSC_CandidateClass,WDPW_CandidateClassText,"Phan loai Production");
+AddMultiTextColumn(WDPW_Zero+WDSC_Review,WDPW_YesNoText,"Production Review");
+AddMultiTextColumn(WDPW_Zero+WDSC_Stage,WDPW_StageText,"Giai doan");
+AddMultiTextColumn(WDPW_Zero+WDSC_PhaseState,WDPW_PhaseText,"Pha Wyckoff");
+AddMultiTextColumn(WDPW_Zero+WDSC_FamilyHypothesis,WDPW_FamilyText,"Gia thuyet cau truc");
+AddMultiTextColumn(WDPW_Zero+WDSC_ContextMultiplicity,WDPW_MultiplicityText,"So vung context");
+AddColumn(100*(WDPW_Zero+WDSC_RangePosition),"Vi tri trong vung (%)",1.1);
+AddMultiTextColumn(WDPW_Zero+WDSC_MTFDirectionalAlignment,WDPW_MTFText,"Dong thuan Ngay/Tuan/Thang");
+AddMultiTextColumn(WDPW_Zero+WDSC_RSStockVsMarketStructure,WDPW_RSText,"Suc manh tuong doi so voi thi truong");
+AddTextColumn(WDPW_SoftText,"Ambiguity mem duoc phep");
+AddTextColumn(WDPW_HardText,"Concern can xem");
+AddTextColumn(WDPW_ReasonText,"Ly do chua la Production Watch");
+AddColumn(WDPW_Zero+WDSC_MethodBlockMask,"Method Block Mask",1.0);
+AddColumn(WDPW_Zero+WDSC_RangeLocationConflict,"Range-location conflict",1.0);
+AddColumn(WDPW_Zero+WDSC_RangeLocationCoherent,"Range-location coherent",1.0);
+AddTextColumn("DISCOVERY_PREWATCH_V01_20260914_A","Phien ban");
+
+_SECTION_END();
