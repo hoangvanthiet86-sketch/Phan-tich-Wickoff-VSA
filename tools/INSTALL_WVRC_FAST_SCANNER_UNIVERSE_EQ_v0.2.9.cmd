@@ -46,13 +46,13 @@ echo   STEP 1 - Publish snapshots for the same universe used by the 1,558-row ba
 echo     Formula: WyckoffVSA_DailyPublisher_v0.2.afl
 echo     Apply to: All quotations / same universe as baseline
 echo     Periodicity: Daily
-necho     Range: 1 recent bar
+echo     Range: 1 recent bar
 
 echo   STEP 2 - Run snapshot-only equivalence probe.
 echo     Formula: WyckoffVSA_FastScanner_UniverseEquivalenceProbe_v0.2.afl
 echo     Apply to: the exact same universe
-necho     Periodicity: Daily
-necho     Range: 1 recent bar
+echo     Periodicity: Daily
+echo     Range: 1 recent bar
 
 echo   Expected if database/config remain equivalent:
 echo     1558 eligible rows and exact decision-surface match.
