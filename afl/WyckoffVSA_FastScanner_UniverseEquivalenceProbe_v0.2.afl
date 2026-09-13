@@ -1,0 +1,45 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Fast Scanner Universe Equivalence Probe.
+
+    PRE-NATIVE-TEST IMPLEMENTATION.
+
+    Purpose:
+    - read persistent Daily snapshots only;
+    - emit exactly the locked Scanner decision surface for all eligible symbols;
+    - provide a compact export for 1,558/1,558 equivalence comparison;
+    - do not execute Core/Candidate/Structure/Phase/MTF/RS/MarketScanner engines.
+
+    No trading signals. No methodology change.
+*/
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_DailySnapshotConsumer_v0.2.afl>
+
+_SECTION_BEGIN("Performance Runtime v0.2 Fast Scanner Universe Equivalence");
+
+WFSEQ_LastVisibleBar = BarIndex()==LastValue(BarIndex());
+WFSEQ_ValidEligible = WDSC_Valid AND WDSC_DataEligible==1;
+
+// Equivalence export is intentionally strict: invalid/missing/stale snapshots
+// are omitted, so row-count or symbol-set mismatch immediately exposes a
+// publication/consumer problem instead of silently becoming a candidate.
+Filter = WFSEQ_LastVisibleBar AND WFSEQ_ValidEligible;
+
+AddTextColumn(Name(),"EQ_Symbol");
+AddColumn(0*BarIndex()+WDSC_DataEligible,"EQ_DataEligible",1.0);
+AddColumn(0*BarIndex()+WDSC_CandidateClass,"EQ_CandidateClass",1.0);
+AddColumn(0*BarIndex()+WDSC_Side,"EQ_Side",1.0);
+AddColumn(0*BarIndex()+WDSC_Stage,"EQ_Stage",1.0);
+AddColumn(0*BarIndex()+WDSC_Qualified,"EQ_Qualified",1.0);
+AddColumn(0*BarIndex()+WDSC_Developing,"EQ_Developing",1.0);
+AddColumn(0*BarIndex()+WDSC_Watch,"EQ_Watch",1.0);
+AddColumn(0*BarIndex()+WDSC_Review,"EQ_Review",1.0);
+AddColumn(0*BarIndex()+WDSC_ExclusionMask,"EQ_ExclusionMask",1.0);
+AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"EQ_MethodBlockMask",1.0);
+AddColumn(0*BarIndex()+WDSC_StatusCode,"SnapshotStatus",1.0);
+AddColumn(0*BarIndex()+WDSC_GenerationAfter,"SnapshotGeneration",1.0);
+AddColumn(0*BarIndex()+WDSC_BusinessDateKey,"SnapshotBusinessDateNum",1.0);
+AddTextColumn("FAST_SCANNER_UNIVERSE_EQ_V02_20260913_A","ProbeVersion");
+
+_SECTION_END();
