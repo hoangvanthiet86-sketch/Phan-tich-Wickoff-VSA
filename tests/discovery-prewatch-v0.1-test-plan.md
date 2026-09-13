@@ -1,6 +1,6 @@
 # Discovery / Pre-Watch v0.1 — Native Test Plan
 
-**Trang thai:** RUN A + RUN B DA DAT; CHO PRODUCTION REGRESSION.
+**Trang thai:** FULL NATIVE PASS.
 
 **Dac ta:** `docs/wyckoff-vsa-discovery-prewatch-v0.1-spec.md`
 
@@ -34,6 +34,11 @@ Chay hai lan:
 
 ### Run B — audit
 `Discovery: che do hien thi = Tat ca Discovery`
+
+Sau Run A/Run B, chay regression nhe tren `WyckoffVSA_FastScanner_v0.2.afl`:
+
+- Filter 4 — All Eligible;
+- Filter 2 — Watch + Developing + Qualified.
 
 ## 3. Checkpoint tham chieu cho snapshot 11/09/2026
 
@@ -96,16 +101,21 @@ PASS — 136/136 audit rows co Stage=1.
 PASS — 136/136 audit rows co RS vs Market code 1 hoac 2.
 
 ### DP-N12 — Snapshot read-only
-CHO PRODUCTION REGRESSION sau Discovery.
+PASS theo production regression sau Discovery:
+- Fast Scanner All Eligible van = 1,066 unique ticker;
+- 1,066/1,066 Snapshot Status = 1 va Data Eligible = 1;
+- version van `FAST_SCANNER_V02_20260913_A`;
+- khong co dau hieu Discovery ghi de hay lam thay doi production snapshot payload.
 
 ### DP-N13 — Production regression
-Sau khi chay Discovery, Fast Scanner production tren cung snapshot phai van giu:
+PASS sau Discovery tren cung snapshot:
 - All Eligible = 1,066;
+- Candidate Class distribution = Review 1,051 / Not Current Candidate 14 / Watch 1;
 - Filter 2 = 1 ma;
 - ma do la `SNZ`;
-- Candidate Class / Side / Stage / Phase / Family / MTF / RS / Review / MethodBlockMask khong thay doi.
+- SNZ giu nguyen Candidate Class=2, Side=0, Stage=1, Phase=2, Family=1, Range Position=0.3500, MTF=0, RS=2, Review=0, MethodBlockMask=7.
 
-Khong can chay lai DailyPublisher.
+Khong chay lai DailyPublisher.
 
 ### DP-N14 — Presentation
 PASS — Run A/Run B dung Vietnamese ASCII khong dau, khong mojibake.
@@ -117,8 +127,7 @@ PASS theo static review; AFL khong co `Buy`, `Sell`, `Short`, `Cover`, `Position
 
 - `docs/evidence/discovery-prewatch-v0.1-native-run-a-2026-09-14.md`
 - `docs/evidence/discovery-prewatch-v0.1-native-run-b-2026-09-14.md`
-
-Con lai can production regression Fast Scanner sau Discovery. Khong can gui lai Publisher output neu snapshot van hop le.
+- `docs/evidence/discovery-prewatch-v0.1-native-production-regression-2026-09-14.md`
 
 ## 6. Trang thai
 
@@ -126,4 +135,8 @@ Con lai can production regression Fast Scanner sau Discovery. Khong can gui lai 
 
 `DISCOVERY_PREWATCH_V01_NATIVE_RUN_B = PASS_136_OF_136`
 
-`DISCOVERY_PREWATCH_V01_NATIVE = PARTIAL_WAITING_PRODUCTION_REGRESSION`
+`DISCOVERY_PREWATCH_V01_PRODUCTION_REGRESSION = PASS_1066_AND_SNZ`
+
+`DISCOVERY_PREWATCH_V01_NATIVE = PASS`
+
+Native PASS nay chi xac nhan implementation Discovery / Pre-Watch v0.1 va tinh read-only tren checkpoint snapshot 11/09/2026. No khong thay doi methodology, Production Scanner acceptance, hay release acceptance khac cua du an.
