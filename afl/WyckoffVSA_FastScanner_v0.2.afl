@@ -1,0 +1,115 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Snapshot-only Fast Market Scanner.
+
+    PRE-NATIVE-TEST IMPLEMENTATION.
+
+    This formula does NOT execute the heavy Wyckoff/VSA analytical stack.
+    It reads the persistent Daily Snapshot, applies the approved production
+    filter semantics, and fails closed when the snapshot contract is invalid.
+
+    P&F Review (Production Filter 5) is intentionally NOT executed here.
+    P&F remains deferred to Deep Review / enrichment by architecture contract.
+*/
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_DailySnapshotConsumer_v0.2.afl>
+
+_SECTION_BEGIN("Performance Runtime v0.2 Fast Scanner");
+
+WFS_FilterModeCode = WVRC_ProductionFilterCode;
+
+// Preserve canonical Market Scanner filter semantics for modes 0..4.
+WFS_FilterQualified = WDSC_Qualified==1;
+WFS_FilterDeveloping = WDSC_Developing==1 OR WDSC_Qualified==1;
+WFS_FilterWatch = WDSC_Watch==1 OR WDSC_Developing==1 OR WDSC_Qualified==1;
+WFS_FilterReviewAudit =
+    WDSC_Review==1 OR
+    WDSC_DataEligible==0 OR
+    WDSC_MethodBlockMask>0;
+WFS_FilterAllEligible = WDSC_DataEligible==1;
+
+WFS_FilterSupported = WFS_FilterModeCode>=0 AND WFS_FilterModeCode<=4;
+WFS_SelectedByProductionFilter =
+    IIf(WFS_FilterModeCode==0,WFS_FilterQualified,
+    IIf(WFS_FilterModeCode==1,WFS_FilterDeveloping,
+    IIf(WFS_FilterModeCode==2,WFS_FilterWatch,
+    IIf(WFS_FilterModeCode==3,WFS_FilterReviewAudit,
+    IIf(WFS_FilterModeCode==4,WFS_FilterAllEligible,0)))));
+
+// Fast Scanner runtime status:
+// 0 SNAPSHOT INVALID / FAIL CLOSED
+// 1 READY
+// 2 P&F REVIEW FILTER REQUIRES DEEP REVIEW
+// 3 RUNTIME CONFIG INVALID
+WFS_RuntimeStatusCode = 0;
+WFS_RuntimeStatusText =
+    "SNAPSHOT INVALID / FAIL CLOSED\nREADY\nP&F REVIEW FILTER REQUIRES DEEP REVIEW\nRUNTIME CONFIG INVALID";
+
+if (WVRC_ConfigValid!=1)
+{
+    WFS_RuntimeStatusCode = 3;
+}
+else
+if (WFS_FilterModeCode==5)
+{
+    WFS_RuntimeStatusCode = 2;
+}
+else
+if (NOT WDSC_Valid)
+{
+    WFS_RuntimeStatusCode = 0;
+}
+else
+{
+    WFS_RuntimeStatusCode = 1;
+}
+
+WFS_Ready = WFS_RuntimeStatusCode==1 AND WFS_FilterSupported;
+WFS_LastVisibleBar = BarIndex()==LastValue(BarIndex());
+
+// Production rows are emitted only from a valid snapshot. When diagnostics are
+// explicitly enabled, infrastructure failures are surfaced as diagnostic rows
+// but never become candidates.
+WFS_DiagnosticFailureRow =
+    WVRC_ShowDecisionDiagnostics==1 AND
+    WFS_RuntimeStatusCode!=1;
+
+Filter = WFS_LastVisibleBar AND
+    ((WFS_Ready AND WFS_SelectedByProductionFilter) OR WFS_DiagnosticFailureRow);
+
+// Approved compact DAILY FAST SCAN surface (~14 columns).
+AddTextColumn(Name(),"Symbol");
+AddColumn(0*BarIndex()+WDSC_SourceDateTime,"As-Of Date",formatDateTime);
+AddColumn(0*BarIndex()+WDSC_StatusCode,"Snapshot Status",1.0);
+AddColumn(0*BarIndex()+WDSC_DataEligible,"Data Eligible",1.0);
+AddColumn(0*BarIndex()+WDSC_CandidateClass,"Candidate Class",1.0);
+AddColumn(0*BarIndex()+WDSC_Side,"Candidate Side",1.0);
+AddColumn(0*BarIndex()+WDSC_Stage,"Candidate Stage",1.0);
+AddColumn(0*BarIndex()+WDSC_PhaseState,"Phase",1.0);
+AddColumn(0*BarIndex()+WDSC_FamilyHypothesis,"Family",1.0);
+AddColumn(0*BarIndex()+WDSC_RangePosition,"Range Position",1.4);
+AddColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,"MTF Alignment",1.0);
+AddColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,"RS vs Market",1.0);
+AddColumn(0*BarIndex()+WDSC_Review,"Scanner Review",1.0);
+AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"Method Block Mask",1.0);
+
+if (WVRC_ShowDecisionDiagnostics==1)
+{
+    AddColumn(0*BarIndex()+WFS_RuntimeStatusCode,"Fast Scanner Status",1.0);
+    AddMultiTextColumn(0*BarIndex()+WFS_RuntimeStatusCode,WFS_RuntimeStatusText,"Fast Scanner Status Text");
+    AddColumn(0*BarIndex()+WDSC_GenerationAfter,"Snapshot Generation",1.0);
+    AddColumn(0*BarIndex()+WDSC_BusinessDateKey,"Snapshot Business DateNum",1.0);
+    AddColumn(0*BarIndex()+WDSC_AsOfBusinessDateKey,"Current Business DateNum",1.0);
+    AddColumn(0*BarIndex()+WDSC_ExclusionMask,"Exclusion Mask",1.0);
+    AddColumn(0*BarIndex()+WDSC_Qualified,"Qualified",1.0);
+    AddColumn(0*BarIndex()+WDSC_Developing,"Developing",1.0);
+    AddColumn(0*BarIndex()+WDSC_Watch,"Watch",1.0);
+    AddColumn(0*BarIndex()+WDSC_RangeStatus,"Range Status",1.0);
+    AddColumn(0*BarIndex()+WDSC_RangeLocationCoherent,"Range Location Coherent",1.0);
+    AddColumn(0*BarIndex()+WDSC_RangeLocationConflict,"Range Location Conflict",1.0);
+}
+
+AddTextColumn("FAST_SCANNER_V02_20260913_A","Fast Scanner Version");
+
+_SECTION_END();
