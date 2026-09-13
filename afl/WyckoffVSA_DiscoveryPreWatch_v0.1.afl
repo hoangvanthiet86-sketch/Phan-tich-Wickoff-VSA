@@ -126,7 +126,9 @@ if (WDPW_MTFS==5)
 if (StrLen(WDPW_HardText)==0)
     WDPW_HardText = "Khong co concern cung";
 
-WDPW_ReasonText = IIf(WDPW_ProductionWatchS,"Da la Production Watch",WDPW_SoftText + " | " + WDPW_HardText);
+WDPW_ReasonText = WDPW_SoftText + " | " + WDPW_HardText;
+if (WDPW_ProductionWatchS)
+    WDPW_ReasonText = "Da la Production Watch";
 
 // Default view: only PRE_WATCH_NEAR. Audit mode: all DiscoveryBase rows.
 Filter = WDPW_LastVisibleBar AND
