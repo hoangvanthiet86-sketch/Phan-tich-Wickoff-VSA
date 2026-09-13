@@ -12,9 +12,11 @@
     P&F remains deferred to Deep Review / enrichment by architecture contract.
 
     PRESENTATION-ONLY UPDATE:
-    - Vietnamese human-readable Exploration surface;
+    - Vietnamese ASCII (no-diacritic) Exploration surface for AmiBroker 6.20;
     - canonical numeric decision fields and filter logic are unchanged;
-    - raw numeric codes remain available when decision diagnostics are enabled.
+    - raw numeric codes remain available when decision diagnostics are enabled;
+    - duplicate Symbol / As-Of Date columns are omitted because AmiBroker
+      already provides Ticker / Date-Time at the start of Exploration output.
 */
 SetBarsRequired(1,0);
 
@@ -84,40 +86,40 @@ Filter = WFS_LastVisibleBar AND
     ((WFS_Ready AND WFS_SelectedByProductionFilter) OR WFS_DiagnosticFailureRow);
 
 // -----------------------------------------------------------------------------
-// Vietnamese presentation layer only. These text enums DO NOT change any
+// Vietnamese ASCII presentation layer only. These text enums DO NOT change any
 // canonical code, filter, eligibility rule, decision flag or snapshot value.
 // -----------------------------------------------------------------------------
 WFS_VI_SnapshotStatusText =
-    "Không có dữ liệu snapshot\nHợp lệ\nGhi dữ liệu chưa hoàn tất / thế hệ không ổn định\nSai lược đồ hoặc phiên bản\nSai mã cổ phiếu\nSai cấu hình\nSnapshot đã cũ\nSnapshot có ngày ở tương lai\nThiếu dữ liệu bắt buộc\nLỗi đồng hồ vận hành";
+    "Khong co du lieu snapshot\nHop le\nGhi du lieu chua hoan tat / the he khong on dinh\nSai luoc do hoac phien ban\nSai ma co phieu\nSai cau hinh\nSnapshot da cu\nSnapshot co ngay o tuong lai\nThieu du lieu bat buoc\nLoi dong ho van hanh";
 
 WFS_VI_DataEligibleText =
-    "Không đủ điều kiện dữ liệu\nĐủ điều kiện dữ liệu";
+    "Khong du dieu kien du lieu\nDu dieu kien du lieu";
 
 WFS_VI_CandidateClassText =
-    "Bị chặn do dữ liệu\nKhông phải ứng viên hiện tại\nTheo dõi\nĐang phát triển - tăng\nĐủ điều kiện - tăng, phù hợp thị trường\nĐủ điều kiện - tăng, đầy đủ từ trên xuống\nĐang phát triển - giảm\nĐủ điều kiện - giảm, phù hợp thị trường\nĐủ điều kiện - giảm, đầy đủ từ trên xuống\nCần rà soát - xung đột / mơ hồ";
+    "Bi chan do du lieu\nKhong phai ung vien hien tai\nTheo doi\nDang phat trien - tang\nDu dieu kien - tang, phu hop thi truong\nDu dieu kien - tang, day du tu tren xuong\nDang phat trien - giam\nDu dieu kien - giam, phu hop thi truong\nDu dieu kien - giam, day du tu tren xuong\nCan ra soat - xung dot / mo ho";
 
 WFS_VI_CandidateSideText =
-    "Chưa xác định\nTăng\nGiảm";
+    "Chua xac dinh\nTang\nGiam";
 
 WFS_VI_CandidateStageText =
-    "Chưa đủ điều kiện\nTheo dõi - vùng đang hình thành / phát triển\nĐang phát triển - chờ kiểm định cuối\nPhát triển có hướng\nMở rộng xu hướng\nKết thúc / bị thay thế";
+    "Chua du dieu kien\nTheo doi - vung dang hinh thanh / phat trien\nDang phat trien - cho kiem dinh cuoi\nPhat trien co huong\nMo rong xu huong\nKet thuc / bi thay the";
 
 WFS_VI_PhaseText =
-    "Chưa đủ bối cảnh\nPha A\nPha B\nỨng viên Pha C\nPha C\nPha D\nPha E\nVùng bị vô hiệu / thay thế";
+    "Chua du boi canh\nPha A\nPha B\nUng vien Pha C\nPha C\nPha D\nPha E\nVung bi vo hieu / thay the";
 
 WFS_VI_FamilyText =
-    "Chưa đủ dữ liệu\nVùng dưới chưa xác nhận\nVùng trên chưa xác nhận\nGiả thuyết tích lũy\nGiả thuyết tái phân phối\nGiả thuyết phân phối\nGiả thuyết tái tích lũy\nBằng chứng hỗn hợp / xung đột";
+    "Chua du du lieu\nVung duoi chua xac nhan\nVung tren chua xac nhan\nGia thuyet tich luy\nGia thuyet tai phan phoi\nGia thuyet phan phoi\nGia thuyet tai tich luy\nBang chung hon hop / xung dot";
 
 WFS_VI_MTFText =
-    "Chưa đủ dữ liệu đa khung\nChưa xác định / phi hướng\nĐồng thuận tăng\nĐồng thuận giảm\nKhung ngày ngược khung lớn\nKhung tuần và tháng xung đột\nĐa khung hỗn hợp / phức tạp";
+    "Chua du du lieu da khung\nChua xac dinh / phi huong\nDong thuan tang\nDong thuan giam\nKhung ngay nguoc khung lon\nKhung tuan va thang xung dot\nDa khung hon hop / phuc tap";
 
 WFS_VI_RSMarketText =
-    "Chưa đủ dữ liệu\nTăng - mạnh hơn thị trường\nGiảm - yếu hơn thị trường\nHỗn hợp";
+    "Chua du du lieu\nTang - manh hon thi truong\nGiam - yeu hon thi truong\nHon hop";
 
 WFS_VI_ReviewText =
-    "Không\nCó - cần rà soát";
+    "Khong\nCo - can ra soat";
 
-// Decode MethodBlockMask into plain Vietnamese. This is display-only.
+// Decode MethodBlockMask into plain Vietnamese ASCII. Display-only.
 WFS_VI_BlockMaskScalar = LastValue(WDSC_MethodBlockMask);
 WFS_VI_BlockRemain = WFS_VI_BlockMaskScalar;
 WFS_VI_BlockCount = 0;
@@ -125,115 +127,114 @@ WFS_VI_BlockText = "";
 
 if (WFS_VI_BlockRemain>=1024)
 {
-    WFS_VI_BlockText = "Vị trí trong vùng Pha A/B không hợp lý";
+    WFS_VI_BlockText = "Vi tri trong vung Pha A/B khong hop ly";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 1024;
 }
 if (WFS_VI_BlockRemain>=512)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Xung đột cấu hình thị trường / nhóm";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Xung dot cau hinh thi truong / nhom";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 512;
 }
 if (WFS_VI_BlockRemain>=256)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Có nhiều vùng giao dịch cùng lúc";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Co nhieu vung giao dich cung luc";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 256;
 }
 if (WFS_VI_BlockRemain>=128)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Dẫn dắt nhóm ngành xung đột / chưa đủ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Dan dat nhom nganh xung dot / chua du";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 128;
 }
 if (WFS_VI_BlockRemain>=64)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Giá và sức mạnh tương đối chưa xác nhận nhau";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Gia va suc manh tuong doi chua xac nhan nhau";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 64;
 }
 if (WFS_VI_BlockRemain>=32)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Bằng chứng VSA xung đột / hỗn hợp";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Bang chung VSA xung dot / hon hop";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 32;
 }
 if (WFS_VI_BlockRemain>=16)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Sức mạnh tương đối chưa rõ / hỗn hợp";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Suc manh tuong doi chua ro / hon hop";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 16;
 }
 if (WFS_VI_BlockRemain>=8)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Đa khung thời gian xung đột";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Da khung thoi gian xung dot";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 8;
 }
 if (WFS_VI_BlockRemain>=4)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Hướng cổ phiếu chưa rõ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Huong co phieu chua ro";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 4;
 }
 if (WFS_VI_BlockRemain>=2)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Pha còn quá sớm";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Pha con qua som";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 2;
 }
 if (WFS_VI_BlockRemain>=1)
 {
     if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
-    WFS_VI_BlockText = WFS_VI_BlockText + "Bối cảnh thị trường chưa thuận / chưa rõ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Boi canh thi truong chua thuan / chua ro";
     WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
     WFS_VI_BlockRemain = WFS_VI_BlockRemain - 1;
 }
 if (WFS_VI_BlockCount==0)
 {
-    WFS_VI_BlockText = "Không có rào cản phương pháp";
+    WFS_VI_BlockText = "Khong co rao can phuong phap";
 }
 
-// Human-readable DAILY FAST SCAN surface.
-AddTextColumn(Name(),"Mã cổ phiếu");
-AddColumn(0*BarIndex()+WDSC_SourceDateTime,"Dữ liệu đến ngày",formatDateTime);
-AddMultiTextColumn(0*BarIndex()+WDSC_StatusCode,WFS_VI_SnapshotStatusText,"Trạng thái dữ liệu");
-AddMultiTextColumn(0*BarIndex()+WDSC_DataEligible,WFS_VI_DataEligibleText,"Đủ dữ liệu");
-AddMultiTextColumn(0*BarIndex()+WDSC_CandidateClass,WFS_VI_CandidateClassText,"Phân loại");
-AddMultiTextColumn(0*BarIndex()+WDSC_Side,WFS_VI_CandidateSideText,"Hướng");
-AddMultiTextColumn(0*BarIndex()+WDSC_Stage,WFS_VI_CandidateStageText,"Giai đoạn ứng viên");
+// AmiBroker already provides Ticker and Date/Time columns automatically.
+// Do not duplicate them with Symbol / As-Of Date columns.
+AddMultiTextColumn(0*BarIndex()+WDSC_StatusCode,WFS_VI_SnapshotStatusText,"Trang thai du lieu");
+AddMultiTextColumn(0*BarIndex()+WDSC_DataEligible,WFS_VI_DataEligibleText,"Du du lieu");
+AddMultiTextColumn(0*BarIndex()+WDSC_CandidateClass,WFS_VI_CandidateClassText,"Phan loai");
+AddMultiTextColumn(0*BarIndex()+WDSC_Side,WFS_VI_CandidateSideText,"Huong");
+AddMultiTextColumn(0*BarIndex()+WDSC_Stage,WFS_VI_CandidateStageText,"Giai doan ung vien");
 AddMultiTextColumn(0*BarIndex()+WDSC_PhaseState,WFS_VI_PhaseText,"Pha Wyckoff");
-AddMultiTextColumn(0*BarIndex()+WDSC_FamilyHypothesis,WFS_VI_FamilyText,"Giả thuyết cấu trúc");
-AddColumn(100*(0*BarIndex()+WDSC_RangePosition),"Vị trí trong vùng (%)",1.1);
-AddMultiTextColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,WFS_VI_MTFText,"Đồng thuận Ngày/Tuần/Tháng");
-AddMultiTextColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,WFS_VI_RSMarketText,"Sức mạnh tương đối so với thị trường");
-AddMultiTextColumn(0*BarIndex()+WDSC_Review,WFS_VI_ReviewText,"Cần rà soát");
-AddTextColumn(WFS_VI_BlockText,"Lý do chưa được nâng hạng");
+AddMultiTextColumn(0*BarIndex()+WDSC_FamilyHypothesis,WFS_VI_FamilyText,"Gia thuyet cau truc");
+AddColumn(100*(0*BarIndex()+WDSC_RangePosition),"Vi tri trong vung (%)",1.1);
+AddMultiTextColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,WFS_VI_MTFText,"Dong thuan Ngay/Tuan/Thang");
+AddMultiTextColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,WFS_VI_RSMarketText,"Suc manh tuong doi so voi thi truong");
+AddMultiTextColumn(0*BarIndex()+WDSC_Review,WFS_VI_ReviewText,"Can ra soat");
+AddTextColumn(WFS_VI_BlockText,"Ly do chua duoc nang hang");
 
 // Raw numeric audit surface remains available on demand.
 if (WVRC_ShowDecisionDiagnostics==1)
 {
-    AddColumn(0*BarIndex()+WDSC_StatusCode,"Mã Snapshot Status",1.0);
-    AddColumn(0*BarIndex()+WDSC_DataEligible,"Mã Data Eligible",1.0);
-    AddColumn(0*BarIndex()+WDSC_CandidateClass,"Mã Candidate Class",1.0);
-    AddColumn(0*BarIndex()+WDSC_Side,"Mã Candidate Side",1.0);
-    AddColumn(0*BarIndex()+WDSC_Stage,"Mã Candidate Stage",1.0);
-    AddColumn(0*BarIndex()+WDSC_PhaseState,"Mã Phase",1.0);
-    AddColumn(0*BarIndex()+WDSC_FamilyHypothesis,"Mã Family",1.0);
-    AddColumn(0*BarIndex()+WDSC_RangePosition,"Range Position gốc",1.4);
-    AddColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,"Mã MTF Alignment",1.0);
-    AddColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,"Mã RS vs Market",1.0);
-    AddColumn(0*BarIndex()+WDSC_Review,"Mã Scanner Review",1.0);
+    AddColumn(0*BarIndex()+WDSC_StatusCode,"Ma Snapshot Status",1.0);
+    AddColumn(0*BarIndex()+WDSC_DataEligible,"Ma Data Eligible",1.0);
+    AddColumn(0*BarIndex()+WDSC_CandidateClass,"Ma Candidate Class",1.0);
+    AddColumn(0*BarIndex()+WDSC_Side,"Ma Candidate Side",1.0);
+    AddColumn(0*BarIndex()+WDSC_Stage,"Ma Candidate Stage",1.0);
+    AddColumn(0*BarIndex()+WDSC_PhaseState,"Ma Phase",1.0);
+    AddColumn(0*BarIndex()+WDSC_FamilyHypothesis,"Ma Family",1.0);
+    AddColumn(0*BarIndex()+WDSC_RangePosition,"Range Position goc",1.4);
+    AddColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,"Ma MTF Alignment",1.0);
+    AddColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,"Ma RS vs Market",1.0);
+    AddColumn(0*BarIndex()+WDSC_Review,"Ma Scanner Review",1.0);
     AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"Method Block Mask",1.0);
 
     AddColumn(0*BarIndex()+WFS_RuntimeStatusCode,"Fast Scanner Status",1.0);
@@ -250,7 +251,7 @@ if (WVRC_ShowDecisionDiagnostics==1)
     AddColumn(0*BarIndex()+WDSC_RangeLocationConflict,"Range Location Conflict",1.0);
 }
 
-AddTextColumn("FAST_SCANNER_V02_20260913_A","Phiên bản bộ lọc");
-AddTextColumn("VIETNAMESE_DISPLAY_V02_20260913_A","Phiên bản hiển thị");
+AddTextColumn("FAST_SCANNER_V02_20260913_A","Phien ban bo loc");
+AddTextColumn("VIETNAMESE_ASCII_DISPLAY_V02_20260913_B","Phien ban hien thi");
 
 _SECTION_END();
