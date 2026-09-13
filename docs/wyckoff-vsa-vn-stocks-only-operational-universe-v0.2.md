@@ -8,28 +8,28 @@ Watchlist chuẩn phải có tên chính xác:
 
 `VN STOCKS ONLY`
 
-Universe này chỉ gồm cổ phiếu niêm yết/giao dịch trên HOSE, HNX và UPCoM.
+Universe này chỉ gồm cổ phiếu thường giao dịch trên HOSE/HSX, HNX và UPCoM.
 
 Bắt buộc loại khỏi universe:
 - chứng quyền có bảo đảm (CW);
 - hợp đồng phái sinh/futures;
 - chỉ số;
-- ETF/quỹ giao dịch;
-- các mã không phải cổ phiếu thường dù có dữ liệu giá.
+- ETF/quỹ giao dịch/quỹ niêm yết;
+- các mã không đủ metadata để xác nhận là cổ phiếu thường.
 
 ## Quy tắc phân loại nền tảng
 
-1. Không được dùng heuristic dựa trên hình dạng ticker/prefix/suffix để xác định loại chứng khoán.
-2. Ưu tiên metadata/category sẵn có trong database AmiBroker: Market, Group, Sector, Industry và Full Name để kiểm tra cấu trúc phân loại hiện hữu.
-3. Chỉ khi metadata hiện hữu chứng minh được ranh giới cổ phiếu so với CW/futures/index/ETF mới được tự động hóa việc tạo watchlist.
-4. Nếu metadata không đủ phân biệt một loại tài sản, phải fail-closed: không tự động đưa mã mơ hồ vào `VN STOCKS ONLY`.
+1. Không được dùng heuristic dựa trên hình dạng ticker/prefix/suffix/độ dài ticker để xác định loại chứng khoán.
+2. Ưu tiên metadata/category sẵn có trong database AmiBroker: Market, Group, Sector, Industry và Full Name.
+3. Chỉ khi metadata hiện hữu chứng minh được ranh giới cổ phiếu so với CW/futures/index/ETF/quỹ mới được tự động hóa việc tạo watchlist.
+4. Nếu metadata không đủ xác nhận một symbol là cổ phiếu thường, phải fail-closed: không tự động đưa symbol đó vào `VN STOCKS ONLY`.
 5. Không sửa methodology, không sửa scanner decision surface và không thay đổi kết quả phân tích của Runtime v0.2.
 
 ## U1 — Metadata Audit: native evidence 2026-09-13
 
 Probe: `WyckoffVSA_VNStocksOnly_MetadataAudit_v0.2.afl`
 
-Native export được kiểm tra toàn bộ 2.297 symbols. Kết quả category thực tế của database:
+Native export được kiểm tra toàn bộ 2.297 symbols. Category thực tế của database:
 
 - `Market=UPCOM, Group=Co phieu`: 953
 - `Market=HSX, Group=Co phieu`: 433
@@ -40,46 +40,54 @@ Native export được kiểm tra toàn bộ 2.297 symbols. Kết quả category
 
 Tổng cộng: 2.297 symbols.
 
-Điểm quan trọng của U1: `Group=Co phieu` một mình KHÔNG đủ để tạo stock-only universe.
+### Phát hiện quan trọng
 
-Trong nhóm `Co phieu` có 112 symbols có `SectorID=0`:
+`Group=Co phieu` một mình KHÔNG đủ để tạo stock-only universe.
 
-- 94 symbols HNX có `FullName` rỗng và không có Sector/Industry đủ để xác nhận là cổ phiếu thường;
-- 12 symbols HSX có `FullName` chỉ rõ là quỹ/ETF (`QUY`/`Quy`) và phải loại;
-- 6 symbols thực tế là cổ phiếu nhưng Sector chưa được gán: `GTX`, `KAI`, `LPS`, `SLD`, `ULG`, `V68`.
+Trong 1.787 symbols thuộc `Group=Co phieu` ở UPCOM/HSX/HNX:
 
-Không sử dụng hình dạng ticker của bất kỳ nhóm nào trong logic phân loại.
+- có 25 quỹ/ETF/REIT; metadata `FullName` của cả 25 bắt đầu bằng `Quy ` / `QUY `;
+- có 94 symbols HNX có `FullName` rỗng và `SectorID=0`, nên metadata không đủ xác nhận là cổ phiếu thường và phải fail-closed;
+- có cổ phiếu thực sự nhưng `SectorID=0`, ví dụ `GTX`, `KAI`, `LPS`, `SLD`, `ULG`, `V68`, do đó không được dùng điều kiện `SectorID > 0` làm tiêu chí bắt buộc.
+
+Cũng không được tìm chuỗi `QUY` ở bất kỳ vị trí nào trong FullName. Làm vậy có thể loại sai doanh nghiệp có tên chứa từ/chuỗi này, ví dụ các tên liên quan `Ngo Quyen`, `Ac quy`, `Da quy`, `Quy Nhon`, hoặc công ty quản lý quỹ. Ranh giới native đã xác minh là **FullName bắt đầu bằng `QUY `**, không phải ticker pattern và không phải substring tùy ý.
 
 ## U2 — Classification Contract đã khóa
 
-Một symbol được đưa vào `VN STOCKS ONLY` khi và chỉ khi thỏa tất cả điều kiện sau:
+Một symbol được đưa vào `VN STOCKS ONLY` khi và chỉ khi thỏa **tất cả** điều kiện sau:
 
 1. `MarketID` thuộc `{1,2,3}` tương ứng `UPCOM`, `HSX`, `HNX`;
-2. `GroupID == 1` và `GroupName == Co phieu` theo database hiện tại;
-3. metadata cổ phiếu được xác nhận theo một trong hai nhánh:
-   - `SectorID > 0`; hoặc
-   - `SectorID == 0`, `FullName` không rỗng, và `FullName` KHÔNG chứa từ `QUY` sau khi chuẩn hóa uppercase.
+2. `GroupID == 1` và `GroupName == Co phieu` trong database hiện tại;
+3. `FullName` không rỗng;
+4. sau khi chuẩn hóa `FullName` sang uppercase, **4 ký tự đầu KHÔNG phải `QUY `**.
 
-Fail-closed exclusions:
+`SectorID`, `IndustryID` vẫn được giữ làm metadata kiểm tra/provenance nhưng không được dùng làm điều kiện bắt buộc để một cổ phiếu được vào universe, vì native evidence có cổ phiếu thực sự với `SectorID=0`.
+
+### Fail-closed exclusions
 
 - Market ngoài UPCOM/HSX/HNX;
 - Group khác `Co phieu`;
-- `SectorID == 0` và `FullName` rỗng;
-- `SectorID == 0` và `FullName` cho thấy đây là quỹ/ETF qua từ `QUY`.
+- `FullName` rỗng;
+- `FullName` bắt đầu bằng `Quy ` / `QUY `, xác định quỹ/ETF/REIT theo metadata mô tả trong database.
 
-Contract này không dùng prefix/suffix/ticker length/pattern.
+Contract này không sử dụng prefix/suffix/độ dài/pattern của ticker.
 
-Áp contract vào native export U1 cho kết quả dự kiến:
+### Kết quả dự kiến khi áp U2 vào native export U1
 
-- `VN STOCKS ONLY`: 1.681 symbols
-  - UPCOM: 953
-  - HSX: 421
-  - HNX: 307
-- Excluded: 616 symbols
-  - chỉ số / market ngoài stock markets: 207
-  - group không phải `Co phieu` (CW + futures): 303
-  - quỹ/ETF xác định bằng metadata FullName: 12
-  - metadata mơ hồ fail-closed (`SectorID=0`, `FullName` rỗng): 94
+`VN STOCKS ONLY` = **1.668 symbols**:
+
+- UPCOM: 953
+- HSX: 408
+- HNX: 307
+
+Excluded = **629 symbols**:
+
+- chỉ số / Market ngoài stock markets: 207
+- Group không phải `Co phieu` (CW + futures): 303
+- quỹ/ETF/REIT xác định từ FullName bắt đầu `QUY `: 25
+- metadata mơ hồ fail-closed (`FullName` rỗng): 94
+
+Kiểm tra tổng: `1668 + 629 = 2297`.
 
 ## U3 — Watchlist Build
 
@@ -116,8 +124,8 @@ Ghi nhận:
 ## Tiêu chí PASS
 
 Universe chỉ được gọi PASS khi:
-- không có CW/futures/index/ETF trong watchlist;
-- không có mã cổ phiếu HOSE/HNX/UPCoM bị loại sai do ticker heuristic;
+- không có CW/futures/index/ETF/quỹ trong watchlist;
+- không có cổ phiếu HOSE/HSX, HNX, UPCoM bị loại sai do ticker heuristic;
 - không dùng ticker pattern;
 - metadata/classification rule có thể lặp lại;
 - U3 audit cho zero mismatch;
