@@ -1,0 +1,67 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    VN STOCKS ONLY - U4 operational snapshot audit.
+
+    PURPOSE
+    - read ONLY persistent Daily Snapshot state;
+    - run on the production watchlist VN STOCKS ONLY;
+    - emit one row per watchlist member so native U4 can count:
+        * valid / invalid snapshots,
+        * Data Eligible,
+        * Candidate Class / Stage,
+        * decision surface distribution;
+    - do NOT execute the heavy analytical Runtime stack;
+    - do NOT modify watchlists, categories, methodology or scanner decisions.
+
+    Expected run:
+    Apply to: VN STOCKS ONLY
+    Periodicity: Daily
+    Range: 1 recent bar
+*/
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_DailySnapshotConsumer_v0.2.afl>
+
+_SECTION_BEGIN("VN STOCKS ONLY U4 Operational Snapshot Audit");
+
+U4_WatchlistName = "VN STOCKS ONLY";
+U4_Member = InWatchListName(U4_WatchlistName);
+U4_LastBar = BarIndex()==LastValue(BarIndex());
+U4_SnapshotValid = WDSC_StatusCode==1 AND WDSC_Valid==1;
+U4_EligibleValid = U4_SnapshotValid AND WDSC_DataEligible==1;
+U4_InvalidSnapshot = NOT U4_SnapshotValid;
+
+// Emit every watchlist member. This is intentionally broader than FastScanner
+// production filters so U4 can prove snapshot coverage before filtering.
+Filter = U4_LastBar AND U4_Member;
+
+AddTextColumn(Name(),"U4_Symbol");
+AddColumn(0*BarIndex()+U4_Member,"U4_WatchlistMember",1.0);
+AddColumn(0*BarIndex()+WDSC_StatusCode,"U4_SnapshotStatus",1.0);
+AddColumn(0*BarIndex()+U4_SnapshotValid,"U4_SnapshotValid",1.0);
+AddColumn(0*BarIndex()+U4_InvalidSnapshot,"U4_InvalidSnapshot",1.0);
+AddColumn(0*BarIndex()+WDSC_BusinessDateKey,"U4_SnapshotBusinessDateNum",1.0);
+AddColumn(0*BarIndex()+WDSC_AsOfBusinessDateKey,"U4_CurrentBusinessDateNum",1.0);
+AddColumn(0*BarIndex()+WDSC_GenerationAfter,"U4_Generation",1.0);
+
+AddColumn(0*BarIndex()+WDSC_DataEligible,"U4_DataEligible",1.0);
+AddColumn(0*BarIndex()+U4_EligibleValid,"U4_EligibleValid",1.0);
+AddColumn(0*BarIndex()+WDSC_CandidateClass,"U4_CandidateClass",1.0);
+AddColumn(0*BarIndex()+WDSC_Side,"U4_Side",1.0);
+AddColumn(0*BarIndex()+WDSC_Stage,"U4_Stage",1.0);
+AddColumn(0*BarIndex()+WDSC_Qualified,"U4_Qualified",1.0);
+AddColumn(0*BarIndex()+WDSC_Developing,"U4_Developing",1.0);
+AddColumn(0*BarIndex()+WDSC_Watch,"U4_Watch",1.0);
+AddColumn(0*BarIndex()+WDSC_Review,"U4_Review",1.0);
+AddColumn(0*BarIndex()+WDSC_ExclusionMask,"U4_ExclusionMask",1.0);
+AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"U4_MethodBlockMask",1.0);
+
+AddColumn(0*BarIndex()+WDSC_PhaseState,"U4_Phase",1.0);
+AddColumn(0*BarIndex()+WDSC_FamilyHypothesis,"U4_Family",1.0);
+AddColumn(0*BarIndex()+WDSC_RangePosition,"U4_RangePosition",1.4);
+AddColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,"U4_MTFAlignment",1.0);
+AddColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,"U4_RSvsMarket",1.0);
+
+AddTextColumn("VN_STOCKS_ONLY_U4_SNAPSHOT_AUDIT_V02_20260913_A","U4_ProbeVersion");
+
+_SECTION_END();

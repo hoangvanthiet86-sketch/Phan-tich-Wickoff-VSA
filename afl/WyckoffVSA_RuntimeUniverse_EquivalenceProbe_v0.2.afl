@@ -1,0 +1,70 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Whole-universe decision-surface equivalence probe.
+
+    Purpose:
+    - run the already native-validated explicit-order Runtime v0.2 path;
+    - emit one current-bar row for every DATA ELIGIBLE symbol;
+    - expose only the locked scanner decision-surface fields under EQ_* names
+      for comparison against the post-MS41 canonical baseline;
+    - no P&F, no ranking, no trading signal, no methodology change.
+
+    IMPORTANT:
+    Some upstream Runtime v0.2 modules still contain legacy Exploration columns.
+    They are intentionally not stripped before equivalence is proven. The EQ_*
+    columns appended by this probe are the authoritative comparison surface.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_MultiTimeframeContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+#include_once <WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_MarketScanner_Runtime_v0.2.afl>
+
+EQ_LastBar = BarIndex()==LastValue(BarIndex());
+EQ_DataEligible = WSCN_DataEligibilityCode==1;
+Filter = EQ_LastBar AND EQ_DataEligible;
+
+AddTextColumn(Name(),"EQ_Symbol");
+AddColumn(DateTime(),"EQ_Date",formatDateTime);
+AddColumn(WVRC_ConfigValid,"EQ_ConfigValid",1.0);
+AddColumn(WSCN_DataEligibilityCode,"EQ_DataEligible",1.0);
+AddColumn(WSCN_CandidateClassCode,"EQ_CandidateClass",1.0);
+AddColumn(WSCN_CandidateSideCode,"EQ_Side",1.0);
+AddColumn(WSCN_CandidateStageCode,"EQ_Stage",1.0);
+AddColumn(WSCN_QualifiedCandidateFlag,"EQ_Qualified",1.0);
+AddColumn(WSCN_DevelopingCandidateFlag,"EQ_Developing",1.0);
+AddColumn(WSCN_WatchFlag,"EQ_Watch",1.0);
+AddColumn(WSCN_ReviewFlag,"EQ_Review",1.0);
+AddColumn(WSCN_ExclusionReasonMask,"EQ_ExclusionMask",1.0);
+AddColumn(WSCN_MethodBlockReasonMask,"EQ_MethodBlockMask",1.0);
+AddColumn(WSCN_StockRangePosition,"EQ_RangePosition",1.4);
+AddColumn(WSCN_RangeLocationCoherent,"EQ_RangeLocationCoherent",1.0);
+AddColumn(WSCN_RangeLocationConflict,"EQ_RangeLocationConflict",1.0);
+AddTextColumn(WVRC_RSAdjustmentBasisDeclaration,"EQ_RSAdjustmentBasis");
+AddColumn(WVRC_RSAdjustmentBasisStatus,"EQ_RSAdjustmentStatus",1.0);
+AddTextColumn("RUNTIME_UNIVERSE_EQ_V02_20260912_A","EQ_ProbeVersion");

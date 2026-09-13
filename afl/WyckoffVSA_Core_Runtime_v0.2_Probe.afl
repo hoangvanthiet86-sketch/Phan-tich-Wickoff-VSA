@@ -1,0 +1,28 @@
+/*
+    Runtime v0.2 Core isolation probe.
+    Diagnostic only. No native PASS is claimed by this file.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+
+Filter = 1;
+
+AddTextColumn(Name(),"PROBE Symbol");
+AddColumn(DateTime(),"PROBE Date",formatDateTime);
+AddColumn(BarIndex(),"PROBE BarIndex",1.0);
+AddColumn(WVRC_ConfigValid,"Runtime Config Valid",1.0);
+AddColumn(VolumeLookback,"Core Volume Lookback",1.0);
+AddColumn(SpreadLookback,"Core Spread Lookback",1.0);
+AddColumn(ATRPeriod,"Core ATR Period",1.0);
+AddColumn(HighEffortThreshold,"Core High Effort",1.2);
+AddColumn(LowEffortThreshold,"Core Low Effort",1.2);
+AddColumn(LowDirectionalResultThreshold,"Core Low Directional",1.2);
+AddColumn(HighDirectionalResultThreshold,"Core High Directional",1.2);
+AddColumn(RVOL,"Core RVOL",1.3);
+AddColumn(RSpread,"Core RSpread",1.3);
+AddColumn(PriorATR,"Core PriorATR",1.4);
+AddColumn(EffortDirectionalResultStateCode,"Core EDR State Code",1.0);
+AddTextColumn("CORE_RUNTIME_V02_PROBE_20260912_A","PROBE VERSION");

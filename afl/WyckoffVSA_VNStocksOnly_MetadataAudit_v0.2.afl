@@ -1,0 +1,32 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    VN STOCKS ONLY - database metadata audit.
+
+    Purpose:
+    - inspect AmiBroker category metadata before building the production stock-only watchlist;
+    - do NOT classify by ticker pattern;
+    - do NOT modify any category or watchlist;
+    - do NOT run analytical Runtime engines.
+
+    Run on the same AmiBroker database/universe used for Runtime benchmarking.
+*/
+#pragma nocache
+
+U_LastBar = BarIndex() == LastValue( BarIndex() );
+Filter = U_LastBar;
+
+AddTextColumn( Name(), "U_Symbol" );
+AddTextColumn( FullName(), "U_FullName" );
+AddColumn( MarketID(), "U_MarketID", 1.0 );
+AddTextColumn( MarketID( 1 ), "U_MarketName" );
+AddColumn( GroupID(), "U_GroupID", 1.0 );
+AddTextColumn( GroupID( 1 ), "U_GroupName" );
+AddColumn( SectorID(), "U_SectorID", 1.0 );
+AddTextColumn( SectorID( 1 ), "U_SectorName" );
+AddColumn( IndustryID(), "U_IndustryID", 1.0 );
+AddTextColumn( IndustryID( 1 ), "U_IndustryName" );
+AddColumn( DateTime(), "U_LastDate", formatDateTime );
+AddColumn( BarIndex(), "U_LastBarIndex", 1.0 );
+AddColumn( Close, "U_LastClose", 1.4 );
+AddColumn( Volume, "U_LastVolume", 1.0 );
+AddTextColumn( "VN_STOCKS_ONLY_METADATA_AUDIT_V02_20260913_A", "U_ProbeVersion" );
