@@ -24,9 +24,9 @@ U_SectorID = SectorID();
 U_AllowedMarket = ( U_MarketID == 1 ) || ( U_MarketID == 2 ) || ( U_MarketID == 3 );
 U_EquityGroup = U_GroupID == 1;
 U_HasFullName = StrLen( U_FullName ) > 0;
-U_FundMetadata = ( U_SectorID == 0 ) && U_HasFullName && ( StrFind( U_FullNameUpper, "QUY" ) > 0 );
-U_UnresolvedMetadata = ( U_SectorID == 0 ) && ( ! U_HasFullName );
-U_EquityMetadata = ( U_SectorID > 0 ) || ( ( U_SectorID == 0 ) && U_HasFullName && ( ! U_FundMetadata ) );
+U_FundMetadata = U_HasFullName && ( StrLeft( U_FullNameUpper, 4 ) == "QUY " );
+U_UnresolvedMetadata = ! U_HasFullName;
+U_EquityMetadata = U_HasFullName && ( ! U_FundMetadata );
 U_IsStock = U_AllowedMarket && U_EquityGroup && U_EquityMetadata;
 
 U_WatchlistID = CategoryFind( U_WatchlistName, categoryWatchlist );
@@ -52,7 +52,7 @@ if( ! U_AllowedMarket ) U_Reason = "EXCLUDED - MARKET";
 else
 if( ! U_EquityGroup ) U_Reason = "EXCLUDED - NON-STOCK GROUP";
 else
-if( U_FundMetadata ) U_Reason = "EXCLUDED - FUND/ETF METADATA";
+if( U_FundMetadata ) U_Reason = "EXCLUDED - FUND/ETF/REIT METADATA";
 else
 if( U_UnresolvedMetadata ) U_Reason = "EXCLUDED - UNRESOLVED METADATA";
 
@@ -71,4 +71,4 @@ AddColumn( U_IsStock, "U_ExpectedStock", 1.0 );
 AddColumn( U_MemberAfter, "U_WatchlistMemberAfter", 1.0 );
 AddColumn( U_ContractMatch, "U_ContractMatch", 1.0 );
 AddTextColumn( U_Reason, "U_Reason" );
-AddTextColumn( "VN_STOCKS_ONLY_WATCHLIST_BUILDER_V02_20260913_A", "U_ProbeVersion" );
+AddTextColumn( "VN_STOCKS_ONLY_WATCHLIST_BUILDER_V02_20260913_B", "U_ProbeVersion" );
