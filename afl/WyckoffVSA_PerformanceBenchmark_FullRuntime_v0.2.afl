@@ -1,0 +1,63 @@
+/*
+    Wyckoff VSA Performance Runtime v0.2
+    Native per-symbol benchmark: FULL RUNTIME calculation path.
+
+    PURPOSE
+    - measure execution time of the full explicit-order Runtime v0.2 stack;
+    - do not change methodology, calibration, scanner decisions or P&F scope;
+    - emit one row for each data-eligible symbol for offline comparison with
+      the snapshot-only benchmark.
+
+    Measurement uses AmiBroker GetPerformanceCounter(), which reports elapsed
+    milliseconds inside this formula instance. This is a computational
+    per-symbol benchmark, not Analysis-window wall-clock time.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+// Reset high-resolution formula-local counter immediately before the heavy path.
+GetPerformanceCounter(1);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_MultiTimeframeContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+#include_once <WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_MarketScanner_Runtime_v0.2.afl>
+
+WVBF_ElapsedMs = GetPerformanceCounter();
+WVBF_LastBar = BarIndex()==LastValue(BarIndex());
+WVBF_Eligible = WSCN_DataEligibilityCode==1;
+Filter = WVBF_LastBar AND WVBF_Eligible;
+
+AddTextColumn(Name(),"BM_Symbol");
+AddColumn(DateTime(),"BM_Date",formatDateTime);
+AddColumn(0*BarIndex()+WVBF_ElapsedMs,"BM_FullRuntime_ms",1.3);
+AddColumn(WSCN_DataEligibilityCode,"BM_DataEligible",1.0);
+AddColumn(WSCN_CandidateClassCode,"BM_CandidateClass",1.0);
+AddColumn(WSCN_CandidateStageCode,"BM_Stage",1.0);
+AddColumn(WSCN_WatchFlag,"BM_Watch",1.0);
+AddColumn(WSCN_ReviewFlag,"BM_Review",1.0);
+AddColumn(WSCN_MethodBlockReasonMask,"BM_MethodBlockMask",1.0);
+AddTextColumn("PERF_BENCH_FULL_RUNTIME_V02_20260913_A","BM_ProbeVersion");
