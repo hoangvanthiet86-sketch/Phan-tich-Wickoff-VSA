@@ -1,20 +1,20 @@
 # Daily Context Multiplicity — Source Audit 2026-09-13
 
-**Trang thai:** `SOURCE AUDIT / NATIVE DEEP DIAGNOSTIC PENDING`
+**Trang thai:** `NATIVE DEEP DIAGNOSTIC COMPLETE / DESIGN REVIEW REQUIRED`
 
 ## Muc tieu
 
-Dieu tra vi sao 668/1,029 ma `MTF Directional Alignment = 6` co `Daily ContextMultiplicity = 2`, ma khong thay doi methodology va khong noi Fast Scanner/MTF truoc khi biet nguyen nhan upstream.
+Dieu tra vi sao mot luong lon ma `MTF Directional Alignment = 6` co `Daily ContextMultiplicity = 2`, ma khong thay doi methodology va khong noi Fast Scanner/MTF truoc khi biet nguyen nhan upstream.
 
-## Bang chung da co
+## Bang chung MTF da co
 
 Diagnostic native `MTF_CODE6_DIAGNOSTIC_V01_20260913_A` tren `VN STOCKS ONLY` cho thay:
 
 - 1,029 ma co MTF code trong Daily Snapshot = 6;
 - 1,029/1,029 phep tinh lai MTF = 6;
 - 1,029/1,029 doi chieu logic = khop;
-- 668/1,029 ma co `Daily - so vung = Nhieu vung`;
-- 246/1,029 ma Daily chi mot vung nhung directional context van mixed/conflicting;
+- 668/1,029 ma MTF=6 co `Daily ContextMultiplicity = 2`;
+- 246/1,029 ma Daily mot vung nhung directional context van mixed/conflicting;
 - 115/1,029 ma Daily khong mixed, nguyen nhan code 6 den tu Weekly va/hoac Monthly.
 
 Nhu vay 914/1,029 (88.8%) da co ambiguity/mixed state tu tang Daily truoc khi xet quan he da khung.
@@ -23,24 +23,15 @@ Nhu vay 914/1,029 (88.8%) da co ambiguity/mixed state tu tang Daily truoc khi xe
 
 ### 1. Phase/Context duy tri hai channel doc lap
 
-`WyckoffVSA_PhaseContext_v0.1.afl` duy tri lower-derived va upper-derived `RangeContext` doc lap. Moi channel cong bo rieng:
-
-- `ContextPresent`;
-- `RangeContextID`;
-- frozen range low/high/width;
-- `RangeActive`;
-- `RangeTerminal`;
-- Phase/Family va diagnostics lien quan.
+`WyckoffVSA_PhaseContext_v0.1.afl` duy tri lower-derived va upper-derived `RangeContext` doc lap. Moi channel cong bo rieng `ContextPresent`, `RangeActive`, `RangeTerminal`, range boundaries, Phase, Family va diagnostics.
 
 ### 2. PublicSnapshot co khai niem active rieng
 
-`WyckoffVSA_PhaseContext_PublicSnapshot_v0.1.afl` xay `WPCP_L_RangeActivePublic` va `WPCP_U_RangeActivePublic` voi lifecycle:
+`WyckoffVSA_PhaseContext_PublicSnapshot_v0.1.afl` phan biet:
 
-- invalidated context -> status 3, active = 0;
-- Phase-E terminal context -> status 2, active = 0;
-- valid non-terminal present context -> status 1, active = 1.
-
-Invalidation duoc giu sticky trong cung mot `RangeContextID`.
+- invalidated context -> active = 0;
+- Phase-E terminal context -> active = 0;
+- valid non-terminal present context -> active = 1.
 
 ### 3. ConsumerFacade dem ContextPresent, khong dem PublicActive
 
@@ -48,72 +39,102 @@ Invalidation duoc giu sticky trong cung mot `RangeContextID`.
 
 `WPCF_CurrentRangeContextCount = WPC_L_ContextPresent + WPC_U_ContextPresent`
 
-Sau do Composite chuyen count > 1 thanh:
+Composite sau do chuyen count > 1 thanh `ContextMultiplicityCode = 2`, context ambiguous, Family mixed/conflicting va DirectionalContext mixed/conflicting.
 
-- `ContextMultiplicityCode = 2`;
-- context ambiguous;
-- singleton family = mixed/conflicting;
-- directional context = mixed/conflicting.
+Do do nhan `MULTIPLE ACTIVE RANGE CONTEXTS` co the rong hon nghia public-active thuc te.
 
-Do do, ve mat source, `ContextMultiplicity = 2` hien tai co nghia **hai context van PRESENT**, chua du de chung minh **hai range deu ACTIVE theo public lifecycle**.
+## Native deep diagnostic
 
-## Gia thuyet can kiem chung native
+### A. Watchlist builder
 
-Co kha nang mot phan trong 668 ma bi gan `MULTIPLE ACTIVE RANGE CONTEXTS` thuc te chi co:
+`WyckoffVSA_DailyMultiplicity_WatchlistBuilder_v0.1.afl` duoc chay tren `VN STOCKS ONLY` va tao watchlist `WVSA DAILY MULTI RANGE`.
 
-- 1 range dang active + 1 range terminal;
-- 1 range active + 1 range invalidated;
-- hoac ca hai khong con active nhung object context van present.
+Ket qua thuc te:
 
-Neu xay ra, multiplicity/ambiguity co the dang dem rong hon y nghia nhan hien thi `multiple active ranges`.
+- 975 ma co Daily Snapshot hop le va `ContextMultiplicity = 2`;
+- 975/975 da vao watchlist;
+- 975/975 doi chieu membership = khop.
 
-**Day moi la gia thuyet source-level, chua duoc phep ket luan la bug cho den khi co native deep diagnostic.**
+Con so 975 la toan bo Daily multiplicity=2. Trong checkpoint U4, 668/975 thuoc tap Data Eligible; 307/975 la Data Ineligible. Do do 668 truoc day la tap con lien quan truc tiep den Fast Scanner All Eligible / MTF=6, khong phai toan bo Daily multiplicity=2.
 
-## Diagnostic da bo sung
+### B. Deep lifecycle diagnostic tren 975 ma
 
-### A. Lightweight watchlist builder
+Output `DAILY_MULTIPLICITY_DEEP_DIAGNOSTIC_V01_20260913_B` cho thay:
 
-`afl/WyckoffVSA_DailyMultiplicity_WatchlistBuilder_v0.1.afl`
+- 975/975 snapshot count = 2 va live `ContextPresentCount = 2` khop nhau;
+- `PublicActiveCount = 2`: 934 ma (95.79%);
+- `PublicActiveCount = 1`: 38 ma (3.90%);
+- `PublicActiveCount = 0`: 3 ma (0.31%);
+- tong `Nghi ngo dem qua rong = Co`: 41/975 (4.21%).
 
-- chi doc Daily Snapshot;
-- target: `WDSC_Valid AND WDSC_ContextMultiplicity==2`;
-- tao/sync watchlist `WVSA DAILY MULTI RANGE`;
-- khong chay heavy analytical stack.
+Lifecycle theo channel:
 
-### B. Deep lifecycle diagnostic
+- lower active: 951; lower terminal / Phase E: 24;
+- upper active: 955; upper terminal / Phase E: 20;
+- khong ghi nhan invalidated status trong output nay.
 
-`afl/WyckoffVSA_DailyMultiplicity_DeepDiagnostic_v0.1.afl`
+Trong 934 ma co ca hai range thuc su active:
 
-- chi chay tren watchlist 668 ma o tren;
-- dung cung generated Phase/Context Runtime v0.2 stack voi DailyPublisher;
-- khong chay DailyPublisher va khong ghi snapshot;
-- tai lap rieng public active/status lifecycle bang O(N) loop de tranh full PublicSnapshot coordinate-audit loops;
-- so sanh:
-  - snapshot context multiplicity;
-  - live `ContextPresent` count;
-  - public-equivalent active count;
-  - lower/upper terminal/invalid/active state;
-  - geometry cua hai range neu ca hai thuc su active.
+- hai vung long nhau: 344 (36.83%);
+- hai vung tach roi: 322 (34.48%);
+- hai vung chong lan mot phan: 268 (28.69%).
 
-## Native checkpoint can thu
+## Tap con 668 ma lien quan truc tiep den MTF=6 / Data Eligible
 
-Can thong ke toi thieu tren 668 ma:
+Doi chieu 668 ma `ContextMultiplicity=2` trong Fast Scanner All Eligible / MTF diagnostic voi deep lifecycle output:
 
-1. `PublicActiveCount = 2`;
-2. `PublicActiveCount = 1`;
-3. `PublicActiveCount = 0`;
-4. lower/upper status phan bo active / terminal / invalidated;
-5. neu ca hai active: long nhau / overlap mot phan / tach roi;
-6. `SnapshotMultiplicity=2` co khop live `ContextPresentCount=2` hay khong.
+- ca hai range thuc su active: 636/668 (95.21%);
+- chi mot range active: 30/668 (4.49%);
+- khong range nao active: 2/668 (0.30%);
+- dem qua rong theo present-vs-active: 32/668 (4.79%).
 
-Chi sau checkpoint nay moi du bang chung de quyet dinh co can sua semantics multiplicity o Phase/Composite hay khong.
+Trong 636 ma co hai range active:
+
+- hai vung tach roi: 232 (36.48%);
+- hai vung long nhau: 219 (34.43%);
+- hai vung chong lan mot phan: 185 (29.09%);
+- Pha B / Pha B: 263 (41.35%);
+- Family `Vung duoi chua xac nhan` + `Vung tren chua xac nhan`: 487 (76.57%).
+
+Tuoi range trong tap 636:
+
+- lower median 51.5 bars; P90 207 bars; max 1,295 bars;
+- upper median 54 bars; P90 160.5 bars; max 783 bars;
+- rieng hai vung tach roi co tuoi median cao hon: lower 69 bars, upper 77.5 bars.
+
+## Ket luan checkpoint
+
+### Ket luan 1 — co ton tai dem rong, nhung khong phai nguyen nhan chinh
+
+Gia thuyet source-level duoc xac nhan mot phan: 41/975 ma bi gan multiplicity=2 theo `ContextPresent` trong khi public-active count < 2. Trong tap 668 lien quan truc tiep den MTF=6 / Data Eligible, con so nay la 32/668.
+
+Day la mismatch semantics giua nhan `MULTIPLE ACTIVE RANGE CONTEXTS` va cach dem `ContextPresent`. Neu sua multiplicity de dem public-active, mot so ma co the duoc giai phong khoi ambiguity, nhung quy mo chi khoang 4.8% cua tap 668.
+
+### Ket luan 2 — nut that lon hon la chinh sach ambiguity cho hai range thuc su active
+
+636/668 ma van co hai range thuc su active. Composite hien tai co chu y khong chon winner khi hai context cung ton tai, va ep singleton Family/Directional ve mixed/conflicting. MTF sau do quy dinh bat ky multiplicity ambiguous nao cung thanh Directional Alignment = 6.
+
+Vi vay, phan lon nut that khong phai bug snapshot hay Fast Scanner. No la he qua truc tiep cua kien truc/spec: bat ky hai RangeContext cung ton tai deu duoc xem la ambiguity cung cap, bat ke hai range long nhau, overlap hay tach roi.
+
+### Ket luan 3 — phan lon hai-range la unresolved som, khong phai hai directional hypothesis doi nghich da xac nhan
+
+Trong 636 ma hai range active, 76.57% la cap family `Vung duoi chua xac nhan` + `Vung tren chua xac nhan`; 41.35% la Pha B/Pha B. Day cho thay nhieu truong hop ambiguity phat sinh khi engine dang bao toan hai gia thuyet range som, chu khong nhat thiet la hai huong directional da duoc xac nhan va doi nghich.
+
+## Y nghia thiet ke
+
+Khong duoc tu dong noi Fast Scanner hoac xoa MTF conflict. Neu muon tang tinh thuc dung, can mot design review rieng cho multiplicity semantics, toi thieu xem xet hai van de:
+
+1. `ContextMultiplicity` co nen dem `PublicActive` thay vi `ContextPresent` de sua mismatch 41/975 hay khong;
+2. voi hai range thuc su active, co can phan loai them `compatible/coexisting` (vi du nested/overlap unresolved) tach khoi `conflicting`, thay vi ep tat ca vao cung mot mixed state hay khong.
+
+Bat ky thay doi nao o muc 2 se thay doi decision surface va phai co spec moi + acceptance/equivalence moi truoc khi sua production code.
 
 ## Bao ve pham vi
 
-- Khong sua methodology.
+- Khong sua methodology trong diagnostic branch.
 - Khong sua Fast Scanner.
 - Khong sua MTF rules.
 - Khong sua Candidate Class.
 - Khong thay nguong.
-- Khong claim production bug truoc native evidence.
-- Khong merge diagnostic vao integration neu chua duoc chu du an phe duyet.
+- Khong auto-merge PR #46.
+- Ket qua nay la native diagnostic checkpoint, khong phai final release acceptance.
