@@ -2,7 +2,8 @@
     Wyckoff VSA Performance Runtime v0.2
     Centralized runtime configuration surface.
 
-    APPROVED ARCHITECTURE / PRE-NATIVE-TEST IMPLEMENTATION.
+    APPROVED ARCHITECTURE / NATIVE-VALIDATED CHECKPOINT.
+    NOT FINAL RELEASE ACCEPTANCE.
 
     Purpose:
     - provide one ordered, production-facing Parameter namespace;

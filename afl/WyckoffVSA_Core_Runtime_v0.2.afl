@@ -7,7 +7,8 @@
     instead of declaring duplicate legacy Params.
 
     Canonical WyckoffVSA_Core_v1.0.afl remains the reference oracle.
-    PRE-NATIVE-TEST: no equivalence PASS is claimed by this file.
+    NATIVE-VALIDATED CHECKPOINT: Runtime v0.2 equivalence is covered by repository
+    native evidence. This file alone does not constitute final release acceptance.
 */
 
 #include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>

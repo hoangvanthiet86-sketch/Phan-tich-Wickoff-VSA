@@ -2,7 +2,7 @@
     Wyckoff VSA Performance Runtime v0.2
     Snapshot-only Fast Market Scanner.
 
-    PRE-NATIVE-TEST IMPLEMENTATION.
+    NATIVE-VALIDATED CHECKPOINT. NOT FINAL RELEASE ACCEPTANCE.
 
     This formula does NOT execute the heavy Wyckoff/VSA analytical stack.
     It reads the persistent Daily Snapshot, applies the approved production

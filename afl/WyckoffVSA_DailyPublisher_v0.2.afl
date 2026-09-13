@@ -2,7 +2,7 @@
     Wyckoff VSA Performance Runtime v0.2
     Daily Stock Snapshot Publisher.
 
-    PRE-NATIVE-TEST IMPLEMENTATION.
+    NATIVE-VALIDATED CHECKPOINT. NOT FINAL RELEASE ACCEPTANCE.
 
     Runs the native-validated Runtime v0.2 scanner stack once for each symbol
     and persists a compact scalar snapshot. P&F is intentionally excluded.
