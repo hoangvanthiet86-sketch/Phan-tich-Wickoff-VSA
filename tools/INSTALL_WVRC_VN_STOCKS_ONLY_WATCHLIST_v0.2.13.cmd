@@ -28,11 +28,11 @@ if errorlevel 1 goto :fail
 curl.exe -L --fail --silent --show-error "%RAW%/afl/WyckoffVSA_VNStocksOnly_WatchlistAudit_v0.2.afl" -o "%AUDIT%"
 if errorlevel 1 goto :fail
 
-findstr /C:"VN_STOCKS_ONLY_WATCHLIST_BUILDER_V02_20260913_A" "%BUILDER%" >nul || goto :fail
+findstr /C:"VN_STOCKS_ONLY_WATCHLIST_BUILDER_V02_20260913_B" "%BUILDER%" >nul || goto :fail
 findstr /C:"CategoryCreate" "%BUILDER%" >nul || goto :fail
 findstr /C:"CategoryAddSymbol" "%BUILDER%" >nul || goto :fail
 findstr /C:"CategoryRemoveSymbol" "%BUILDER%" >nul || goto :fail
-findstr /C:"VN_STOCKS_ONLY_WATCHLIST_AUDIT_V02_20260913_A" "%AUDIT%" >nul || goto :fail
+findstr /C:"VN_STOCKS_ONLY_WATCHLIST_AUDIT_V02_20260913_B" "%AUDIT%" >nul || goto :fail
 findstr /C:"InWatchListName" "%AUDIT%" >nul || goto :fail
 
 echo INSTALLED: WyckoffVSA_VNStocksOnly_WatchlistBuilder_v0.2.afl
@@ -46,17 +46,17 @@ echo   Apply to: All quotations
 echo   Periodicity: Daily
 echo   Range: 1 recent bar
 echo   Explore
- echo   Expected Exploration rows from current audited database: 1681
- echo   Expected watchlist name: VN STOCKS ONLY
- echo.
+echo   Expected Exploration rows from current audited database: 1668
+echo   Expected watchlist name: VN STOCKS ONLY
+echo.
 echo STEP 2 - VERIFY EXACT MEMBERSHIP:
 echo   Formula: WyckoffVSA_VNStocksOnly_WatchlistAudit_v0.2.afl
 echo   Apply to: All quotations
 echo   Periodicity: Daily
 echo   Range: 1 recent bar
 echo   Explore
- echo   Expected result: ZERO ROWS
- echo.
+echo   Expected result: ZERO ROWS
+echo.
 echo IMPORTANT:
 echo   The builder modifies ONLY the watchlist VN STOCKS ONLY.
 echo   It does NOT modify Market/Group/Sector/Industry metadata.
