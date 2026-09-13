@@ -57,10 +57,12 @@ WMD_AlignmentMatch =
     WMD_RecomputedAlignment==WDSC_MTFDirectionalAlignment;
 
 // Human-readable root-cause bucket. This is diagnostic classification only.
+// Codes are deliberately zero-based because AddMultiTextColumn uses the code
+// as the text-list index.
 WMD_RootCauseCode = IIf(
-    WMD_DMult==2,1,
-    IIf(WMD_DDir==4,2,
-    IIf(WMD_WMult==2 OR WMD_WDir==4 OR WMD_MMult==2 OR WMD_MDir==4,3,4)));
+    WMD_DMult==2,0,
+    IIf(WMD_DDir==4,1,
+    IIf(WMD_WMult==2 OR WMD_WDir==4 OR WMD_MMult==2 OR WMD_MDir==4,2,3)));
 
 WMD_RootCauseText =
     "Daily co nhieu vung giao dich\nDaily mot vung nhung huong van hon hop / xung dot\nNguon gay hon hop nam o Weekly va/hoac Monthly\nKhong thuoc ba nhom chinh - can kiem tra";
@@ -85,6 +87,6 @@ AddMultiTextColumn(WMD_Zero+WMD_MDir,WMD_DirText,"Monthly - huong");
 AddColumn(WMD_Zero+WDSC_MTFDirectionalAlignment,"MTF code trong Daily Snapshot",1.0);
 AddColumn(WMD_Zero+WMD_RecomputedAlignment,"MTF code tinh lai",1.0);
 AddMultiTextColumn(WMD_Zero+WMD_AlignmentMatch,WMD_MatchText,"Doi chieu logic");
-AddTextColumn("MTF_CODE6_DIAGNOSTIC_V01_20260913_A","Phien ban diagnostic");
+AddTextColumn("MTF_CODE6_DIAGNOSTIC_V01_20260913_B","Phien ban diagnostic");
 
 _SECTION_END();
