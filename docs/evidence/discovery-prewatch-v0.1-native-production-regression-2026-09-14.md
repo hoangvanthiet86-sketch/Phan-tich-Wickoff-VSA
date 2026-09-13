@@ -69,7 +69,7 @@ TXT export Filter 2 tra dung 1 dong:
 
 `SNZ | Snapshot Status=1 | Data Eligible=1 | Candidate Class=2 | Side=0 | Stage=1 | Phase=2 | Family=1 | Range Position=0.3500 | MTF=0 | RS=2 | Review=0 | Method Block Mask=7 | FAST_SCANNER_V02_20260913_A`
 
-Filter 2 therefore returns exactly the same sole Production Watch control as before Discovery.
+Filter 2 tra dung cung Production Watch control nhu truoc Discovery.
 
 ## Doi chieu SNZ voi checkpoint truoc Discovery
 
