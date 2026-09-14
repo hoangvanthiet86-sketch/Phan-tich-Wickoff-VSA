@@ -70,8 +70,24 @@ Can it nhat:
 - 2 dong doi thang (co the trung voi dong doi tuan);
 - tat ca row co `Moc tuan hop le = Co` va `Moc thang hop le = Co`.
 
-## 5. Checkpoint khi dat
+## 5. Ket qua native 2026-09-14
+
+AmiBroker 6.20.01 / SNZ / output version `HISTORICAL_MTF_ROLLOVER_PROOF_V01_20260914_A`.
+
+- 485 dong boundary tu 27/11/2017 den 24/08/2026.
+- 443 dong doi tuan.
+- 105 dong doi thang.
+- 63 dong vua doi tuan vua doi thang.
+- 485/485 `Moc tuan hop le = Co`.
+- 485/485 `Moc thang hop le = Co`.
+- 485/485 `Trang thai kiem tra = Dat kiem tra moc doi`.
+- 0 mismatch `Tuan da hoan tat gan nhat = Ma tuan hien tai - 1`.
+- 0 mismatch `Thang da hoan tat gan nhat = Ma thang hien tai - 1`.
+
+Bang chung: `docs/evidence/historical-scanner-v0.1-h2a-native-2026-09-14.md`.
+
+## 6. Checkpoint
 
 `HISTORICAL_SCANNER_V01_H2A_ROLLOVER_BOUNDARY = PASS`
 
-Sau H2A moi tiep tuc H2B historical Weekly/Monthly payload reconstruction.
+H2A da dat. Tiep tuc H2B historical Weekly/Monthly payload reconstruction; chua duoc ghi H2 full PASS.
