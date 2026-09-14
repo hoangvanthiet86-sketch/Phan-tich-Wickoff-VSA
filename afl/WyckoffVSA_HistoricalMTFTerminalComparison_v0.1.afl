@@ -14,9 +14,8 @@
 #pragma nocache
 SetBarsRequired(sbrAll,sbrAll);
 
-// Sibling entrypoint include: use quotes so AmiBroker resolves the file from
-// the same formula directory as this H2C harness instead of Formulas\Include.
-#include_once "WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl"
+// Native AmiBroker 6.20.01 resolves include_once through Formulas\Include.
+#include_once <WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl>
 
 _SECTION_BEGIN("07. DOI CHIEU TERMINAL VOI DAILY SNAPSHOT");
 HTC_Symbol = Name();
@@ -54,7 +53,7 @@ HTC_ProdStable =
     NOT IsNull(HTC_ProdMTFDirectional);
 
 HTC_DateMatchArray = DateNum()==HTC_ProdBusinessDateKey;
-HTC_DateExists = LastValue(Sum(HTC_DateMatchArray))>0;
+HTC_DateExists = LastValue(Cum(HTC_DateMatchArray))>0;
 HTC_LastBar = BarIndex()==LastValue(BarIndex());
 HTC_TargetRow = IIf(HTC_DateExists,HTC_DateMatchArray,HTC_LastBar);
 
@@ -96,7 +95,7 @@ HTC_StatusCode = IIf(
 HTC_StatusText =
     "Daily Snapshot production khong san sang\nKhong tim thay ngay snapshot trong lich su\nHistorical MTF contract khong hop le\nCo sai khac terminal\nKhop hoan toan terminal";
 HTC_YesNoText = "Khong\nCo";
-HTC_Version = "HISTORICAL_MTF_TERMINAL_COMPARISON_V01_20260914_B";
+HTC_Version = "HISTORICAL_MTF_TERMINAL_COMPARISON_V01_20260914_C";
 
 Filter = HTC_TargetRow;
 
