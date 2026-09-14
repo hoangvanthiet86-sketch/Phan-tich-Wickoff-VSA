@@ -25,7 +25,14 @@ _SECTION_END();
 _SECTION_BEGIN("02. DOC TIMELINE THI TRUONG LICH SU");
 HMP_IntervalValid = Interval()==inDaily;
 HMP_DT = DateTime();
-HMP_DateKey = Year()*10000 + Month()*100 + Day();
+
+// Tao khoa ngay YYYYMMDD tu DateNum() de tranh collision quan sat native khi
+// dung Year()*10000 + Month()*100 + Day().
+HMP_DateNum = DateNum();
+HMP_DateYearOffset = Floor(HMP_DateNum/10000);
+HMP_DateRemainder = HMP_DateNum - 10000*HMP_DateYearOffset;
+HMP_DateKey = (1900 + HMP_DateYearOffset)*10000 + HMP_DateRemainder;
+
 HMP_Prefix = "WVSA_HIST_MKT_v01_" + HMP_MarketSymbol + "_";
 
 HMP_Ready = Nz(StaticVarGet(HMP_Prefix+"Ready"),0);
@@ -51,9 +58,12 @@ HMP_MTFPhase = StaticVarGet(HMP_Prefix+"MTFPhaseRelationshipCode");
 HMP_MTFConflict = StaticVarGet(HMP_Prefix+"MTFConflictReasonCode");
 
 // Kiem tra ngay chinh xac de chan moi kieu pad/forward-fill ngam.
+// Ca khoa ngay va DateTime phai trung; khong chi dua vao mot key co the collision.
 HMP_ExactDateMatch =
     NOT IsNull(HMP_SourceDateKey) AND
-    HMP_SourceDateKey==HMP_DateKey;
+    NOT IsNull(HMP_SourceDT) AND
+    HMP_SourceDateKey==HMP_DateKey AND
+    HMP_SourceDT==HMP_DT;
 HMP_NoFutureSource =
     NOT IsNull(HMP_SourceDT) AND
     HMP_SourceDT<=HMP_DT;
@@ -145,7 +155,7 @@ HMP_DirectionalText = "Khong du du lieu\nChua xac dinh\nTang\nGiam\nHon hop / xu
 HMP_EvidenceText = "Khong du du lieu\nNghieng tang\nNghieng giam\nHon hop / xung dot";
 HMP_SelectionText =
     "Khong du du lieu\nTrung tinh / chua ro\nHo tro tang\nHo tro giam\nHon hop / xung dot";
-HMP_Version = "HISTORICAL_MARKET_CONTEXT_PROOF_V01_20260914_A";
+HMP_Version = "HISTORICAL_MARKET_CONTEXT_PROOF_V01_20260914_B";
 
 Filter = HMP_IntervalValid AND IIf(HMP_ShowOnlyProblem,NOT HMP_EffectiveValid,1);
 
