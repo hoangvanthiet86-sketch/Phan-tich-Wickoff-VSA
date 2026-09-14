@@ -1,0 +1,253 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H4 historical stock timeline publisher.
+
+    Chay tren co phieu Daily (control dau tien: SNZ) sau khi timeline Tuan/Thang
+    lich su cua co phieu da duoc ghi boi H2B.
+
+    Nguon:
+      - Daily causal stock arrays + historical MTF tu H2B;
+      - RS stock/VNINDEX causal arrays tai dung semantics Relative Strength v0.1;
+      - KHONG doc Daily Snapshot production;
+      - KHONG doc current MTF snapshot production;
+      - KHONG tao trading signal.
+
+    Namespace rieng:
+      WVSA_HIST_STOCK_v01_<SYMBOL>_*
+
+    UI moi do file nay tao ra dung tieng Viet khong dau theo HS14.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl>
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+
+function HST_Finite(x)
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+function HST_StageFromPhase(phaseCode)
+{
+    return IIf(phaseCode==1 OR phaseCode==2,1,
+           IIf(phaseCode==3 OR phaseCode==4,2,
+           IIf(phaseCode==5,3,
+           IIf(phaseCode==6,4,
+           IIf(phaseCode==7,5,0)))));
+}
+
+_SECTION_BEGIN("07. RS LICH SU STOCK VOI THI TRUONG");
+HST_RSMarketSymbol = WVRC_RSMarketSymbol;
+HST_RSMarketConfigured = StrLen(HST_RSMarketSymbol)>0;
+HST_RSMarketClose = Null + 0*BarIndex();
+if (HST_RSMarketConfigured)
+{
+    // fixup=0: ngay benchmark thieu phai de Null, khong forward-fill ngam.
+    HST_RSMarketClose = Foreign(HST_RSMarketSymbol,"C",0);
+}
+
+HST_StockCloseValid = HST_Finite(Close) AND Close>0;
+HST_RSMarketCloseFinite = HST_Finite(HST_RSMarketClose);
+HST_RSMarketStatus = IIf(
+    NOT HST_RSMarketConfigured,0,
+    IIf(IsNull(HST_RSMarketClose),1,
+    IIf(NOT HST_RSMarketCloseFinite OR HST_RSMarketClose<=0,2,3)));
+HST_RSMarketCloseValid = HST_RSMarketStatus==3;
+
+HST_RatioValid = HST_StockCloseValid AND HST_RSMarketCloseValid;
+HST_Ratio = IIf(HST_RatioValid,Close/HST_RSMarketClose,Null);
+
+// Tai dung confirmed-pivot semantics cua RelativeStrengthContext v0.1.
+HST_RSKernel = WDP_RunDerivedSeries(
+    "HIST_SVM",HST_Ratio,HST_RatioValid,
+    WVRC_PivotLeft,WVRC_PivotRight,BarIndex(),DateTime(),Cum(1)-1);
+
+HST_RSHiCode = VarGet("WDP_HIST_SVM_PivotHighEventCode");
+HST_RSLoCode = VarGet("WDP_HIST_SVM_PivotLowEventCode");
+HST_RSHiValue = VarGet("WDP_HIST_SVM_PivotHighEventValue");
+HST_RSLoValue = VarGet("WDP_HIST_SVM_PivotLowEventValue");
+HST_RSHiCount = Cum(HST_RSHiCode==2);
+HST_RSLoCount = Cum(HST_RSLoCode==2);
+HST_RSHi1 = ValueWhen(HST_RSHiCode==2,HST_RSHiValue,1);
+HST_RSHi2 = ValueWhen(HST_RSHiCode==2,HST_RSHiValue,2);
+HST_RSLo1 = ValueWhen(HST_RSLoCode==2,HST_RSLoValue,1);
+HST_RSLo2 = ValueWhen(HST_RSLoCode==2,HST_RSLoValue,2);
+HST_RSStructureValid = HST_RSHiCount>=2 AND HST_RSLoCount>=2;
+HST_RSStructure = IIf(NOT HST_RSStructureValid,0,
+    IIf(HST_RSHi1>HST_RSHi2 AND HST_RSLo1>HST_RSLo2,1,
+    IIf(HST_RSHi1<HST_RSHi2 AND HST_RSLo1<HST_RSLo2,2,3)));
+
+// Price structure dung confirmed pivot events canonical cua StructureLocation.
+HST_PriceHiCode = VarGet("SL_PivotHighEventCode");
+HST_PriceLoCode = VarGet("SL_PivotLowEventCode");
+HST_PriceHiValue = VarGet("SL_PivotHighEventPrice");
+HST_PriceLoValue = VarGet("SL_PivotLowEventPrice");
+HST_PriceHiCount = Cum(HST_PriceHiCode==2);
+HST_PriceLoCount = Cum(HST_PriceLoCode==2);
+HST_PriceHi1 = ValueWhen(HST_PriceHiCode==2,HST_PriceHiValue,1);
+HST_PriceHi2 = ValueWhen(HST_PriceHiCode==2,HST_PriceHiValue,2);
+HST_PriceLo1 = ValueWhen(HST_PriceLoCode==2,HST_PriceLoValue,1);
+HST_PriceLo2 = ValueWhen(HST_PriceLoCode==2,HST_PriceLoValue,2);
+HST_PriceStructureValid = HST_PriceHiCount>=2 AND HST_PriceLoCount>=2;
+HST_PriceStructure = IIf(NOT HST_PriceStructureValid,0,
+    IIf(HST_PriceHi1>HST_PriceHi2 AND HST_PriceLo1>HST_PriceLo2,1,
+    IIf(HST_PriceHi1<HST_PriceHi2 AND HST_PriceLo1<HST_PriceLo2,2,3)));
+
+HST_PriceRSRelationship = IIf(
+    NOT HST_PriceStructureValid OR HST_RSStructure==0,0,
+    IIf(HST_PriceStructure==1 AND HST_RSStructure==1,1,
+    IIf(HST_PriceStructure==1 AND HST_RSStructure==2,2,
+    IIf(HST_PriceStructure==2 AND HST_RSStructure==1,3,
+    IIf(HST_PriceStructure==2 AND HST_RSStructure==2,4,5)))));
+
+HST_SLPivotConfigValid = VarGet("SL_PivotConfigValid");
+HST_RSPivotConfigValid = NOT IsNull(HST_SLPivotConfigValid) AND HST_SLPivotConfigValid==1;
+HST_RSContextComputable = Interval()==inDaily AND HST_RSPivotConfigValid AND HST_RatioValid;
+HST_RSContextValid = HST_RSContextComputable AND WVRC_RSAdjustmentBasisStatus==1;
+HST_RSContextStatus = IIf(
+    Interval()!=inDaily,1,
+    IIf(NOT HST_RSMarketConfigured,2,
+    IIf(HST_RSMarketStatus!=3,3,
+    IIf(NOT HST_RSPivotConfigValid,4,
+    IIf(WVRC_RSAdjustmentBasisStatus==2,5,
+    IIf(WVRC_RSAdjustmentBasisStatus!=1,6,
+    IIf(WCI_ProvisionalFlag==1,7,0)))))));
+_SECTION_END();
+
+_SECTION_BEGIN("08. STOCK PAYLOAD LICH SU");
+HST_Symbol = Name();
+HST_DT = DateTime();
+HST_DateKey = DateNum();
+HST_IntervalValid = Interval()==inDaily;
+HST_Prefix = "WVSA_HIST_STOCK_v01_" + HST_Symbol + "_";
+HST_Version = "HISTORICAL_STOCK_TIMELINE_PUBLISHER_V01_20260914_A";
+
+HST_Stage = HST_StageFromPhase(WCI_PhaseStateCode);
+HST_SingleLower = WCI_ContextMultiplicityCode==1 AND
+    WPC_L_ContextPresent==1 AND WPC_U_ContextPresent!=1;
+HST_SingleUpper = WCI_ContextMultiplicityCode==1 AND
+    WPC_U_ContextPresent==1 AND WPC_L_ContextPresent!=1;
+HST_RangeStatus = IIf(HST_SingleLower,WPCP_L_RangeStatusCode,
+    IIf(HST_SingleUpper,WPCP_U_RangeStatusCode,0));
+HST_RangePosition = IIf(HST_SingleLower,WPC_L_RangePosition,
+    IIf(HST_SingleUpper,WPC_U_RangePosition,Null));
+HST_RangePositionValid = IIf(HST_SingleLower,WPC_L_RangePositionValid,
+    IIf(HST_SingleUpper,WPC_U_RangePositionValid,0));
+HST_RangeUsableActive = WCI_ContextMultiplicityCode==1 AND
+    HST_RangeStatus==1 AND HST_RangePositionValid==1 AND HST_Finite(HST_RangePosition);
+HST_RangeLocationConflict = HST_Stage==1 AND HST_RangeUsableActive AND
+    (HST_RangePosition<0 OR HST_RangePosition>1);
+HST_RangeLocationCoherent = HST_Stage!=1 OR
+    (HST_RangeUsableActive AND HST_RangePosition>=0 AND HST_RangePosition<=1);
+
+HST_StockSchemaValid =
+    WCI_PublicSchemaMajor==1 AND WCI_PublicSchemaMinor==0;
+
+// SourceValid chi phan anh stock causal payload co mat; MTF/RS duoc giu thanh
+// cac validity field rieng de H4 tai dung dung exclusion semantics production.
+HST_SourceValid =
+    HST_IntervalValid AND
+    HST_StockSchemaValid AND
+    WCI_ProvisionalFlag==0 AND
+    HST_StockCloseValid AND
+    NOT IsNull(WCI_ContextMultiplicityCode) AND
+    NOT IsNull(WCI_DirectionalContextCode) AND
+    NOT IsNull(WCI_PhaseStateCode) AND
+    NOT IsNull(WCI_FamilyHypothesisCode) AND
+    NOT IsNull(WCI_EvidenceBalanceCode) AND
+    NOT IsNull(WCI_HypothesisAlignmentCode);
+
+HST_ValidCount = LastValue(Cum(HST_SourceValid));
+_SECTION_END();
+
+_SECTION_BEGIN("09. GHI TIMELINE STOCK LICH SU");
+HST_WriteAllowed = ParamToggle(
+    "9.1 Cho phep ghi timeline co phieu lich su",
+    "Khong|Co",0);
+
+// 0 chua chay; 1 da ghi; 2 sai khung; 3 chua cho phep; 4 khong co payload;
+// 5 xac minh ghi that bai.
+HST_StatusCode = 0;
+if (NOT HST_IntervalValid)
+{
+    HST_StatusCode = 2;
+}
+else
+if (NOT HST_WriteAllowed)
+{
+    HST_StatusCode = 3;
+}
+else
+if (BarCount<=0 OR HST_ValidCount<=0 OR StrLen(HST_Symbol)<=0)
+{
+    HST_StatusCode = 4;
+}
+else
+{
+    HST_PreviousGeneration = Nz(StaticVarGet(HST_Prefix+"CommittedGenerationID"),0);
+    HST_NewGeneration = HST_PreviousGeneration + 1;
+
+    StaticVarSet(HST_Prefix+"Ready",0,True);
+    StaticVarSet(HST_Prefix+"SchemaMajor",1,True);
+    StaticVarSet(HST_Prefix+"SchemaMinor",0,True);
+    StaticVarSetText(HST_Prefix+"Symbol",HST_Symbol,True);
+    StaticVarSetText(HST_Prefix+"ProducerVersion",HST_Version,True);
+    StaticVarSetText(HST_Prefix+"RSMarketSymbol",HST_RSMarketSymbol,True);
+
+    StaticVarSet(HST_Prefix+"SourceBusinessDateKey",HST_DateKey,True);
+    StaticVarSet(HST_Prefix+"SourceBarDateTime",HST_DT,True);
+    StaticVarSet(HST_Prefix+"SourceValid",HST_SourceValid,True);
+    StaticVarSet(HST_Prefix+"StockSchemaValid",HST_StockSchemaValid,True);
+    StaticVarSet(HST_Prefix+"ProvisionalFlag",WCI_ProvisionalFlag,True);
+    StaticVarSet(HST_Prefix+"Close",Close,True);
+
+    StaticVarSet(HST_Prefix+"ContextMultiplicityCode",WCI_ContextMultiplicityCode,True);
+    StaticVarSet(HST_Prefix+"DirectionalContextCode",WCI_DirectionalContextCode,True);
+    StaticVarSet(HST_Prefix+"PhaseStateCode",WCI_PhaseStateCode,True);
+    StaticVarSet(HST_Prefix+"FamilyHypothesisCode",WCI_FamilyHypothesisCode,True);
+    StaticVarSet(HST_Prefix+"EvidenceBalanceCode",WCI_EvidenceBalanceCode,True);
+    StaticVarSet(HST_Prefix+"HypothesisAlignmentCode",WCI_HypothesisAlignmentCode,True);
+    StaticVarSet(HST_Prefix+"CurrentEventMask",WCI_CurrentEventMask,True);
+
+    StaticVarSet(HST_Prefix+"RangeStatusCode",HST_RangeStatus,True);
+    StaticVarSet(HST_Prefix+"RangePosition",HST_RangePosition,True);
+    StaticVarSet(HST_Prefix+"RangePositionValid",HST_RangePositionValid,True);
+    StaticVarSet(HST_Prefix+"RangeUsableActive",HST_RangeUsableActive,True);
+    StaticVarSet(HST_Prefix+"RangeLocationCoherent",HST_RangeLocationCoherent,True);
+    StaticVarSet(HST_Prefix+"RangeLocationConflict",HST_RangeLocationConflict,True);
+
+    StaticVarSet(HST_Prefix+"MTFContractValid",HPM_ContractValid,True);
+    StaticVarSet(HST_Prefix+"MTFDirectionalAlignmentCode",HPM_DirectionalAlignment,True);
+    StaticVarSet(HST_Prefix+"MTFEvidenceAlignmentCode",HPM_EvidenceAlignment,True);
+    StaticVarSet(HST_Prefix+"MTFPhaseRelationshipCode",HPM_PhaseRelationship,True);
+    StaticVarSet(HST_Prefix+"MTFConflictReasonCode",HPM_ConflictMask,True);
+
+    StaticVarSet(HST_Prefix+"RSContextValid",HST_RSContextValid,True);
+    StaticVarSet(HST_Prefix+"RSContextStatusCode",HST_RSContextStatus,True);
+    StaticVarSet(HST_Prefix+"RSMarketBenchmarkStatusCode",HST_RSMarketStatus,True);
+    StaticVarSet(HST_Prefix+"RSStockVsMarketStructureCode",HST_RSStructure,True);
+    StaticVarSet(HST_Prefix+"RSPriceRelationshipCode",HST_PriceRSRelationship,True);
+
+    StaticVarSet(HST_Prefix+"CommittedGenerationID",HST_NewGeneration,True);
+    StaticVarSet(HST_Prefix+"Ready",1,True);
+
+    HST_VerifyReady = StaticVarGet(HST_Prefix+"Ready");
+    HST_VerifyGeneration = StaticVarGet(HST_Prefix+"CommittedGenerationID");
+    HST_StatusCode = IIf(
+        HST_VerifyReady==1 AND HST_VerifyGeneration==HST_NewGeneration,
+        1,5);
+}
+
+HST_StatusText =
+    "Chua chay\nDa ghi timeline co phieu\nSai khung thoi gian\nChua cho phep ghi\nKhong co payload hop le\nXac minh ghi that bai";
+HST_StatusArray = 0*BarIndex()+HST_StatusCode;
+HST_ValidCountArray = 0*BarIndex()+HST_ValidCount;
+HST_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = HST_LastBar;
+
+AddTextColumn(HST_Symbol,"Ma co phieu");
+AddColumn(HST_ValidCountArray,"So ngay stock payload hop le",1.0);
+AddMultiTextColumn(HST_StatusArray,HST_StatusText,"Trang thai ghi");
+AddTextColumn(HST_Version,"Phien ban H4 publisher");
+_SECTION_END();
