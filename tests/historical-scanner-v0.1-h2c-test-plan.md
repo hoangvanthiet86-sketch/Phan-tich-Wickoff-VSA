@@ -7,6 +7,21 @@ Doi chieu terminal-date historical reconstruction voi persisted Daily Snapshot p
 AFL:
 `afl/WyckoffVSA_HistoricalMTFTerminalComparison_v0.1.afl`
 
+## Cai dat cuc bo bat buoc
+
+H2C dung lai logic H2B trong:
+`WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl`
+
+Tu ban `HISTORICAL_MTF_TERMINAL_COMPARISON_V01_20260914_B`, H2C include tep nay bang dau nhay kep de AmiBroker resolve tu **cung thu muc formula** voi H2C, khong phai `Formulas\Include`.
+
+Vi vay hai tep sau phai nam cung mot thu muc cuc bo:
+- `WyckoffVSA_HistoricalMTFTerminalComparison_v0.1.afl`
+- `WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl`
+
+Neu chay truc tiep tu `Downloads`, ca hai tep phai cung nam trong `Downloads`. Neu cai vao `Formulas\afl`, ca hai tep phai cung nam trong `Formulas\afl`.
+
+Cac runtime dependency ben trong H2B (`HistoricalRuntimeDefaults`, runtime modules v0.2...) van duoc resolve tu `Formulas\Include` nhu H2B native run da xac nhan.
+
 ## Cau hinh native
 
 - Apply to: `SNZ`
