@@ -1,0 +1,82 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    Fixed runtime-default contract for historical proof harnesses.
+
+    Muc dich:
+    - cung cap dung cac gia tri mac dinh cua RuntimeConfig v0.2 cho runtime stack;
+    - KHONG tao Param de cac proof harness khong lo ra giao dien tieng Anh tu module cu;
+    - KHONG doi threshold, methodology, enum hay decision semantics.
+
+    Chuoi noi bo co the giu canonical English vi khong hien thi cho nguoi dung.
+*/
+
+WVRC_UseCentralConfig = 1;
+
+WVRC_RuntimeProfileCode = 0;
+WVRC_ProductionFilterCode = 2;
+WVRC_LastBarProvisional = 0;
+
+WVRC_VolumeLookback = 20;
+WVRC_SpreadLookback = 20;
+WVRC_ATRPeriod = 14;
+WVRC_HighEffortRVOL = 1.80;
+WVRC_LowEffortRVOL = 0.75;
+WVRC_LowDirectionalResultATR = 0.35;
+WVRC_HighDirectionalResultATR = 0.80;
+
+WVRC_ShortLookback = 20;
+WVRC_MediumLookback = 60;
+WVRC_LongLookback = 120;
+WVRC_PivotLeft = 3;
+WVRC_PivotRight = 3;
+
+WVRC_RSMarketSymbol = "VNINDEX";
+WVRC_RSGroupSymbol = "";
+WVRC_RSAdjustmentBasisDeclaration = "ADJUSTED PRICE";
+WVRC_RSAdjustmentBasisStatus = 1;
+
+WVRC_SelectionMarketSymbol = "VNINDEX";
+WVRC_SelectionGroupSymbol = "";
+WVRC_RequireFullTopDown = 0;
+
+WVRC_PnFRuntimeModeRequested = 0;
+WVRC_PnFBoxSize = 1;
+WVRC_PnFGridOrigin = 0;
+WVRC_PnFReversalBoxes = 3;
+WVRC_PnFAdjustmentBasisDeclaration = "COMPATIBLE - DECLARED";
+WVRC_PnFAdjustmentBasisStatus = 1;
+
+WVRC_OutputDetailRequested = 0;
+WVRC_ShowDecisionDiagnostics = 0;
+WVRC_ShowRangeDiagnostics = 0;
+WVRC_ShowDebugTitle = 0;
+WVRC_PnFSourceRevisionStatus = 0;
+
+WVRC_PnFRuntimeModeEffective = 0;
+WVRC_OutputDetailEffective = 0;
+
+WVRC_ThresholdConfigValid =
+    WVRC_LowEffortRVOL < WVRC_HighEffortRVOL AND
+    WVRC_LowDirectionalResultATR < WVRC_HighDirectionalResultATR;
+
+WVRC_MarketIdentityConsistent =
+    WVRC_RSMarketSymbol == WVRC_SelectionMarketSymbol;
+
+WVRC_GroupIdentityConsistent =
+    WVRC_RSGroupSymbol == WVRC_SelectionGroupSymbol;
+
+WVRC_RoleIdentityValid =
+    NOT (
+        StrLen(WVRC_SelectionMarketSymbol)>0 AND
+        StrLen(WVRC_SelectionGroupSymbol)>0 AND
+        WVRC_SelectionMarketSymbol==WVRC_SelectionGroupSymbol
+    );
+
+WVRC_ConfigValid =
+    WVRC_ThresholdConfigValid AND
+    WVRC_MarketIdentityConsistent AND
+    WVRC_GroupIdentityConsistent AND
+    WVRC_RoleIdentityValid;
+
+WVRC_RuntimeConfigSchemaMajor = 2;
+WVRC_RuntimeConfigSchemaMinor = 0;
