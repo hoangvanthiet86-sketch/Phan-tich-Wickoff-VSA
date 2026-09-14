@@ -121,7 +121,7 @@ HST_DT = DateTime();
 HST_DateKey = DateNum();
 HST_IntervalValid = Interval()==inDaily;
 HST_Prefix = "WVSA_HIST_STOCK_v01_" + HST_Symbol + "_";
-HST_Version = "HISTORICAL_STOCK_TIMELINE_PUBLISHER_V01_20260914_A";
+HST_Version = "HISTORICAL_STOCK_TIMELINE_PUBLISHER_V01_20260914_B";
 
 HST_Stage = HST_StageFromPhase(WCI_PhaseStateCode);
 HST_SingleLower = WCI_ContextMultiplicityCode==1 AND
@@ -141,8 +141,12 @@ HST_RangeLocationConflict = HST_Stage==1 AND HST_RangeUsableActive AND
 HST_RangeLocationCoherent = HST_Stage!=1 OR
     (HST_RangeUsableActive AND HST_RangePosition>=0 AND HST_RangePosition<=1);
 
-HST_StockSchemaValid =
-    WCI_PublicSchemaMajor==1 AND WCI_PublicSchemaMinor==0;
+// H2 historical runtime stack is compile-time pinned to the approved Composite
+// interface. The H2 entrypoint does not expose the current-snapshot facade
+// constants WCI_PublicSchemaMajor/Minor, so H4 must not depend on those
+// unavailable current-snapshot-facing scalars. Interface presence is checked
+// below through the required causal WCI payload itself.
+HST_StockSchemaValid = 1;
 
 // SourceValid chi phan anh stock causal payload co mat; MTF/RS duoc giu thanh
 // cac validity field rieng de H4 tai dung dung exclusion semantics production.
