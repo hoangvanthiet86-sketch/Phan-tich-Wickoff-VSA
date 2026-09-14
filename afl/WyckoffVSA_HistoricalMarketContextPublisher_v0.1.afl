@@ -1,0 +1,119 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H3 historical Market context timeline publisher.
+
+    Chay tren benchmark thi truong (mac dinh VNINDEX) o khung Daily sau khi
+    timeline Tuan/Thang lich su cua chinh benchmark da duoc ghi boi H2B.
+
+    Nguon historical duy nhat:
+      WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl
+      -> Daily causal Composite + historical W/M MTF reconstruction.
+
+    Namespace rieng:
+      WVSA_HIST_MKT_v01_<SYMBOL>_*
+
+    KHONG ghi de WVSA_SELCTX_v01_* production.
+    KHONG tao trading signal.
+    UI do file nay tao ra dung tieng Viet khong dau theo HS14.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+// Native AmiBroker 6.20.01: include duoc resolve qua Formulas\Include.
+#include_once <WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl>
+
+_SECTION_BEGIN("07. GHI BOI CANH THI TRUONG LICH SU");
+HMC_WriteAllowed = ParamToggle(
+    "7.1 Cho phep ghi boi canh thi truong lich su",
+    "Khong|Co",0);
+
+HMC_Symbol = Name();
+HMC_IntervalValid = Interval()==inDaily;
+HMC_SourceDateTime = DateTime();
+HMC_SourceBusinessDateKey = Year()*10000 + Month()*100 + Day();
+HMC_Prefix = "WVSA_HIST_MKT_v01_" + HMC_Symbol + "_";
+HMC_Version = "HISTORICAL_MARKET_CONTEXT_PUBLISHER_V01_20260914_A";
+
+HMC_SourceValid =
+    HMC_IntervalValid AND
+    HPM_ContractValid AND
+    WCI_ProvisionalFlag==0 AND
+    NOT IsNull(HPM_DMult) AND
+    NOT IsNull(HPM_DDir) AND
+    NOT IsNull(HPM_DEvidence) AND
+    NOT IsNull(WCI_HypothesisAlignmentCode) AND
+    NOT IsNull(HPM_DPhase) AND
+    NOT IsNull(WCI_StructuralDevelopmentCode) AND
+    NOT IsNull(HPM_DirectionalAlignment) AND
+    NOT IsNull(HPM_EvidenceAlignment) AND
+    NOT IsNull(HPM_PhaseRelationship) AND
+    NOT IsNull(HPM_ConflictMask);
+
+HMC_ValidCount = LastValue(Cum(HMC_SourceValid));
+
+// 0 chua chay; 1 da ghi; 2 sai khung; 3 chua cho phep ghi;
+// 4 khong co payload hop le; 5 xac minh ghi that bai.
+HMC_StatusCode = 0;
+
+if (NOT HMC_IntervalValid)
+{
+    HMC_StatusCode = 2;
+}
+else
+if (NOT HMC_WriteAllowed)
+{
+    HMC_StatusCode = 3;
+}
+else
+if (BarCount<=0 OR HMC_ValidCount<=0 OR StrLen(HMC_Symbol)<=0)
+{
+    HMC_StatusCode = 4;
+}
+else
+{
+    HMC_PreviousGeneration = Nz(StaticVarGet(HMC_Prefix+"CommittedGenerationID"),0);
+    HMC_NewGeneration = HMC_PreviousGeneration + 1;
+
+    StaticVarSet(HMC_Prefix+"Ready",0,True);
+    StaticVarSet(HMC_Prefix+"SchemaMajor",1,True);
+    StaticVarSet(HMC_Prefix+"SchemaMinor",0,True);
+    StaticVarSetText(HMC_Prefix+"Symbol",HMC_Symbol,True);
+    StaticVarSetText(HMC_Prefix+"ProducerVersion",HMC_Version,True);
+
+    StaticVarSet(HMC_Prefix+"SourceBusinessDateKey",HMC_SourceBusinessDateKey,True);
+    StaticVarSet(HMC_Prefix+"SourceBarDateTime",HMC_SourceDateTime,True);
+    StaticVarSet(HMC_Prefix+"SourceValid",HMC_SourceValid,True);
+
+    StaticVarSet(HMC_Prefix+"ContextMultiplicityCode",HPM_DMult,True);
+    StaticVarSet(HMC_Prefix+"DirectionalContextCode",HPM_DDir,True);
+    StaticVarSet(HMC_Prefix+"EvidenceBalanceCode",HPM_DEvidence,True);
+    StaticVarSet(HMC_Prefix+"HypothesisAlignmentCode",WCI_HypothesisAlignmentCode,True);
+    StaticVarSet(HMC_Prefix+"PhaseStateCode",HPM_DPhase,True);
+    StaticVarSet(HMC_Prefix+"StructuralDevelopmentCode",WCI_StructuralDevelopmentCode,True);
+    StaticVarSet(HMC_Prefix+"MTFDirectionalAlignmentCode",HPM_DirectionalAlignment,True);
+    StaticVarSet(HMC_Prefix+"MTFEvidenceAlignmentCode",HPM_EvidenceAlignment,True);
+    StaticVarSet(HMC_Prefix+"MTFPhaseRelationshipCode",HPM_PhaseRelationship,True);
+    StaticVarSet(HMC_Prefix+"MTFConflictReasonCode",HPM_ConflictMask,True);
+
+    StaticVarSet(HMC_Prefix+"CommittedGenerationID",HMC_NewGeneration,True);
+    StaticVarSet(HMC_Prefix+"Ready",1,True);
+
+    HMC_VerifyReady = StaticVarGet(HMC_Prefix+"Ready");
+    HMC_VerifyGeneration = StaticVarGet(HMC_Prefix+"CommittedGenerationID");
+    HMC_StatusCode = IIf(
+        HMC_VerifyReady==1 AND HMC_VerifyGeneration==HMC_NewGeneration,
+        1,5);
+}
+
+HMC_StatusText =
+    "Chua chay\nDa ghi timeline thi truong\nSai khung thoi gian\nChua cho phep ghi\nKhong co payload hop le\nXac minh ghi that bai";
+HMC_StatusArray = 0*BarIndex()+HMC_StatusCode;
+HMC_ValidCountArray = 0*BarIndex()+HMC_ValidCount;
+HMC_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = HMC_LastBar;
+
+AddTextColumn(HMC_Symbol,"Ma thi truong");
+AddColumn(HMC_ValidCountArray,"So ngay payload hop le",1.0);
+AddMultiTextColumn(HMC_StatusArray,HMC_StatusText,"Trang thai ghi");
+AddTextColumn(HMC_Version,"Phien ban H3 publisher");
+_SECTION_END();
