@@ -37,6 +37,14 @@ trong:
 
 Cac runtime include v0.2 can giu nhu H2 native.
 
+## Quy tac khoa ngay H3
+
+Native B cho thay viec chuyen `DateNum()` sang so dang YYYYMMDD khoang 20 trieu lam mat bit don vi trong AFL float va tao collision giua nhieu ngay. Tu ban C:
+- Publisher va Proof dung `DateNum()` goc lam `Khoa ngay`.
+- `DateNum()` nam trong mien so nguyen duoc AFL float bieu dien chinh xac.
+- Exact-date guard bat buoc ca `Khoa ngay co phieu == Khoa ngay thi truong` va `Ngay co phieu == Ngay nguon thi truong`.
+- Khong duoc nghiem thu bang khoa YYYYMMDD tu tao.
+
 ## Trinh tu native
 
 ### H3-A1 — Ghi Weekly timeline cho VNINDEX
@@ -50,7 +58,7 @@ AFL:
 - `1.1 Cho phep ghi timeline lich su = Co`
 - Explore
 
-Kỳ vong:
+Ky vong:
 - `Khung nguon = W`
 - `Trang thai ghi = Da ghi timeline`
 
@@ -63,7 +71,7 @@ Cung AFL tren:
 - `1.1 Cho phep ghi timeline lich su = Co`
 - Explore
 
-Kỳ vong:
+Ky vong:
 - `Khung nguon = M`
 - `Trang thai ghi = Da ghi timeline`
 
@@ -78,10 +86,10 @@ AFL:
 - `7.1 Cho phep ghi boi canh thi truong lich su = Co`
 - Explore
 
-Kỳ vong:
+Ky vong:
 - `Trang thai ghi = Da ghi timeline thi truong`
 - `So ngay payload hop le > 0`
-- phien ban `HISTORICAL_MARKET_CONTEXT_PUBLISHER_V01_20260914_A`
+- phien ban `HISTORICAL_MARKET_CONTEXT_PUBLISHER_V01_20260914_C`
 
 ## H3-B — Point-in-time alignment tren SNZ
 
@@ -106,6 +114,7 @@ Tai cac dong sau warm-up co source:
 Moi dong duoc danh dau `Boi canh thi truong hop le = Co` phai co:
 - `Khop dung ngay benchmark = Co`
 - `Khoa ngay co phieu == Khoa ngay thi truong`
+- `Ngay co phieu == Ngay nguon thi truong`
 - `Nguon khong den tu tuong lai = Co`
 
 Khong chap nhan forward-fill ngam tu ngay benchmark cu.
