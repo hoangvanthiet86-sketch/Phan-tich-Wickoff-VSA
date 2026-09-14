@@ -1,0 +1,346 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H2B Historical Weekly/Monthly payload + categorical MTF proof.
+
+    Nguon higher timeframe DUY NHAT:
+        WVSA_HIST_MTF_v01_<SYMBOL>_<W|M>_*
+    do WyckoffVSA_HistoricalTimeframeTimelinePublisher_v0.1.afl tao.
+
+    Cam doc current production snapshot namespace WVSA_MTF_v01_*.
+    Cam doc DailySnapshotConsumer / TimeframeSnapshotConsumer.
+    Khong co trading semantics.
+
+    Toan bo UI do file nay tao ra dung tieng Viet khong dau theo HS14.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+
+_SECTION_BEGIN("01. CHE DO HIEN THI");
+HPM_OnlyBoundary = ParamToggle(
+    "1.1 Dong hien thi",
+    "Tat ca ngay co payload|Chi ngay doi tuan / doi thang",1);
+_SECTION_END();
+
+_SECTION_BEGIN("02. MOC THOI GIAN NHAN QUA");
+HPM_DT = DateTime();
+HPM_DN = DateNum();
+HPM_BI = BarIndex();
+HPM_IntervalValid = Interval()==inDaily;
+HPM_WeekEpoch = _DT("2000-01-03 00:00:00");
+HPM_CurrentWOrd = Floor(DateTimeDiff(HPM_DT,HPM_WeekEpoch)/604800);
+HPM_ExpectedWOrd = HPM_CurrentWOrd - 1;
+HPM_YearOffset = Floor(HPM_DN/10000);
+HPM_Year = 1900 + HPM_YearOffset;
+HPM_DateRemainder = HPM_DN - 10000*HPM_YearOffset;
+HPM_Month = Floor(HPM_DateRemainder/100);
+HPM_CurrentMOrd = HPM_Year*12 + HPM_Month;
+HPM_ExpectedMOrd = HPM_CurrentMOrd - 1;
+HPM_HasPriorBar = HPM_BI>0;
+HPM_W_Rollover = HPM_HasPriorBar AND HPM_CurrentWOrd!=Ref(HPM_CurrentWOrd,-1);
+HPM_M_Rollover = HPM_HasPriorBar AND HPM_CurrentMOrd!=Ref(HPM_CurrentMOrd,-1);
+HPM_AnyRollover = HPM_W_Rollover OR HPM_M_Rollover;
+_SECTION_END();
+
+_SECTION_BEGIN("03. DOC TIMELINE WEEKLY LICH SU");
+HPM_Symbol = Name();
+HPM_WPrefix = "WVSA_HIST_MTF_v01_" + HPM_Symbol + "_W_";
+HPM_WReadyScalar =
+    Nz(StaticVarGet(HPM_WPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(HPM_WPrefix+"CommittedGenerationID"),0)>0 AND
+    StaticVarGetText(HPM_WPrefix+"Symbol")==HPM_Symbol AND
+    StaticVarGetText(HPM_WPrefix+"TimeframeCode")=="W";
+
+HPM_WRawValid = StaticVarGet(HPM_WPrefix+"SourceValid");
+HPM_WRawOrd = StaticVarGet(HPM_WPrefix+"SourcePeriodOrdinal");
+HPM_WRawDT = StaticVarGet(HPM_WPrefix+"SourceBarDateTime");
+HPM_WRawMult = StaticVarGet(HPM_WPrefix+"ContextMultiplicityCode");
+HPM_WRawRangeID = StaticVarGet(HPM_WPrefix+"CurrentRangeContextID");
+HPM_WRawRangeStatus = StaticVarGet(HPM_WPrefix+"RangeStatusCode");
+HPM_WRawRangeLow = StaticVarGet(HPM_WPrefix+"PrimaryRangeLow");
+HPM_WRawRangeHigh = StaticVarGet(HPM_WPrefix+"PrimaryRangeHigh");
+HPM_WRawRangeAge = StaticVarGet(HPM_WPrefix+"RangeAgeBars");
+HPM_WRawPhase = StaticVarGet(HPM_WPrefix+"PhaseStateCode");
+HPM_WRawFamily = StaticVarGet(HPM_WPrefix+"FamilyHypothesisCode");
+HPM_WRawDir = StaticVarGet(HPM_WPrefix+"DirectionalContextCode");
+HPM_WRawEvidence = StaticVarGet(HPM_WPrefix+"EvidenceBalanceCode");
+HPM_WRawEventMask = StaticVarGet(HPM_WPrefix+"CurrentEventMask");
+
+HPM_WSeen = HPM_WReadyScalar AND HPM_WRawValid==1 AND NOT IsNull(HPM_WRawOrd);
+HPM_WLastOrd = ValueWhen(HPM_WSeen,HPM_WRawOrd);
+HPM_WLastDT = ValueWhen(HPM_WSeen,HPM_WRawDT);
+HPM_WLastMult = ValueWhen(HPM_WSeen,HPM_WRawMult);
+HPM_WLastRangeID = ValueWhen(HPM_WSeen,HPM_WRawRangeID);
+HPM_WLastRangeStatus = ValueWhen(HPM_WSeen,HPM_WRawRangeStatus);
+HPM_WLastRangeLow = ValueWhen(HPM_WSeen,HPM_WRawRangeLow);
+HPM_WLastRangeHigh = ValueWhen(HPM_WSeen,HPM_WRawRangeHigh);
+HPM_WLastRangeAge = ValueWhen(HPM_WSeen,HPM_WRawRangeAge);
+HPM_WLastPhase = ValueWhen(HPM_WSeen,HPM_WRawPhase);
+HPM_WLastFamily = ValueWhen(HPM_WSeen,HPM_WRawFamily);
+HPM_WLastDir = ValueWhen(HPM_WSeen,HPM_WRawDir);
+HPM_WLastEvidence = ValueWhen(HPM_WSeen,HPM_WRawEvidence);
+HPM_WLastEventMask = ValueWhen(HPM_WSeen,HPM_WRawEventMask);
+
+// Tai ngay rollover, chi duoc chup payload da thay truoc bar Daily hien tai.
+HPM_WCandidateOrd = Ref(HPM_WLastOrd,-1);
+HPM_WCandidateDT = Ref(HPM_WLastDT,-1);
+HPM_WCandidateMult = Ref(HPM_WLastMult,-1);
+HPM_WCandidateRangeID = Ref(HPM_WLastRangeID,-1);
+HPM_WCandidateRangeStatus = Ref(HPM_WLastRangeStatus,-1);
+HPM_WCandidateRangeLow = Ref(HPM_WLastRangeLow,-1);
+HPM_WCandidateRangeHigh = Ref(HPM_WLastRangeHigh,-1);
+HPM_WCandidateRangeAge = Ref(HPM_WLastRangeAge,-1);
+HPM_WCandidatePhase = Ref(HPM_WLastPhase,-1);
+HPM_WCandidateFamily = Ref(HPM_WLastFamily,-1);
+HPM_WCandidateDir = Ref(HPM_WLastDir,-1);
+HPM_WCandidateEvidence = Ref(HPM_WLastEvidence,-1);
+HPM_WCandidateEventMask = Ref(HPM_WLastEventMask,-1);
+
+HPM_WAccept =
+    HPM_W_Rollover AND
+    HPM_WReadyScalar AND
+    NOT IsNull(HPM_WCandidateOrd) AND
+    HPM_WCandidateOrd==HPM_ExpectedWOrd AND
+    HPM_WCandidateDT < HPM_DT;
+
+HPM_WSelectedOrd = ValueWhen(HPM_WAccept,HPM_WCandidateOrd);
+HPM_WSelectedDT = ValueWhen(HPM_WAccept,HPM_WCandidateDT);
+HPM_WSelectedMult = ValueWhen(HPM_WAccept,HPM_WCandidateMult);
+HPM_WSelectedRangeID = ValueWhen(HPM_WAccept,HPM_WCandidateRangeID);
+HPM_WSelectedRangeStatus = ValueWhen(HPM_WAccept,HPM_WCandidateRangeStatus);
+HPM_WSelectedRangeLow = ValueWhen(HPM_WAccept,HPM_WCandidateRangeLow);
+HPM_WSelectedRangeHigh = ValueWhen(HPM_WAccept,HPM_WCandidateRangeHigh);
+HPM_WSelectedRangeAge = ValueWhen(HPM_WAccept,HPM_WCandidateRangeAge);
+HPM_WSelectedPhase = ValueWhen(HPM_WAccept,HPM_WCandidatePhase);
+HPM_WSelectedFamily = ValueWhen(HPM_WAccept,HPM_WCandidateFamily);
+HPM_WSelectedDir = ValueWhen(HPM_WAccept,HPM_WCandidateDir);
+HPM_WSelectedEvidence = ValueWhen(HPM_WAccept,HPM_WCandidateEvidence);
+HPM_WSelectedEventMask = ValueWhen(HPM_WAccept,HPM_WCandidateEventMask);
+
+HPM_WValid =
+    HPM_WReadyScalar AND
+    NOT IsNull(HPM_WSelectedOrd) AND
+    HPM_WSelectedOrd==HPM_ExpectedWOrd AND
+    HPM_WSelectedDT < HPM_DT;
+_SECTION_END();
+
+_SECTION_BEGIN("04. DOC TIMELINE MONTHLY LICH SU");
+HPM_MPrefix = "WVSA_HIST_MTF_v01_" + HPM_Symbol + "_M_";
+HPM_MReadyScalar =
+    Nz(StaticVarGet(HPM_MPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(HPM_MPrefix+"CommittedGenerationID"),0)>0 AND
+    StaticVarGetText(HPM_MPrefix+"Symbol")==HPM_Symbol AND
+    StaticVarGetText(HPM_MPrefix+"TimeframeCode")=="M";
+
+HPM_MRawValid = StaticVarGet(HPM_MPrefix+"SourceValid");
+HPM_MRawOrd = StaticVarGet(HPM_MPrefix+"SourcePeriodOrdinal");
+HPM_MRawDT = StaticVarGet(HPM_MPrefix+"SourceBarDateTime");
+HPM_MRawMult = StaticVarGet(HPM_MPrefix+"ContextMultiplicityCode");
+HPM_MRawRangeID = StaticVarGet(HPM_MPrefix+"CurrentRangeContextID");
+HPM_MRawRangeStatus = StaticVarGet(HPM_MPrefix+"RangeStatusCode");
+HPM_MRawRangeLow = StaticVarGet(HPM_MPrefix+"PrimaryRangeLow");
+HPM_MRawRangeHigh = StaticVarGet(HPM_MPrefix+"PrimaryRangeHigh");
+HPM_MRawRangeAge = StaticVarGet(HPM_MPrefix+"RangeAgeBars");
+HPM_MRawPhase = StaticVarGet(HPM_MPrefix+"PhaseStateCode");
+HPM_MRawFamily = StaticVarGet(HPM_MPrefix+"FamilyHypothesisCode");
+HPM_MRawDir = StaticVarGet(HPM_MPrefix+"DirectionalContextCode");
+HPM_MRawEvidence = StaticVarGet(HPM_MPrefix+"EvidenceBalanceCode");
+HPM_MRawEventMask = StaticVarGet(HPM_MPrefix+"CurrentEventMask");
+
+HPM_MSeen = HPM_MReadyScalar AND HPM_MRawValid==1 AND NOT IsNull(HPM_MRawOrd);
+HPM_MLastOrd = ValueWhen(HPM_MSeen,HPM_MRawOrd);
+HPM_MLastDT = ValueWhen(HPM_MSeen,HPM_MRawDT);
+HPM_MLastMult = ValueWhen(HPM_MSeen,HPM_MRawMult);
+HPM_MLastRangeID = ValueWhen(HPM_MSeen,HPM_MRawRangeID);
+HPM_MLastRangeStatus = ValueWhen(HPM_MSeen,HPM_MRawRangeStatus);
+HPM_MLastRangeLow = ValueWhen(HPM_MSeen,HPM_MRawRangeLow);
+HPM_MLastRangeHigh = ValueWhen(HPM_MSeen,HPM_MRawRangeHigh);
+HPM_MLastRangeAge = ValueWhen(HPM_MSeen,HPM_MRawRangeAge);
+HPM_MLastPhase = ValueWhen(HPM_MSeen,HPM_MRawPhase);
+HPM_MLastFamily = ValueWhen(HPM_MSeen,HPM_MRawFamily);
+HPM_MLastDir = ValueWhen(HPM_MSeen,HPM_MRawDir);
+HPM_MLastEvidence = ValueWhen(HPM_MSeen,HPM_MRawEvidence);
+HPM_MLastEventMask = ValueWhen(HPM_MSeen,HPM_MRawEventMask);
+
+HPM_MCandidateOrd = Ref(HPM_MLastOrd,-1);
+HPM_MCandidateDT = Ref(HPM_MLastDT,-1);
+HPM_MCandidateMult = Ref(HPM_MLastMult,-1);
+HPM_MCandidateRangeID = Ref(HPM_MLastRangeID,-1);
+HPM_MCandidateRangeStatus = Ref(HPM_MLastRangeStatus,-1);
+HPM_MCandidateRangeLow = Ref(HPM_MLastRangeLow,-1);
+HPM_MCandidateRangeHigh = Ref(HPM_MLastRangeHigh,-1);
+HPM_MCandidateRangeAge = Ref(HPM_MLastRangeAge,-1);
+HPM_MCandidatePhase = Ref(HPM_MLastPhase,-1);
+HPM_MCandidateFamily = Ref(HPM_MLastFamily,-1);
+HPM_MCandidateDir = Ref(HPM_MLastDir,-1);
+HPM_MCandidateEvidence = Ref(HPM_MLastEvidence,-1);
+HPM_MCandidateEventMask = Ref(HPM_MLastEventMask,-1);
+
+HPM_MAccept =
+    HPM_M_Rollover AND
+    HPM_MReadyScalar AND
+    NOT IsNull(HPM_MCandidateOrd) AND
+    HPM_MCandidateOrd==HPM_ExpectedMOrd AND
+    HPM_MCandidateDT < HPM_DT;
+
+HPM_MSelectedOrd = ValueWhen(HPM_MAccept,HPM_MCandidateOrd);
+HPM_MSelectedDT = ValueWhen(HPM_MAccept,HPM_MCandidateDT);
+HPM_MSelectedMult = ValueWhen(HPM_MAccept,HPM_MCandidateMult);
+HPM_MSelectedRangeID = ValueWhen(HPM_MAccept,HPM_MCandidateRangeID);
+HPM_MSelectedRangeStatus = ValueWhen(HPM_MAccept,HPM_MCandidateRangeStatus);
+HPM_MSelectedRangeLow = ValueWhen(HPM_MAccept,HPM_MCandidateRangeLow);
+HPM_MSelectedRangeHigh = ValueWhen(HPM_MAccept,HPM_MCandidateRangeHigh);
+HPM_MSelectedRangeAge = ValueWhen(HPM_MAccept,HPM_MCandidateRangeAge);
+HPM_MSelectedPhase = ValueWhen(HPM_MAccept,HPM_MCandidatePhase);
+HPM_MSelectedFamily = ValueWhen(HPM_MAccept,HPM_MCandidateFamily);
+HPM_MSelectedDir = ValueWhen(HPM_MAccept,HPM_MCandidateDir);
+HPM_MSelectedEvidence = ValueWhen(HPM_MAccept,HPM_MCandidateEvidence);
+HPM_MSelectedEventMask = ValueWhen(HPM_MAccept,HPM_MCandidateEventMask);
+
+HPM_MValid =
+    HPM_MReadyScalar AND
+    NOT IsNull(HPM_MSelectedOrd) AND
+    HPM_MSelectedOrd==HPM_ExpectedMOrd AND
+    HPM_MSelectedDT < HPM_DT;
+_SECTION_END();
+
+_SECTION_BEGIN("05. TAI DUNG MTF CATEGORICAL");
+HPM_DValid = HPM_IntervalValid AND WCI_ProvisionalFlag==0;
+HPM_ContractValid = HPM_DValid AND HPM_WValid AND HPM_MValid;
+
+HPM_DMult = WCI_ContextMultiplicityCode;
+HPM_DPhase = WCI_PhaseStateCode;
+HPM_DFamily = WCI_FamilyHypothesisCode;
+HPM_DDir = WCI_DirectionalContextCode;
+HPM_DEvidence = WCI_EvidenceBalanceCode;
+
+HPM_WMult = IIf(HPM_WValid,HPM_WSelectedMult,0);
+HPM_WPhase = IIf(HPM_WValid,HPM_WSelectedPhase,0);
+HPM_WFamily = IIf(HPM_WValid,HPM_WSelectedFamily,0);
+HPM_WDir = IIf(HPM_WValid,HPM_WSelectedDir,0);
+HPM_WEvidence = IIf(HPM_WValid,HPM_WSelectedEvidence,0);
+
+HPM_MMult = IIf(HPM_MValid,HPM_MSelectedMult,0);
+HPM_MPhase = IIf(HPM_MValid,HPM_MSelectedPhase,0);
+HPM_MFamily = IIf(HPM_MValid,HPM_MSelectedFamily,0);
+HPM_MDir = IIf(HPM_MValid,HPM_MSelectedDir,0);
+HPM_MEvidence = IIf(HPM_MValid,HPM_MSelectedEvidence,0);
+
+HPM_AnyMultiplicityAmbiguous = HPM_DMult==2 OR HPM_WMult==2 OR HPM_MMult==2;
+HPM_AnyDirectionalMixed = HPM_DDir==4 OR HPM_WDir==4 OR HPM_MDir==4;
+HPM_WMDirectional = (HPM_WDir==2 OR HPM_WDir==3) AND (HPM_MDir==2 OR HPM_MDir==3);
+HPM_WMSameDirectional = HPM_WMDirectional AND HPM_WDir==HPM_MDir;
+HPM_WMOppositeDirectional = HPM_WMDirectional AND HPM_WDir!=HPM_MDir;
+HPM_DDirectional = HPM_DDir==2 OR HPM_DDir==3;
+
+HPM_DirectionalAlignment = IIf(
+    NOT HPM_ContractValid,0,
+    IIf(HPM_AnyMultiplicityAmbiguous OR HPM_AnyDirectionalMixed,6,
+    IIf(HPM_WMOppositeDirectional,5,
+    IIf(HPM_WMSameDirectional AND HPM_DDirectional AND HPM_DDir!=HPM_WDir,4,
+    IIf(HPM_DDir==2 AND HPM_WDir==2 AND HPM_MDir==2,2,
+    IIf(HPM_DDir==3 AND HPM_WDir==3 AND HPM_MDir==3,3,
+    IIf(HPM_DDir==0 OR HPM_WDir==0 OR HPM_MDir==0,0,
+    IIf(HPM_DDir==1 OR HPM_WDir==1 OR HPM_MDir==1,1,6))))))));
+
+HPM_EvidenceAlignment = IIf(
+    NOT HPM_ContractValid,0,
+    IIf(HPM_DEvidence==0 OR HPM_WEvidence==0 OR HPM_MEvidence==0,0,
+    IIf(HPM_DEvidence==3 OR HPM_WEvidence==3 OR HPM_MEvidence==3,5,
+    IIf(HPM_WEvidence!=HPM_MEvidence,4,
+    IIf(HPM_DEvidence!=HPM_WEvidence,3,
+    IIf(HPM_DEvidence==1 AND HPM_WEvidence==1 AND HPM_MEvidence==1,1,
+    IIf(HPM_DEvidence==2 AND HPM_WEvidence==2 AND HPM_MEvidence==2,2,5)))))));
+
+HPM_PhaseRelationship = IIf(
+    NOT HPM_ContractValid,0,
+    IIf(HPM_AnyMultiplicityAmbiguous,5,
+    IIf(HPM_DPhase==0 OR HPM_WPhase==0 OR HPM_MPhase==0,0,
+    IIf(HPM_DPhase==HPM_WPhase AND HPM_DPhase==HPM_MPhase,1,
+    IIf(HPM_DPhase==7 OR HPM_WPhase==7 OR HPM_MPhase==7,4,
+    IIf(HPM_DPhase<HPM_WPhase AND HPM_DPhase<HPM_MPhase,2,
+    IIf(HPM_DPhase>HPM_WPhase AND HPM_DPhase>HPM_MPhase,3,4)))))));
+
+HPM_ConflictMask =
+      IIf(NOT HPM_ContractValid,1,0)
+    + IIf(HPM_ContractValid AND HPM_DirectionalAlignment==1,2,0)
+    + IIf(HPM_ContractValid AND (HPM_AnyMultiplicityAmbiguous OR HPM_AnyDirectionalMixed),4,0)
+    + IIf(HPM_DirectionalAlignment==5,8,0)
+    + IIf(HPM_DirectionalAlignment==4,16,0)
+    + IIf(HPM_DirectionalAlignment==6 AND NOT (HPM_AnyMultiplicityAmbiguous OR HPM_AnyDirectionalMixed),32,0)
+    + IIf(HPM_EvidenceAlignment==4,64,0)
+    + IIf(HPM_EvidenceAlignment==3,128,0)
+    + IIf(HPM_EvidenceAlignment==5,256,0)
+    + IIf(HPM_PhaseRelationship==4,512,0)
+    + IIf(HPM_PhaseRelationship==5,1024,0);
+_SECTION_END();
+
+_SECTION_BEGIN("06. KET QUA KIEM TRA H2B");
+HPM_YesNoText = "Khong\nCo";
+HPM_MultiplicityText = "Khong co vung\nMot vung\nNhieu vung";
+HPM_DirectionalText = "Khong du du lieu\nChua xac dinh\nTang\nGiam\nHon hop / xung dot";
+HPM_PhaseText = "Khong du du lieu\nPha A\nPha B\nPha C ung vien\nPha C\nPha D\nPha E\nDa het hieu luc";
+HPM_FamilyText = "Khong du du lieu\nVung duoi chua xac nhan\nVung tren chua xac nhan\nGia thuyet tich luy\nGia thuyet tai phan phoi\nGia thuyet phan phoi\nGia thuyet tai tich luy\nBang chung hon hop / xung dot";
+HPM_MTDirText = "Khong du du lieu MTF\nChua xac dinh / phi dinh huong\nDong thuan tang\nDong thuan giam\nKhung Ngay nguoc khung lon\nKhung Tuan va Thang xung dot\nMTF hon hop / phuc tap";
+HPM_MTEvidenceText = "Khong du du lieu\nBang chung tang dong thuan\nBang chung giam dong thuan\nBang chung Ngay nguoc khung lon\nBang chung Tuan va Thang xung dot\nBang chung hon hop / phuc tap";
+HPM_MTPhaseText = "Khong du du lieu\nCung trang thai pha\nNgay som hon ve cau truc\nNgay muon hon ve cau truc\nPha phan ky\nNhieu vung / khong ro";
+HPM_StatusCode = IIf(
+    NOT HPM_IntervalValid,0,
+    IIf(NOT HPM_WReadyScalar OR NOT HPM_MReadyScalar,1,
+    IIf(NOT HPM_WValid OR NOT HPM_MValid,2,
+    IIf(HPM_ContractValid,3,2))));
+HPM_StatusText = "Sai khung thoi gian\nChua co du timeline Tuan/Thang\nChua du payload da hoan tat\nDat tai dung payload va MTF";
+HPM_Version = "HISTORICAL_MTF_PAYLOAD_PROOF_V01_20260914_B";
+
+Filter = HPM_IntervalValid AND IIf(HPM_OnlyBoundary,HPM_AnyRollover,HPM_ContractValid);
+
+AddColumn(HPM_DT,"Ngay du lieu",formatDateTime);
+AddMultiTextColumn(HPM_W_Rollover,HPM_YesNoText,"Doi tuan");
+AddColumn(HPM_ExpectedWOrd,"Tuan can dung",1.0);
+AddColumn(HPM_WSelectedOrd,"Tuan payload da chon",1.0);
+AddColumn(HPM_WSelectedDT,"Ngay nguon Tuan",formatDateTime);
+AddMultiTextColumn(HPM_WValid,HPM_YesNoText,"Payload Tuan hop le");
+AddMultiTextColumn(HPM_WMult,HPM_MultiplicityText,"Tuan - so vung");
+AddMultiTextColumn(HPM_WPhase,HPM_PhaseText,"Tuan - pha");
+AddMultiTextColumn(HPM_WFamily,HPM_FamilyText,"Tuan - gia thuyet");
+AddMultiTextColumn(HPM_WDir,HPM_DirectionalText,"Tuan - huong");
+
+AddMultiTextColumn(HPM_M_Rollover,HPM_YesNoText,"Doi thang");
+AddColumn(HPM_ExpectedMOrd,"Thang can dung",1.0);
+AddColumn(HPM_MSelectedOrd,"Thang payload da chon",1.0);
+AddColumn(HPM_MSelectedDT,"Ngay nguon Thang",formatDateTime);
+AddMultiTextColumn(HPM_MValid,HPM_YesNoText,"Payload Thang hop le");
+AddMultiTextColumn(HPM_MMult,HPM_MultiplicityText,"Thang - so vung");
+AddMultiTextColumn(HPM_MPhase,HPM_PhaseText,"Thang - pha");
+AddMultiTextColumn(HPM_MFamily,HPM_FamilyText,"Thang - gia thuyet");
+AddMultiTextColumn(HPM_MDir,HPM_DirectionalText,"Thang - huong");
+
+AddMultiTextColumn(HPM_DMult,HPM_MultiplicityText,"Ngay - so vung");
+AddMultiTextColumn(HPM_DPhase,HPM_PhaseText,"Ngay - pha");
+AddMultiTextColumn(HPM_DFamily,HPM_FamilyText,"Ngay - gia thuyet");
+AddMultiTextColumn(HPM_DDir,HPM_DirectionalText,"Ngay - huong");
+AddMultiTextColumn(HPM_DirectionalAlignment,HPM_MTDirText,"MTF - dong thuan huong");
+AddMultiTextColumn(HPM_EvidenceAlignment,HPM_MTEvidenceText,"MTF - dong thuan bang chung");
+AddMultiTextColumn(HPM_PhaseRelationship,HPM_MTPhaseText,"MTF - quan he pha");
+AddColumn(HPM_ConflictMask,"MTF - ma xung dot",1.0);
+AddMultiTextColumn(HPM_StatusCode,HPM_StatusText,"Trang thai kiem tra");
+AddTextColumn(HPM_Version,"Phien ban");
+_SECTION_END();

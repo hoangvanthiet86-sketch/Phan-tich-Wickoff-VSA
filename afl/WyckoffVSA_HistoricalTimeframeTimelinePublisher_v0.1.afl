@@ -1,0 +1,147 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H2B higher-timeframe historical timeline publisher.
+
+    Chay rieng tren native Weekly va native Monthly cho mot ma.
+    Ghi TOAN BO Composite payload timeline vao namespace lich su rieng:
+        WVSA_HIST_MTF_v01_<SYMBOL>_<W|M>_*
+
+    KHONG ghi de WVSA_MTF_v01_* production namespace.
+    KHONG tao trading signal.
+    Toan bo UI do file nay tao ra dung tieng Viet khong dau theo HS14.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+
+_SECTION_BEGIN("01. DIEU KHIEN GHI TIMELINE LICH SU");
+HHTP_WriteAllowed = ParamToggle(
+    "1.1 Cho phep ghi timeline lich su",
+    "Khong|Co",0);
+_SECTION_END();
+
+_SECTION_BEGIN("02. NGUON VA CONTRACT");
+HHTP_IsWeekly = Interval()==inWeekly;
+HHTP_IsMonthly = Interval()==inMonthly;
+HHTP_IntervalValid = HHTP_IsWeekly OR HHTP_IsMonthly;
+HHTP_Symbol = Name();
+HHTP_TFCode = "";
+if (HHTP_IsWeekly) HHTP_TFCode = "W";
+if (HHTP_IsMonthly) HHTP_TFCode = "M";
+
+HHTP_DT = DateTime();
+HHTP_WeekEpoch = _DT("2000-01-03 00:00:00");
+HHTP_WeeklyOrdinal = Floor(DateTimeDiff(HHTP_DT,HHTP_WeekEpoch)/604800);
+HHTP_MonthlyOrdinal = Year()*12 + Month();
+HHTP_SourcePeriodOrdinal = IIf(HHTP_IsWeekly,HHTP_WeeklyOrdinal,HHTP_MonthlyOrdinal);
+
+// Giu dung source-payload validity contract cua Timeframe Snapshot Publisher v0.1.
+HHTP_SourceValid =
+    NOT IsNull(WCI_ContextMultiplicityCode) AND
+    NOT IsNull(WCI_CurrentEventMask) AND
+    WCI_ProvisionalFlag==0;
+
+HHTP_ValidBarCount = LastValue(Cum(HHTP_SourceValid));
+HHTP_Prefix = "WVSA_HIST_MTF_v01_" + HHTP_Symbol + "_" + HHTP_TFCode + "_";
+HHTP_Version = "HISTORICAL_TF_TIMELINE_PUBLISHER_V01_20260914_A";
+_SECTION_END();
+
+_SECTION_BEGIN("03. GHI NAMESPACE LICH SU");
+// 0 CHUA CHAY
+// 1 DA GHI
+// 2 SAI KHUNG
+// 3 CHUA CHO PHEP GHI
+// 4 KHONG CO PAYLOAD HOP LE
+// 5 XAC MINH GHI THAT BAI
+HHTP_StatusCode = 0;
+
+if (NOT HHTP_IntervalValid)
+{
+    HHTP_StatusCode = 2;
+}
+else
+if (NOT HHTP_WriteAllowed)
+{
+    HHTP_StatusCode = 3;
+}
+else
+if (BarCount<=0 OR HHTP_ValidBarCount<=0 OR StrLen(HHTP_Symbol)<=0)
+{
+    HHTP_StatusCode = 4;
+}
+else
+{
+    HHTP_PreviousGeneration = Nz(StaticVarGet(HHTP_Prefix+"CommittedGenerationID"),0);
+    HHTP_NewGeneration = HHTP_PreviousGeneration + 1;
+
+    StaticVarSet(HHTP_Prefix+"Ready",0,True);
+    StaticVarSet(HHTP_Prefix+"SchemaMajor",1,True);
+    StaticVarSet(HHTP_Prefix+"SchemaMinor",0,True);
+    StaticVarSetText(HHTP_Prefix+"Symbol",HHTP_Symbol,True);
+    StaticVarSetText(HHTP_Prefix+"TimeframeCode",HHTP_TFCode,True);
+    StaticVarSetText(HHTP_Prefix+"ProducerVersion",HHTP_Version,True);
+
+    // Provenance timeline.
+    StaticVarSet(HHTP_Prefix+"SourcePeriodOrdinal",HHTP_SourcePeriodOrdinal,True);
+    StaticVarSet(HHTP_Prefix+"SourceBarDateTime",HHTP_DT,True);
+    StaticVarSet(HHTP_Prefix+"SourceValid",HHTP_SourceValid,True);
+
+    // Payload dung bo truong ma MultiTimeframeContext v0.1 tieu thu.
+    StaticVarSet(HHTP_Prefix+"ContextMultiplicityCode",WCI_ContextMultiplicityCode,True);
+    StaticVarSet(HHTP_Prefix+"CurrentRangeContextID",WCI_CurrentRangeContextID,True);
+    StaticVarSet(HHTP_Prefix+"RangeStatusCode",WCI_RangeStatusCode,True);
+    StaticVarSet(HHTP_Prefix+"PrimaryRangeLow",WCI_PrimaryRangeLow,True);
+    StaticVarSet(HHTP_Prefix+"PrimaryRangeHigh",WCI_PrimaryRangeHigh,True);
+    StaticVarSet(HHTP_Prefix+"RangeAgeBars",WCI_RangeAgeBars,True);
+    StaticVarSet(HHTP_Prefix+"PhaseStateCode",WCI_PhaseStateCode,True);
+    StaticVarSet(HHTP_Prefix+"FamilyHypothesisCode",WCI_FamilyHypothesisCode,True);
+    StaticVarSet(HHTP_Prefix+"DirectionalContextCode",WCI_DirectionalContextCode,True);
+    StaticVarSet(HHTP_Prefix+"EvidenceBalanceCode",WCI_EvidenceBalanceCode,True);
+    StaticVarSet(HHTP_Prefix+"CurrentEventMask",WCI_CurrentEventMask,True);
+
+    StaticVarSet(HHTP_Prefix+"CommittedGenerationID",HHTP_NewGeneration,True);
+    StaticVarSet(HHTP_Prefix+"Ready",1,True);
+
+    HHTP_VerifyReady = StaticVarGet(HHTP_Prefix+"Ready");
+    HHTP_VerifyGeneration = StaticVarGet(HHTP_Prefix+"CommittedGenerationID");
+    HHTP_StatusCode = IIf(
+        HHTP_VerifyReady==1 AND HHTP_VerifyGeneration==HHTP_NewGeneration,
+        1,5);
+}
+_SECTION_END();
+
+_SECTION_BEGIN("04. KET QUA GHI");
+HHTP_StatusText =
+    "Chua chay\nDa ghi timeline\nSai khung thoi gian\nChua cho phep ghi\nKhong co payload hop le\nXac minh ghi that bai";
+HHTP_StatusArray = 0*BarIndex()+HHTP_StatusCode;
+HHTP_ValidBarCountArray = 0*BarIndex()+HHTP_ValidBarCount;
+HHTP_LastOrdinalArray = 0*BarIndex()+LastValue(HHTP_SourcePeriodOrdinal);
+HHTP_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = HHTP_LastBar;
+
+AddTextColumn(HHTP_Symbol,"Ma co phieu");
+AddTextColumn(HHTP_TFCode,"Khung nguon");
+AddColumn(BarCount,"Tong so bar",1.0);
+AddColumn(HHTP_ValidBarCountArray,"So bar payload hop le",1.0);
+AddColumn(HHTP_LastOrdinalArray,"Ma ky cuoi",1.0);
+AddMultiTextColumn(HHTP_StatusArray,HHTP_StatusText,"Trang thai ghi");
+AddTextColumn(HHTP_Version,"Phien ban");
+_SECTION_END();
