@@ -1,0 +1,137 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H2C terminal-date comparison against the current persisted Daily Snapshot.
+
+    Historical source:
+      WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl
+      -> Daily causal arrays + WVSA_HIST_MTF_v01_* W/M timelines.
+
+    Production oracle is read ONLY for terminal comparison, never as a
+    historical source.
+
+    UI added by this file is Vietnamese ASCII per HS14.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl>
+
+_SECTION_BEGIN("07. DOI CHIEU TERMINAL VOI DAILY SNAPSHOT");
+HTC_Symbol = Name();
+HTC_ProdPrefix = "WVSA_DAILY_v02_" + HTC_Symbol + "_";
+
+HTC_GenA = Nz(StaticVarGet(HTC_ProdPrefix+"CommittedGenerationID"),0);
+HTC_Ready = Nz(StaticVarGet(HTC_ProdPrefix+"Ready"),0);
+HTC_WriteComplete = Nz(StaticVarGet(HTC_ProdPrefix+"WriteComplete"),0);
+HTC_ProdBusinessDateKey = Nz(StaticVarGet(HTC_ProdPrefix+"BusinessDateKey"),0);
+HTC_ProdSourceDateTime = StaticVarGet(HTC_ProdPrefix+"SourceDateTime");
+HTC_ProdSymbol = StaticVarGetText(HTC_ProdPrefix+"Symbol");
+
+HTC_ProdContextMultiplicity = StaticVarGet(HTC_ProdPrefix+"ContextMultiplicity");
+HTC_ProdPhase = StaticVarGet(HTC_ProdPrefix+"PhaseState");
+HTC_ProdFamily = StaticVarGet(HTC_ProdPrefix+"FamilyHypothesis");
+HTC_ProdDirection = StaticVarGet(HTC_ProdPrefix+"DirectionalContext");
+HTC_ProdEvidence = StaticVarGet(HTC_ProdPrefix+"EvidenceBalance");
+HTC_ProdMTFContractValid = StaticVarGet(HTC_ProdPrefix+"MTFContractValid");
+HTC_ProdMTFDirectional = StaticVarGet(HTC_ProdPrefix+"MTFDirectionalAlignment");
+HTC_ProdMTFEvidence = StaticVarGet(HTC_ProdPrefix+"MTFEvidenceAlignment");
+HTC_ProdMTFPhase = StaticVarGet(HTC_ProdPrefix+"MTFPhaseRelationship");
+
+HTC_GenB = Nz(StaticVarGet(HTC_ProdPrefix+"CommittedGenerationID"),0);
+HTC_ProdStable =
+    HTC_Ready==1 AND
+    HTC_WriteComplete==1 AND
+    HTC_GenA>0 AND
+    HTC_GenA==HTC_GenB AND
+    HTC_ProdBusinessDateKey>0 AND
+    HTC_ProdSymbol==HTC_Symbol AND
+    NOT IsNull(HTC_ProdContextMultiplicity) AND
+    NOT IsNull(HTC_ProdPhase) AND
+    NOT IsNull(HTC_ProdFamily) AND
+    NOT IsNull(HTC_ProdDirection) AND
+    NOT IsNull(HTC_ProdMTFDirectional);
+
+HTC_DateMatchArray = DateNum()==HTC_ProdBusinessDateKey;
+HTC_DateExists = LastValue(Sum(HTC_DateMatchArray))>0;
+HTC_LastBar = BarIndex()==LastValue(BarIndex());
+HTC_TargetRow = IIf(HTC_DateExists,HTC_DateMatchArray,HTC_LastBar);
+
+HTC_HistContract = HPM_ContractValid;
+HTC_MatchContextMultiplicity = HTC_ProdStable AND HTC_DateExists AND HPM_DMult==HTC_ProdContextMultiplicity;
+HTC_MatchPhase = HTC_ProdStable AND HTC_DateExists AND HPM_DPhase==HTC_ProdPhase;
+HTC_MatchFamily = HTC_ProdStable AND HTC_DateExists AND HPM_DFamily==HTC_ProdFamily;
+HTC_MatchDirection = HTC_ProdStable AND HTC_DateExists AND HPM_DDir==HTC_ProdDirection;
+HTC_MatchEvidence = HTC_ProdStable AND HTC_DateExists AND HPM_DEvidence==HTC_ProdEvidence;
+HTC_MatchMTFContract = HTC_ProdStable AND HTC_DateExists AND HPM_ContractValid==HTC_ProdMTFContractValid;
+HTC_MatchMTFDirectional = HTC_ProdStable AND HTC_DateExists AND HPM_DirectionalAlignment==HTC_ProdMTFDirectional;
+HTC_MatchMTFEvidence = HTC_ProdStable AND HTC_DateExists AND HPM_EvidenceAlignment==HTC_ProdMTFEvidence;
+HTC_MatchMTFPhase = HTC_ProdStable AND HTC_DateExists AND HPM_PhaseRelationship==HTC_ProdMTFPhase;
+
+HTC_AllMatch =
+    HTC_ProdStable AND
+    HTC_DateExists AND
+    HTC_HistContract AND
+    HTC_MatchContextMultiplicity AND
+    HTC_MatchPhase AND
+    HTC_MatchFamily AND
+    HTC_MatchDirection AND
+    HTC_MatchEvidence AND
+    HTC_MatchMTFContract AND
+    HTC_MatchMTFDirectional AND
+    HTC_MatchMTFEvidence AND
+    HTC_MatchMTFPhase;
+
+// 0 snapshot production khong san sang
+// 1 khong tim thay ngay snapshot trong Daily history dang nap
+// 2 historical contract khong hop le tai ngay doi chieu
+// 3 co sai khac terminal
+// 4 khop hoan toan
+HTC_StatusCode = IIf(
+    NOT HTC_ProdStable,0,
+    IIf(NOT HTC_DateExists,1,
+    IIf(NOT HTC_HistContract,2,
+    IIf(HTC_AllMatch,4,3))));
+HTC_StatusText =
+    "Daily Snapshot production khong san sang\nKhong tim thay ngay snapshot trong lich su\nHistorical MTF contract khong hop le\nCo sai khac terminal\nKhop hoan toan terminal";
+HTC_YesNoText = "Khong\nCo";
+HTC_Version = "HISTORICAL_MTF_TERMINAL_COMPARISON_V01_20260914_A";
+
+Filter = HTC_TargetRow;
+
+AddColumn(DateTime(),"Ngay Daily dang doi chieu",formatDateTime);
+AddColumn(HTC_ProdBusinessDateKey,"Ngay khoa Daily Snapshot",1.0);
+AddColumn(HTC_ProdSourceDateTime,"Thoi diem nguon Daily Snapshot",formatDateTime);
+AddMultiTextColumn(HTC_ProdStable,HTC_YesNoText,"Daily Snapshot san sang");
+AddMultiTextColumn(HTC_DateExists,HTC_YesNoText,"Co ngay snapshot trong lich su");
+AddMultiTextColumn(HPM_ContractValid,HTC_YesNoText,"Historical MTF contract hop le");
+
+AddColumn(HPM_DMult,"Lich su - so vung",1.0);
+AddColumn(HTC_ProdContextMultiplicity,"Production - so vung",1.0);
+AddMultiTextColumn(HTC_MatchContextMultiplicity,HTC_YesNoText,"Khop so vung");
+AddColumn(HPM_DPhase,"Lich su - pha",1.0);
+AddColumn(HTC_ProdPhase,"Production - pha",1.0);
+AddMultiTextColumn(HTC_MatchPhase,HTC_YesNoText,"Khop pha");
+AddColumn(HPM_DFamily,"Lich su - gia thuyet",1.0);
+AddColumn(HTC_ProdFamily,"Production - gia thuyet",1.0);
+AddMultiTextColumn(HTC_MatchFamily,HTC_YesNoText,"Khop gia thuyet");
+AddColumn(HPM_DDir,"Lich su - huong",1.0);
+AddColumn(HTC_ProdDirection,"Production - huong",1.0);
+AddMultiTextColumn(HTC_MatchDirection,HTC_YesNoText,"Khop huong");
+AddColumn(HPM_DEvidence,"Lich su - bang chung",1.0);
+AddColumn(HTC_ProdEvidence,"Production - bang chung",1.0);
+AddMultiTextColumn(HTC_MatchEvidence,HTC_YesNoText,"Khop bang chung");
+
+AddColumn(HPM_DirectionalAlignment,"Lich su - MTF huong",1.0);
+AddColumn(HTC_ProdMTFDirectional,"Production - MTF huong",1.0);
+AddMultiTextColumn(HTC_MatchMTFDirectional,HTC_YesNoText,"Khop MTF huong");
+AddColumn(HPM_EvidenceAlignment,"Lich su - MTF bang chung",1.0);
+AddColumn(HTC_ProdMTFEvidence,"Production - MTF bang chung",1.0);
+AddMultiTextColumn(HTC_MatchMTFEvidence,HTC_YesNoText,"Khop MTF bang chung");
+AddColumn(HPM_PhaseRelationship,"Lich su - MTF quan he pha",1.0);
+AddColumn(HTC_ProdMTFPhase,"Production - MTF quan he pha",1.0);
+AddMultiTextColumn(HTC_MatchMTFPhase,HTC_YesNoText,"Khop MTF quan he pha");
+AddMultiTextColumn(HTC_MatchMTFContract,HTC_YesNoText,"Khop MTF contract");
+
+AddMultiTextColumn(HTC_StatusCode,HTC_StatusText,"Trang thai doi chieu terminal");
+AddTextColumn(HTC_Version,"Phien ban doi chieu terminal");
+_SECTION_END();
