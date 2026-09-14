@@ -128,14 +128,17 @@ _SECTION_BEGIN("04. KET QUA KIEM TRA H3");
 // 0 sai khung; 1 publisher chua san sang; 2 khong co dung ngay benchmark;
 // 3 source benchmark khong hop le; 4 payload thieu; 5 co source tu tuong lai;
 // 6 mo phong thieu benchmark - fail closed; 7 hop le point-in-time.
+// Khi dang test mo phong thieu benchmark, status 6 co uu tien sau hai dieu kien
+// ha tang toi thieu (Daily + publisher san sang) de diagnostic phan anh dung
+// kich ban test tren ca cac dong source goc vốn da invalid.
 HMP_StatusCode = IIf(
     NOT HMP_IntervalValid,0,
     IIf(NOT HMP_PublisherReady,1,
+    IIf(HMP_SimulateMissing,6,
     IIf(NOT HMP_ExactDateMatch,2,
     IIf(HMP_SourceValid!=1,3,
     IIf(NOT HMP_CorePayloadPresent,4,
-    IIf(NOT HMP_NoFutureSource,5,
-    IIf(HMP_SimulateMissing,6,7)))))));
+    IIf(NOT HMP_NoFutureSource,5,7)))))));
 
 HMP_StatusText =
     "Sai khung thoi gian\n"
@@ -152,7 +155,7 @@ HMP_DirectionalText = "Khong du du lieu\nChua xac dinh\nTang\nGiam\nHon hop / xu
 HMP_EvidenceText = "Khong du du lieu\nNghieng tang\nNghieng giam\nHon hop / xung dot";
 HMP_SelectionText =
     "Khong du du lieu\nTrung tinh / chua ro\nHo tro tang\nHo tro giam\nHon hop / xung dot";
-HMP_Version = "HISTORICAL_MARKET_CONTEXT_PROOF_V01_20260914_C";
+HMP_Version = "HISTORICAL_MARKET_CONTEXT_PROOF_V01_20260914_D";
 
 Filter = HMP_IntervalValid AND IIf(HMP_ShowOnlyProblem,NOT HMP_EffectiveValid,1);
 
