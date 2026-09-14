@@ -10,6 +10,13 @@
 
     P&F Review (Production Filter 5) is intentionally NOT executed here.
     P&F remains deferred to Deep Review / enrichment by architecture contract.
+
+    PRESENTATION-ONLY UPDATE:
+    - Vietnamese ASCII (no-diacritic) Exploration surface for AmiBroker 6.20;
+    - canonical numeric decision fields and filter logic are unchanged;
+    - raw numeric codes remain available when decision diagnostics are enabled;
+    - duplicate Symbol / As-Of Date columns are omitted because AmiBroker
+      already provides Ticker / Date-Time at the start of Exploration output.
 */
 SetBarsRequired(1,0);
 
@@ -78,24 +85,158 @@ WFS_DiagnosticFailureRow =
 Filter = WFS_LastVisibleBar AND
     ((WFS_Ready AND WFS_SelectedByProductionFilter) OR WFS_DiagnosticFailureRow);
 
-// Approved compact DAILY FAST SCAN surface (~14 columns).
-AddTextColumn(Name(),"Symbol");
-AddColumn(0*BarIndex()+WDSC_SourceDateTime,"As-Of Date",formatDateTime);
-AddColumn(0*BarIndex()+WDSC_StatusCode,"Snapshot Status",1.0);
-AddColumn(0*BarIndex()+WDSC_DataEligible,"Data Eligible",1.0);
-AddColumn(0*BarIndex()+WDSC_CandidateClass,"Candidate Class",1.0);
-AddColumn(0*BarIndex()+WDSC_Side,"Candidate Side",1.0);
-AddColumn(0*BarIndex()+WDSC_Stage,"Candidate Stage",1.0);
-AddColumn(0*BarIndex()+WDSC_PhaseState,"Phase",1.0);
-AddColumn(0*BarIndex()+WDSC_FamilyHypothesis,"Family",1.0);
-AddColumn(0*BarIndex()+WDSC_RangePosition,"Range Position",1.4);
-AddColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,"MTF Alignment",1.0);
-AddColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,"RS vs Market",1.0);
-AddColumn(0*BarIndex()+WDSC_Review,"Scanner Review",1.0);
-AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"Method Block Mask",1.0);
+// -----------------------------------------------------------------------------
+// Vietnamese ASCII presentation layer only. These text enums DO NOT change any
+// canonical code, filter, eligibility rule, decision flag or snapshot value.
+// -----------------------------------------------------------------------------
+WFS_VI_SnapshotStatusText =
+    "Khong co du lieu snapshot\nHop le\nGhi du lieu chua hoan tat / the he khong on dinh\nSai luoc do hoac phien ban\nSai ma co phieu\nSai cau hinh\nSnapshot da cu\nSnapshot co ngay o tuong lai\nThieu du lieu bat buoc\nLoi dong ho van hanh";
 
+WFS_VI_DataEligibleText =
+    "Khong du dieu kien du lieu\nDu dieu kien du lieu";
+
+WFS_VI_CandidateClassText =
+    "Bi chan do du lieu\nKhong phai ung vien hien tai\nTheo doi\nDang phat trien - tang\nDu dieu kien - tang, phu hop thi truong\nDu dieu kien - tang, day du tu tren xuong\nDang phat trien - giam\nDu dieu kien - giam, phu hop thi truong\nDu dieu kien - giam, day du tu tren xuong\nCan ra soat - xung dot / mo ho";
+
+WFS_VI_CandidateSideText =
+    "Chua xac dinh\nTang\nGiam";
+
+WFS_VI_CandidateStageText =
+    "Chua du dieu kien\nTheo doi - vung dang hinh thanh / phat trien\nDang phat trien - cho kiem dinh cuoi\nPhat trien co huong\nMo rong xu huong\nKet thuc / bi thay the";
+
+WFS_VI_PhaseText =
+    "Chua du boi canh\nPha A\nPha B\nUng vien Pha C\nPha C\nPha D\nPha E\nVung bi vo hieu / thay the";
+
+WFS_VI_FamilyText =
+    "Chua du du lieu\nVung duoi chua xac nhan\nVung tren chua xac nhan\nGia thuyet tich luy\nGia thuyet tai phan phoi\nGia thuyet phan phoi\nGia thuyet tai tich luy\nBang chung hon hop / xung dot";
+
+WFS_VI_MTFText =
+    "Chua du du lieu da khung\nChua xac dinh / phi huong\nDong thuan tang\nDong thuan giam\nKhung ngay nguoc khung lon\nKhung tuan va thang xung dot\nDa khung hon hop / phuc tap";
+
+WFS_VI_RSMarketText =
+    "Chua du du lieu\nTang - manh hon thi truong\nGiam - yeu hon thi truong\nHon hop";
+
+WFS_VI_ReviewText =
+    "Khong\nCo - can ra soat";
+
+// Decode MethodBlockMask into plain Vietnamese ASCII. Display-only.
+WFS_VI_BlockMaskScalar = LastValue(WDSC_MethodBlockMask);
+WFS_VI_BlockRemain = WFS_VI_BlockMaskScalar;
+WFS_VI_BlockCount = 0;
+WFS_VI_BlockText = "";
+
+if (WFS_VI_BlockRemain>=1024)
+{
+    WFS_VI_BlockText = "Vi tri trong vung Pha A/B khong hop ly";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 1024;
+}
+if (WFS_VI_BlockRemain>=512)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Xung dot cau hinh thi truong / nhom";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 512;
+}
+if (WFS_VI_BlockRemain>=256)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Co nhieu vung giao dich cung luc";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 256;
+}
+if (WFS_VI_BlockRemain>=128)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Dan dat nhom nganh xung dot / chua du";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 128;
+}
+if (WFS_VI_BlockRemain>=64)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Gia va suc manh tuong doi chua xac nhan nhau";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 64;
+}
+if (WFS_VI_BlockRemain>=32)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Bang chung VSA xung dot / hon hop";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 32;
+}
+if (WFS_VI_BlockRemain>=16)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Suc manh tuong doi chua ro / hon hop";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 16;
+}
+if (WFS_VI_BlockRemain>=8)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Da khung thoi gian xung dot";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 8;
+}
+if (WFS_VI_BlockRemain>=4)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Huong co phieu chua ro";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 4;
+}
+if (WFS_VI_BlockRemain>=2)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Pha con qua som";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 2;
+}
+if (WFS_VI_BlockRemain>=1)
+{
+    if (WFS_VI_BlockCount>0) WFS_VI_BlockText = WFS_VI_BlockText + "; ";
+    WFS_VI_BlockText = WFS_VI_BlockText + "Boi canh thi truong chua thuan / chua ro";
+    WFS_VI_BlockCount = WFS_VI_BlockCount + 1;
+    WFS_VI_BlockRemain = WFS_VI_BlockRemain - 1;
+}
+if (WFS_VI_BlockCount==0)
+{
+    WFS_VI_BlockText = "Khong co rao can phuong phap";
+}
+
+// AmiBroker already provides Ticker and Date/Time columns automatically.
+// Do not duplicate them with Symbol / As-Of Date columns.
+AddMultiTextColumn(0*BarIndex()+WDSC_StatusCode,WFS_VI_SnapshotStatusText,"Trang thai du lieu");
+AddMultiTextColumn(0*BarIndex()+WDSC_DataEligible,WFS_VI_DataEligibleText,"Du du lieu");
+AddMultiTextColumn(0*BarIndex()+WDSC_CandidateClass,WFS_VI_CandidateClassText,"Phan loai");
+AddMultiTextColumn(0*BarIndex()+WDSC_Side,WFS_VI_CandidateSideText,"Huong");
+AddMultiTextColumn(0*BarIndex()+WDSC_Stage,WFS_VI_CandidateStageText,"Giai doan ung vien");
+AddMultiTextColumn(0*BarIndex()+WDSC_PhaseState,WFS_VI_PhaseText,"Pha Wyckoff");
+AddMultiTextColumn(0*BarIndex()+WDSC_FamilyHypothesis,WFS_VI_FamilyText,"Gia thuyet cau truc");
+AddColumn(100*(0*BarIndex()+WDSC_RangePosition),"Vi tri trong vung (%)",1.1);
+AddMultiTextColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,WFS_VI_MTFText,"Dong thuan Ngay/Tuan/Thang");
+AddMultiTextColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,WFS_VI_RSMarketText,"Suc manh tuong doi so voi thi truong");
+AddMultiTextColumn(0*BarIndex()+WDSC_Review,WFS_VI_ReviewText,"Can ra soat");
+AddTextColumn(WFS_VI_BlockText,"Ly do chua duoc nang hang");
+
+// Raw numeric audit surface remains available on demand.
 if (WVRC_ShowDecisionDiagnostics==1)
 {
+    AddColumn(0*BarIndex()+WDSC_StatusCode,"Ma Snapshot Status",1.0);
+    AddColumn(0*BarIndex()+WDSC_DataEligible,"Ma Data Eligible",1.0);
+    AddColumn(0*BarIndex()+WDSC_CandidateClass,"Ma Candidate Class",1.0);
+    AddColumn(0*BarIndex()+WDSC_Side,"Ma Candidate Side",1.0);
+    AddColumn(0*BarIndex()+WDSC_Stage,"Ma Candidate Stage",1.0);
+    AddColumn(0*BarIndex()+WDSC_PhaseState,"Ma Phase",1.0);
+    AddColumn(0*BarIndex()+WDSC_FamilyHypothesis,"Ma Family",1.0);
+    AddColumn(0*BarIndex()+WDSC_RangePosition,"Range Position goc",1.4);
+    AddColumn(0*BarIndex()+WDSC_MTFDirectionalAlignment,"Ma MTF Alignment",1.0);
+    AddColumn(0*BarIndex()+WDSC_RSStockVsMarketStructure,"Ma RS vs Market",1.0);
+    AddColumn(0*BarIndex()+WDSC_Review,"Ma Scanner Review",1.0);
+    AddColumn(0*BarIndex()+WDSC_MethodBlockMask,"Method Block Mask",1.0);
+
     AddColumn(0*BarIndex()+WFS_RuntimeStatusCode,"Fast Scanner Status",1.0);
     AddMultiTextColumn(0*BarIndex()+WFS_RuntimeStatusCode,WFS_RuntimeStatusText,"Fast Scanner Status Text");
     AddColumn(0*BarIndex()+WDSC_GenerationAfter,"Snapshot Generation",1.0);
@@ -110,6 +251,7 @@ if (WVRC_ShowDecisionDiagnostics==1)
     AddColumn(0*BarIndex()+WDSC_RangeLocationConflict,"Range Location Conflict",1.0);
 }
 
-AddTextColumn("FAST_SCANNER_V02_20260913_A","Fast Scanner Version");
+AddTextColumn("FAST_SCANNER_V02_20260913_A","Phien ban bo loc");
+AddTextColumn("VIETNAMESE_ASCII_DISPLAY_V02_20260913_B","Phien ban hien thi");
 
 _SECTION_END();
