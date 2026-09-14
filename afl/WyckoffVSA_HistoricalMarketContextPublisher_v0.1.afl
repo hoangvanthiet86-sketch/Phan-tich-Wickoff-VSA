@@ -31,16 +31,13 @@ HMC_Symbol = Name();
 HMC_IntervalValid = Interval()==inDaily;
 HMC_SourceDateTime = DateTime();
 
-// Tao khoa ngay tu DateNum() de tranh Day() cho ket qua khong phai ngay-thang
-// tren native AmiBroker 6.20.01. Khoa nay la YYYYMMDD, duy nhat theo ngay.
-HMC_SourceDateNum = DateNum();
-HMC_SourceYearOffset = Floor(HMC_SourceDateNum/10000);
-HMC_SourceDateRemainder = HMC_SourceDateNum - 10000*HMC_SourceYearOffset;
-HMC_SourceBusinessDateKey =
-    (1900 + HMC_SourceYearOffset)*10000 + HMC_SourceDateRemainder;
+// Dung DateNum() goc lam khoa ngay. Gia tri nay nam trong mien so nguyen ma
+// AFL float co the bieu dien chinh xac; khong chuyen sang YYYYMMDD ~20 trieu
+// vi se mat bit don vi va tao collision tren native AmiBroker 6.20.01.
+HMC_SourceBusinessDateKey = DateNum();
 
 HMC_Prefix = "WVSA_HIST_MKT_v01_" + HMC_Symbol + "_";
-HMC_Version = "HISTORICAL_MARKET_CONTEXT_PUBLISHER_V01_20260914_B";
+HMC_Version = "HISTORICAL_MARKET_CONTEXT_PUBLISHER_V01_20260914_C";
 
 HMC_SourceValid =
     HMC_IntervalValid AND
