@@ -1,0 +1,76 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H6 prerequisite audit — fast StaticVar-only check before any heavy universe rerun.
+
+    Muc tieu:
+    - xac dinh symbol nao da co H2 Weekly/Monthly historical timeline;
+    - xac dinh symbol nao da co H4 stock historical timeline tai 11/09/2026;
+    - xac dinh historical Market VNINDEX tai 11/09/2026;
+    - xac dinh production Daily Snapshot 11/09/2026 con day du de lam oracle H6;
+    - KHONG chay analytical runtime, KHONG ghi StaticVar, KHONG tao trading signal.
+
+    UI moi: tieng Viet ASCII khong dau.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+SetOption("NoDefaultColumns",True);
+
+H6P_TargetDateNum = 1260911; // 11/09/2026 theo AmiBroker DateNum
+H6P_Symbol = Name();
+H6P_YesNo = "Khong\nCo";
+H6P_Version = "HISTORICAL_H6_PREREQUISITE_AUDIT_V01_20260914_A";
+
+// Historical H2 W/M namespaces.
+H6P_WPrefix = "WVSA_HIST_MTF_v01_" + H6P_Symbol + "_W_";
+H6P_MPrefix = "WVSA_HIST_MTF_v01_" + H6P_Symbol + "_M_";
+H6P_WReady = Nz(StaticVarGet(H6P_WPrefix+"Ready"),0)==1 AND
+              Nz(StaticVarGet(H6P_WPrefix+"CommittedGenerationID"),0)>0;
+H6P_MReady = Nz(StaticVarGet(H6P_MPrefix+"Ready"),0)==1 AND
+              Nz(StaticVarGet(H6P_MPrefix+"CommittedGenerationID"),0)>0;
+
+// Historical H4 stock namespace.
+H6P_StockPrefix = "WVSA_HIST_STOCK_v01_" + H6P_Symbol + "_";
+H6P_StockReady = Nz(StaticVarGet(H6P_StockPrefix+"Ready"),0)==1 AND
+                  Nz(StaticVarGet(H6P_StockPrefix+"CommittedGenerationID"),0)>0 AND
+                  StaticVarGetText(H6P_StockPrefix+"Symbol")==H6P_Symbol;
+H6P_StockKey = StaticVarGet(H6P_StockPrefix+"SourceBusinessDateKey");
+H6P_StockHasTarget = LastValue(Cum(Nz(H6P_StockKey,0)==H6P_TargetDateNum))>0;
+
+// Historical Market namespace. Market timeline la benchmark chung cho tat ca stock.
+H6P_MarketPrefix = "WVSA_HIST_MKT_v01_VNINDEX_";
+H6P_MarketReady = Nz(StaticVarGet(H6P_MarketPrefix+"Ready"),0)==1 AND
+                   Nz(StaticVarGet(H6P_MarketPrefix+"CommittedGenerationID"),0)>0 AND
+                   StaticVarGetText(H6P_MarketPrefix+"Symbol")=="VNINDEX";
+H6P_MarketKey = StaticVarGet(H6P_MarketPrefix+"SourceBusinessDateKey");
+H6P_MarketHasTarget = LastValue(Cum(Nz(H6P_MarketKey,0)==H6P_TargetDateNum))>0;
+
+// Production Daily Snapshot oracle — read raw persistent snapshot only.
+H6P_ProdPrefix = "WVSA_DAILY_v02_" + H6P_Symbol + "_";
+H6P_ProdReady = Nz(StaticVarGet(H6P_ProdPrefix+"Ready"),0)==1 AND
+                 Nz(StaticVarGet(H6P_ProdPrefix+"WriteComplete"),0)==1 AND
+                 Nz(StaticVarGet(H6P_ProdPrefix+"CommittedGenerationID"),0)>0 AND
+                 Nz(StaticVarGet(H6P_ProdPrefix+"SchemaMajor"),0)==2 AND
+                 Nz(StaticVarGet(H6P_ProdPrefix+"SchemaMinor"),0)==0 AND
+                 StaticVarGetText(H6P_ProdPrefix+"Symbol")==H6P_Symbol AND
+                 Nz(StaticVarGet(H6P_ProdPrefix+"BusinessDateKey"),0)==H6P_TargetDateNum;
+H6P_ProdDataEligible = Nz(StaticVarGet(H6P_ProdPrefix+"DataEligible"),0)==1;
+
+H6P_AllReady = H6P_WReady AND H6P_MReady AND
+                H6P_StockReady AND H6P_StockHasTarget AND
+                H6P_MarketReady AND H6P_MarketHasTarget AND
+                H6P_ProdReady;
+
+H6P_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = H6P_LastBar;
+
+AddTextColumn(H6P_Symbol,"Ma co phieu");
+AddMultiTextColumn(H6P_ProdReady,H6P_YesNo,"Snapshot production 11/09");
+AddMultiTextColumn(H6P_ProdDataEligible,H6P_YesNo,"Production Data Eligible");
+AddMultiTextColumn(H6P_WReady,H6P_YesNo,"H2 Tuan san sang");
+AddMultiTextColumn(H6P_MReady,H6P_YesNo,"H2 Thang san sang");
+AddMultiTextColumn(H6P_StockReady,H6P_YesNo,"H4 stock san sang");
+AddMultiTextColumn(H6P_StockHasTarget,H6P_YesNo,"H4 co moc 11/09");
+AddMultiTextColumn(H6P_MarketReady,H6P_YesNo,"H3 Market san sang");
+AddMultiTextColumn(H6P_MarketHasTarget,H6P_YesNo,"H3 Market co moc 11/09");
+AddMultiTextColumn(H6P_AllReady,H6P_YesNo,"Du dieu kien H6");
+AddTextColumn(H6P_Version,"Phien ban H6 audit");
