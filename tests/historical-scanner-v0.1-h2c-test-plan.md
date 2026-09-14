@@ -12,15 +12,18 @@ AFL:
 H2C dung lai logic H2B trong:
 `WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl`
 
-Tu ban `HISTORICAL_MTF_TERMINAL_COMPARISON_V01_20260914_B`, H2C include tep nay bang dau nhay kep de AmiBroker resolve tu **cung thu muc formula** voi H2C, khong phai `Formulas\Include`.
+Native AmiBroker 6.20.01 tren moi truong kiem thu hien tai resolve `#include_once` qua Standard Include Path. Vi vay can dat mot ban dung version B3 da native PASS vao:
 
-Vi vay hai tep sau phai nam cung mot thu muc cuc bo:
-- `WyckoffVSA_HistoricalMTFTerminalComparison_v0.1.afl`
-- `WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl`
+`C:\Program Files (x86)\AmiBroker\Formulas\Include\WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl`
 
-Neu chay truc tiep tu `Downloads`, ca hai tep phai cung nam trong `Downloads`. Neu cai vao `Formulas\afl`, ca hai tep phai cung nam trong `Formulas\afl`.
+Cac runtime dependency ben trong H2B (`HistoricalRuntimeDefaults`, runtime modules v0.2...) cung duoc resolve tu `Formulas\Include`.
 
-Cac runtime dependency ben trong H2B (`HistoricalRuntimeDefaults`, runtime modules v0.2...) van duoc resolve tu `Formulas\Include` nhu H2B native run da xac nhan.
+Sau khi copy, chon `View -> Refresh All`, mo lai H2C va Verify Formula/Verify Syntax truoc khi Explore.
+
+## Sua loi native da ghi nhan
+
+- Error 42: thieu B3 trong `Formulas\Include` -> deployment/setup issue.
+- Error 17 tai dong kiem tra ngay snapshot: code cu dung `Sum(HTC_DateMatchArray)` thieu tham so period theo AFL. Ban `HISTORICAL_MTF_TERMINAL_COMPARISON_V01_20260914_C` da thay bang `Cum(HTC_DateMatchArray)` de kiem tra ton tai tren toan chuoi ma khong thay doi analytical semantics.
 
 ## Cau hinh native
 
