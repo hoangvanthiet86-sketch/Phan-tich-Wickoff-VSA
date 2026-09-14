@@ -268,7 +268,7 @@ HPM_EvidenceAlignment = IIf(
     IIf(HPM_WEvidence!=HPM_MEvidence,4,
     IIf(HPM_DEvidence!=HPM_WEvidence,3,
     IIf(HPM_DEvidence==1 AND HPM_WEvidence==1 AND HPM_MEvidence==1,1,
-    IIf(HPM_DEvidence==2 AND HPM_WEvidence==2 AND HPM_MEvidence==2,2,5))))));
+    IIf(HPM_DEvidence==2 AND HPM_WEvidence==2 AND HPM_MEvidence==2,2,5)))))));
 
 HPM_PhaseRelationship = IIf(
     NOT HPM_ContractValid,0,
@@ -277,7 +277,7 @@ HPM_PhaseRelationship = IIf(
     IIf(HPM_DPhase==HPM_WPhase AND HPM_DPhase==HPM_MPhase,1,
     IIf(HPM_DPhase==7 OR HPM_WPhase==7 OR HPM_MPhase==7,4,
     IIf(HPM_DPhase<HPM_WPhase AND HPM_DPhase<HPM_MPhase,2,
-    IIf(HPM_DPhase>HPM_WPhase AND HPM_DPhase>HPM_MPhase,3,4))))));
+    IIf(HPM_DPhase>HPM_WPhase AND HPM_DPhase>HPM_MPhase,3,4)))))));
 
 HPM_ConflictMask =
       IIf(NOT HPM_ContractValid,1,0)
@@ -308,7 +308,7 @@ HPM_StatusCode = IIf(
     IIf(NOT HPM_WValid OR NOT HPM_MValid,2,
     IIf(HPM_ContractValid,3,2))));
 HPM_StatusText = "Sai khung thoi gian\nChua co du timeline Tuan/Thang\nChua du payload da hoan tat\nDat tai dung payload va MTF";
-HPM_Version = "HISTORICAL_MTF_PAYLOAD_PROOF_V01_20260914_A";
+HPM_Version = "HISTORICAL_MTF_PAYLOAD_PROOF_V01_20260914_B";
 
 Filter = HPM_IntervalValid AND IIf(HPM_OnlyBoundary,HPM_AnyRollover,HPM_ContractValid);
 
