@@ -22,7 +22,30 @@ H2B chi chay tren mot ma control truoc, uu tien `SNZ`.
 - Khong co Buy/Sell/Short/Cover/PositionScore/P&L/ranking.
 - Toan bo UI do hai AFL moi tao ra phai la tieng Viet khong dau theo HS14.
 
-## 3. Trinh tu chay native
+## 3. Cai dat cuc bo bat buoc truoc khi chay
+
+Hai AFL H2B dung `#include_once <WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl>`.
+Vi dung cu phap dau ngoac nhon, AmiBroker 6.20.01 tim tep nay trong thu muc Include, khong phai thu muc `Formulas\afl` cua entrypoint.
+
+Can dat tep:
+
+`WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl`
+
+vao dung thu muc:
+
+`C:\Program Files (x86)\AmiBroker\Formulas\Include\`
+
+Cac runtime include v0.2 khac da duoc dung trong production runtime truoc do cung phai ton tai trong thu muc Include theo bo cai dat hien hanh.
+
+Neu AmiBroker bao:
+
+`Error 42: #include failed because the file does not exist`
+
+va duong dan chi den `...\Formulas\Include\WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl`, day la **loi trien khai tep phu thuoc cuc bo**, khong phai loi Parameters va khong duoc tinh la native analytical failure.
+
+Sau khi bo sung tep vao Include, dong va mo lai Formula/Analysis neu AmiBroker van giu cache loi, roi chay lai.
+
+## 4. Trinh tu chay native
 
 ### Run B1 — Ghi timeline Tuan
 
@@ -79,7 +102,7 @@ Cau hinh:
 
 Explore va xuat TXT.
 
-## 4. Acceptance
+## 5. Acceptance
 
 ### H2B-N01 — Publisher Tuan native
 
@@ -145,7 +168,11 @@ Toan bo Param, lua chon Param, ten cot, status va canh bao do H2B AFL tao ra la 
 
 Khong Buy/Sell/Short/Cover/PositionScore/P&L/ranking.
 
-## 5. Bang chung can gui
+### H2B-N11 — Phu thuoc local da trien khai dung vi tri
+
+`WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl` phai duoc AmiBroker resolve tu `Formulas\Include`. Loi Error 42 do thieu tep include la setup/deployment failure, khong phai analytical failure.
+
+## 6. Bang chung can gui
 
 Gui 3 TXT:
 
@@ -155,7 +182,7 @@ Gui 3 TXT:
 
 Neu Run B3 co nhieu dong, khong can cat bot; gui toan bo TXT de kiem tra ordinal/source-date va phan bo MTF.
 
-## 6. Checkpoint khi dat
+## 7. Checkpoint khi dat
 
 `HISTORICAL_SCANNER_V01_H2B_PAYLOAD_RECONSTRUCTION = PASS`
 
