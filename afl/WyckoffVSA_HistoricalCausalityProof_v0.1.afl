@@ -1,0 +1,220 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H5-A causal publication / boundary proof.
+
+    Muc tieu:
+    - HS03: pivot chi cong bo tai bar xac nhan;
+    - HS04: Range/Phase/Family chi xuat hien tu KnownAt tro di;
+    - tai xac nhan HS05/HS06: W/M chi dung ky lich da hoan tat truoc T;
+    - tai xac nhan HS08: benchmark khong den tu tuong lai va exact-date khi hop le.
+
+    Khong co trading signal. UI moi dung tieng Viet khong dau.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+
+function H5A_Finite(x)
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+_SECTION_BEGIN("01. KIEM TRA PIVOT CAUSAL");
+H5A_BI = BarIndex();
+H5A_DT = DateTime();
+H5A_DN = DateNum();
+H5A_Zero = 0*H5A_BI;
+H5A_IntervalValid = Interval()==inDaily;
+
+H5A_HighEvent = SL_PivotHighEventCode==2;
+H5A_LowEvent = SL_PivotLowEventCode==2;
+
+H5A_HighTimingBad = H5A_HighEvent AND (
+    NOT H5A_Finite(SL_PivotHighConfirmBarIndex) OR
+    NOT H5A_Finite(SL_PivotHighConfirmDateTime) OR
+    NOT H5A_Finite(SL_PivotHighExtremeBarIndex) OR
+    SL_PivotHighConfirmBarIndex!=H5A_BI OR
+    SL_PivotHighConfirmDateTime!=H5A_DT OR
+    SL_PivotHighExtremeBarIndex>=SL_PivotHighConfirmBarIndex OR
+    SL_PivotHighConfirmationLag!=WVRC_PivotRight);
+
+H5A_LowTimingBad = H5A_LowEvent AND (
+    NOT H5A_Finite(SL_PivotLowConfirmBarIndex) OR
+    NOT H5A_Finite(SL_PivotLowConfirmDateTime) OR
+    NOT H5A_Finite(SL_PivotLowExtremeBarIndex) OR
+    SL_PivotLowConfirmBarIndex!=H5A_BI OR
+    SL_PivotLowConfirmDateTime!=H5A_DT OR
+    SL_PivotLowExtremeBarIndex>=SL_PivotLowConfirmBarIndex OR
+    SL_PivotLowConfirmationLag!=WVRC_PivotRight);
+
+H5A_HighFutureBad = SL_PivotHighLatestValid==1 AND (
+    SL_PivotHighLatestConfirmBarIndex>H5A_BI OR
+    SL_PivotHighLatestConfirmDateTime>H5A_DT);
+H5A_LowFutureBad = SL_PivotLowLatestValid==1 AND (
+    SL_PivotLowLatestConfirmBarIndex>H5A_BI OR
+    SL_PivotLowLatestConfirmDateTime>H5A_DT);
+
+H5A_HighEventCount = LastValue(Cum(H5A_HighEvent));
+H5A_LowEventCount = LastValue(Cum(H5A_LowEvent));
+H5A_PivotTimingBadCount = LastValue(Cum(H5A_HighTimingBad OR H5A_LowTimingBad));
+H5A_PivotFutureBadCount = LastValue(Cum(H5A_HighFutureBad OR H5A_LowFutureBad));
+_SECTION_END();
+
+_SECTION_BEGIN("02. KIEM TRA KNOWNAT RANGE PHASE FAMILY");
+H5A_SingleLower = WCI_ContextMultiplicityCode==1 AND WPC_L_ContextPresent==1 AND WPC_U_ContextPresent!=1;
+H5A_SingleUpper = WCI_ContextMultiplicityCode==1 AND WPC_U_ContextPresent==1 AND WPC_L_ContextPresent!=1;
+H5A_SingleContext = H5A_SingleLower OR H5A_SingleUpper;
+
+H5A_RangeKnownBI = IIf(H5A_SingleLower,WPC_L_RangeKnownAtBarIndex,
+                    IIf(H5A_SingleUpper,WPC_U_RangeKnownAtBarIndex,Null));
+H5A_RangeKnownDT = IIf(H5A_SingleLower,WPC_L_RangeKnownAtDateTime,
+                    IIf(H5A_SingleUpper,WPC_U_RangeKnownAtDateTime,Null));
+H5A_PhaseKnownBI = IIf(H5A_SingleLower,WPC_L_PhaseKnownAtBarIndex,
+                    IIf(H5A_SingleUpper,WPC_U_PhaseKnownAtBarIndex,Null));
+H5A_PhaseKnownDT = IIf(H5A_SingleLower,WPC_L_PhaseKnownAtDateTime,
+                    IIf(H5A_SingleUpper,WPC_U_PhaseKnownAtDateTime,Null));
+H5A_FamilyKnownBI = WCI_HypothesisKnownAtBarIndex;
+H5A_FamilyKnownDT = WCI_HypothesisKnownAtDateTime;
+
+H5A_RangeRow = H5A_SingleContext;
+H5A_PhaseRow = H5A_SingleContext AND WCI_PhaseStateCode>0;
+H5A_FamilyRow = H5A_SingleContext AND WCI_FamilyHypothesisCode>0;
+
+H5A_RangeKnownBad = H5A_RangeRow AND (
+    NOT H5A_Finite(H5A_RangeKnownBI) OR NOT H5A_Finite(H5A_RangeKnownDT) OR
+    H5A_RangeKnownBI>H5A_BI OR H5A_RangeKnownDT>H5A_DT);
+H5A_PhaseKnownBad = H5A_PhaseRow AND (
+    NOT H5A_Finite(H5A_PhaseKnownBI) OR NOT H5A_Finite(H5A_PhaseKnownDT) OR
+    H5A_PhaseKnownBI>H5A_BI OR H5A_PhaseKnownDT>H5A_DT);
+H5A_FamilyKnownBad = H5A_FamilyRow AND (
+    NOT H5A_Finite(H5A_FamilyKnownBI) OR NOT H5A_Finite(H5A_FamilyKnownDT) OR
+    H5A_FamilyKnownBI>H5A_BI OR H5A_FamilyKnownDT>H5A_DT);
+
+H5A_RangeRowCount = LastValue(Cum(H5A_RangeRow));
+H5A_PhaseRowCount = LastValue(Cum(H5A_PhaseRow));
+H5A_FamilyRowCount = LastValue(Cum(H5A_FamilyRow));
+H5A_RangeKnownBadCount = LastValue(Cum(H5A_RangeKnownBad));
+H5A_PhaseKnownBadCount = LastValue(Cum(H5A_PhaseKnownBad));
+H5A_FamilyKnownBadCount = LastValue(Cum(H5A_FamilyKnownBad));
+_SECTION_END();
+
+_SECTION_BEGIN("03. KIEM TRA BIEN TUAN THANG");
+H5A_WeekEpoch = _DT("2000-01-03 00:00:00");
+H5A_CurrentWOrd = Floor(DateTimeDiff(H5A_DT,H5A_WeekEpoch)/604800);
+H5A_ExpectedWOrd = H5A_CurrentWOrd-1;
+H5A_YearOffset = Floor(H5A_DN/10000);
+H5A_Year = 1900+H5A_YearOffset;
+H5A_DateRemainder = H5A_DN-10000*H5A_YearOffset;
+H5A_Month = Floor(H5A_DateRemainder/100);
+H5A_CurrentMOrd = H5A_Year*12+H5A_Month;
+H5A_ExpectedMOrd = H5A_CurrentMOrd-1;
+H5A_HasPrior = H5A_BI>0;
+H5A_WRollover = H5A_HasPrior AND H5A_CurrentWOrd!=Ref(H5A_CurrentWOrd,-1);
+H5A_MRollover = H5A_HasPrior AND H5A_CurrentMOrd!=Ref(H5A_CurrentMOrd,-1);
+
+H5A_Symbol = Name();
+H5A_WPrefix = "WVSA_HIST_MTF_v01_"+H5A_Symbol+"_W_";
+H5A_MPrefix = "WVSA_HIST_MTF_v01_"+H5A_Symbol+"_M_";
+H5A_WReady = Nz(StaticVarGet(H5A_WPrefix+"Ready"),0)==1;
+H5A_MReady = Nz(StaticVarGet(H5A_MPrefix+"Ready"),0)==1;
+H5A_WRawValid = StaticVarGet(H5A_WPrefix+"SourceValid");
+H5A_MRawValid = StaticVarGet(H5A_MPrefix+"SourceValid");
+H5A_WRawOrd = StaticVarGet(H5A_WPrefix+"SourcePeriodOrdinal");
+H5A_MRawOrd = StaticVarGet(H5A_MPrefix+"SourcePeriodOrdinal");
+H5A_WRawDT = StaticVarGet(H5A_WPrefix+"SourceBarDateTime");
+H5A_MRawDT = StaticVarGet(H5A_MPrefix+"SourceBarDateTime");
+
+H5A_WSeen = H5A_WReady AND H5A_WRawValid==1 AND NOT IsNull(H5A_WRawOrd);
+H5A_MSeen = H5A_MReady AND H5A_MRawValid==1 AND NOT IsNull(H5A_MRawOrd);
+H5A_WLastOrd = ValueWhen(H5A_WSeen,H5A_WRawOrd);
+H5A_MLastOrd = ValueWhen(H5A_MSeen,H5A_MRawOrd);
+H5A_WLastDT = ValueWhen(H5A_WSeen,H5A_WRawDT);
+H5A_MLastDT = ValueWhen(H5A_MSeen,H5A_MRawDT);
+H5A_WCandidateOrd = Ref(H5A_WLastOrd,-1);
+H5A_MCandidateOrd = Ref(H5A_MLastOrd,-1);
+H5A_WCandidateDT = Ref(H5A_WLastDT,-1);
+H5A_MCandidateDT = Ref(H5A_MLastDT,-1);
+H5A_WAccept = H5A_WRollover AND H5A_WReady AND NOT IsNull(H5A_WCandidateOrd) AND
+               H5A_WCandidateOrd==H5A_ExpectedWOrd AND H5A_WCandidateDT<H5A_DT;
+H5A_MAccept = H5A_MRollover AND H5A_MReady AND NOT IsNull(H5A_MCandidateOrd) AND
+               H5A_MCandidateOrd==H5A_ExpectedMOrd AND H5A_MCandidateDT<H5A_DT;
+H5A_WSelectedOrd = ValueWhen(H5A_WAccept,H5A_WCandidateOrd);
+H5A_MSelectedOrd = ValueWhen(H5A_MAccept,H5A_MCandidateOrd);
+H5A_WSelectedDT = ValueWhen(H5A_WAccept,H5A_WCandidateDT);
+H5A_MSelectedDT = ValueWhen(H5A_MAccept,H5A_MCandidateDT);
+H5A_WSelectedPresent = H5A_WReady AND NOT IsNull(H5A_WSelectedOrd) AND NOT IsNull(H5A_WSelectedDT);
+H5A_MSelectedPresent = H5A_MReady AND NOT IsNull(H5A_MSelectedOrd) AND NOT IsNull(H5A_MSelectedDT);
+H5A_WBoundaryBad = H5A_WSelectedPresent AND
+                    (H5A_WSelectedOrd!=H5A_ExpectedWOrd OR H5A_WSelectedDT>=H5A_DT);
+H5A_MBoundaryBad = H5A_MSelectedPresent AND
+                    (H5A_MSelectedOrd!=H5A_ExpectedMOrd OR H5A_MSelectedDT>=H5A_DT);
+H5A_WSelectedCount = LastValue(Cum(H5A_WSelectedPresent));
+H5A_MSelectedCount = LastValue(Cum(H5A_MSelectedPresent));
+H5A_WBoundaryBadCount = LastValue(Cum(H5A_WBoundaryBad));
+H5A_MBoundaryBadCount = LastValue(Cum(H5A_MBoundaryBad));
+_SECTION_END();
+
+_SECTION_BEGIN("04. KIEM TRA BENCHMARK POINT IN TIME");
+H5A_MarketPrefix = "WVSA_HIST_MKT_v01_"+WVRC_SelectionMarketSymbol+"_";
+H5A_MarketReady = Nz(StaticVarGet(H5A_MarketPrefix+"Ready"),0)==1;
+H5A_MarketKey = StaticVarGet(H5A_MarketPrefix+"SourceBusinessDateKey");
+H5A_MarketDT = StaticVarGet(H5A_MarketPrefix+"SourceBarDateTime");
+H5A_MarketValid = StaticVarGet(H5A_MarketPrefix+"SourceValid");
+H5A_MarketPresent = H5A_MarketReady AND NOT IsNull(H5A_MarketKey) AND NOT IsNull(H5A_MarketDT);
+H5A_MarketFutureBad = H5A_MarketPresent AND H5A_MarketDT>H5A_DT;
+H5A_MarketExactBad = H5A_MarketValid==1 AND
+                      (H5A_MarketKey!=H5A_DN OR H5A_MarketDT!=H5A_DT);
+H5A_MarketValidCount = LastValue(Cum(H5A_MarketValid==1));
+H5A_MarketFutureBadCount = LastValue(Cum(H5A_MarketFutureBad));
+H5A_MarketExactBadCount = LastValue(Cum(H5A_MarketExactBad));
+_SECTION_END();
+
+_SECTION_BEGIN("05. KET QUA H5A");
+H5A_Prereq = H5A_IntervalValid AND H5A_HighEventCount>0 AND H5A_LowEventCount>0 AND
+              H5A_PhaseRowCount>0 AND H5A_WSelectedCount>0 AND H5A_MSelectedCount>0 AND
+              H5A_MarketValidCount>0;
+H5A_AllPass = H5A_Prereq AND
+              H5A_PivotTimingBadCount==0 AND H5A_PivotFutureBadCount==0 AND
+              H5A_RangeKnownBadCount==0 AND H5A_PhaseKnownBadCount==0 AND H5A_FamilyKnownBadCount==0 AND
+              H5A_WBoundaryBadCount==0 AND H5A_MBoundaryBadCount==0 AND
+              H5A_MarketFutureBadCount==0 AND H5A_MarketExactBadCount==0;
+H5A_Status = IIf(NOT H5A_IntervalValid,0,IIf(NOT H5A_Prereq,1,IIf(H5A_AllPass,2,3)));
+H5A_StatusText = "Sai khung thoi gian\nThieu prerequisite lich su\nDat kiem tra causal / boundary\nCo vi pham causal / boundary";
+H5A_Version = "HISTORICAL_ANTI_LOOKAHEAD_CAUSALITY_V01_20260914_A";
+H5A_Last = H5A_BI==LastValue(H5A_BI);
+Filter = H5A_Last;
+
+AddTextColumn(H5A_Symbol,"Ma co phieu");
+AddColumn(H5A_Zero+H5A_HighEventCount,"So pivot dinh da xac nhan",1.0);
+AddColumn(H5A_Zero+H5A_LowEventCount,"So pivot day da xac nhan",1.0);
+AddColumn(H5A_Zero+H5A_PivotTimingBadCount,"Loi thoi diem cong bo pivot",1.0);
+AddColumn(H5A_Zero+H5A_PivotFutureBadCount,"Loi pivot den tu tuong lai",1.0);
+AddColumn(H5A_Zero+H5A_RangeRowCount,"So dong mot vung",1.0);
+AddColumn(H5A_Zero+H5A_RangeKnownBadCount,"Loi Range KnownAt",1.0);
+AddColumn(H5A_Zero+H5A_PhaseKnownBadCount,"Loi Phase KnownAt",1.0);
+AddColumn(H5A_Zero+H5A_FamilyKnownBadCount,"Loi Family KnownAt",1.0);
+AddColumn(H5A_Zero+H5A_WBoundaryBadCount,"Loi bien Tuan",1.0);
+AddColumn(H5A_Zero+H5A_MBoundaryBadCount,"Loi bien Thang",1.0);
+AddColumn(H5A_Zero+H5A_MarketFutureBadCount,"Loi benchmark tu tuong lai",1.0);
+AddColumn(H5A_Zero+H5A_MarketExactBadCount,"Loi benchmark khong khop ngay",1.0);
+AddMultiTextColumn(H5A_Zero+H5A_Status,H5A_StatusText,"Trang thai H5A");
+AddTextColumn(H5A_Version,"Phien ban H5A");
+_SECTION_END();
