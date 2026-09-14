@@ -32,6 +32,12 @@ H4 chi la Exploration / validation layer. Khong co trading semantics.
 6. Khong co `Buy`, `Sell`, `Short`, `Cover`, `PositionScore`, P&L.
 7. UI moi cua H4 dung tieng Viet khong dau.
 
+## Native compile correction truoc H4-A
+
+Lan Verify Formula dau tien tren AmiBroker 6.20.01 phat hien `Error 29` tai `WCI_PublicSchemaMajor`: H2 historical runtime entrypoint khong export hai scalar current-snapshot facade `WCI_PublicSchemaMajor/Minor`. Day la dependency/interface mismatch, khong phai loi Parameters va khong phai loi decision logic.
+
+Ban B cua publisher bo dependency vao hai scalar khong ton tai nay; H2 stack da duoc compile-time pin vao interface Composite duoc phe duyet va required causal WCI payload tiep tuc duoc kiem tra trong `HST_SourceValid`. Khong thay methodology, threshold, enum hay classification semantics.
+
 ## H4-A — Ghi stock timeline SNZ
 
 AFL:
@@ -48,7 +54,7 @@ Ky vong o cac cot H4 publisher cuoi:
 - `Ma co phieu = SNZ`
 - `So ngay stock payload hop le > 0`
 - `Trang thai ghi = Da ghi timeline co phieu`
-- `Phien ban H4 publisher = HISTORICAL_STOCK_TIMELINE_PUBLISHER_V01_20260914_A`
+- `Phien ban H4 publisher = HISTORICAL_STOCK_TIMELINE_PUBLISHER_V01_20260914_B`
 
 Neu bao H2 W/M timeline chua san sang thi chi sua/rerun prerequisite H2 cho SNZ; khong sua formula decision logic.
 
