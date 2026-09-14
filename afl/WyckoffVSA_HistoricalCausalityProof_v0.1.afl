@@ -8,6 +8,10 @@
     - tai xac nhan HS05/HS06: W/M chi dung ky lich da hoan tat truoc T;
     - tai xac nhan HS08: benchmark khong den tu tuong lai va exact-date khi hop le.
 
+    Ban B sua proof semantics: payload stale / benchmark khong khop ngay phai bi
+    gate fail-closed; chung la dong bi tu choi, KHONG phai causal violation neu
+    khong duoc chap nhan lam context hop le.
+
     Khong co trading signal. UI moi dung tieng Viet khong dau.
 */
 #pragma nocache
@@ -162,12 +166,27 @@ H5A_WSelectedDT = ValueWhen(H5A_WAccept,H5A_WCandidateDT);
 H5A_MSelectedDT = ValueWhen(H5A_MAccept,H5A_MCandidateDT);
 H5A_WSelectedPresent = H5A_WReady AND NOT IsNull(H5A_WSelectedOrd) AND NOT IsNull(H5A_WSelectedDT);
 H5A_MSelectedPresent = H5A_MReady AND NOT IsNull(H5A_MSelectedOrd) AND NOT IsNull(H5A_MSelectedDT);
-H5A_WBoundaryBad = H5A_WSelectedPresent AND
+
+// Day la guard thuc su cua H2B: payload carry-forward chi hop le neu van dung
+// previous completed calendar period cua bar Daily hien tai. Payload stale phai
+// bi tu choi (fail closed), khong duoc dem la lookahead violation.
+H5A_WSelectedValid = H5A_WSelectedPresent AND
+                      H5A_WSelectedOrd==H5A_ExpectedWOrd AND H5A_WSelectedDT<H5A_DT;
+H5A_MSelectedValid = H5A_MSelectedPresent AND
+                      H5A_MSelectedOrd==H5A_ExpectedMOrd AND H5A_MSelectedDT<H5A_DT;
+H5A_WRejectedStale = H5A_WSelectedPresent AND NOT H5A_WSelectedValid;
+H5A_MRejectedStale = H5A_MSelectedPresent AND NOT H5A_MSelectedValid;
+
+// Causal violation chi xay ra neu mot payload duoc chap nhan ma lai khong phai
+// ky truoc da hoan tat hoac co DateTime >= T.
+H5A_WBoundaryBad = H5A_WSelectedValid AND
                     (H5A_WSelectedOrd!=H5A_ExpectedWOrd OR H5A_WSelectedDT>=H5A_DT);
-H5A_MBoundaryBad = H5A_MSelectedPresent AND
+H5A_MBoundaryBad = H5A_MSelectedValid AND
                     (H5A_MSelectedOrd!=H5A_ExpectedMOrd OR H5A_MSelectedDT>=H5A_DT);
-H5A_WSelectedCount = LastValue(Cum(H5A_WSelectedPresent));
-H5A_MSelectedCount = LastValue(Cum(H5A_MSelectedPresent));
+H5A_WSelectedValidCount = LastValue(Cum(H5A_WSelectedValid));
+H5A_MSelectedValidCount = LastValue(Cum(H5A_MSelectedValid));
+H5A_WRejectedStaleCount = LastValue(Cum(H5A_WRejectedStale));
+H5A_MRejectedStaleCount = LastValue(Cum(H5A_MRejectedStale));
 H5A_WBoundaryBadCount = LastValue(Cum(H5A_WBoundaryBad));
 H5A_MBoundaryBadCount = LastValue(Cum(H5A_MBoundaryBad));
 _SECTION_END();
@@ -179,18 +198,33 @@ H5A_MarketKey = StaticVarGet(H5A_MarketPrefix+"SourceBusinessDateKey");
 H5A_MarketDT = StaticVarGet(H5A_MarketPrefix+"SourceBarDateTime");
 H5A_MarketValid = StaticVarGet(H5A_MarketPrefix+"SourceValid");
 H5A_MarketPresent = H5A_MarketReady AND NOT IsNull(H5A_MarketKey) AND NOT IsNull(H5A_MarketDT);
-H5A_MarketFutureBad = H5A_MarketPresent AND H5A_MarketDT>H5A_DT;
-H5A_MarketExactBad = H5A_MarketValid==1 AND
+H5A_MarketExactMatch = H5A_MarketPresent AND H5A_MarketKey==H5A_DN AND H5A_MarketDT==H5A_DT;
+H5A_MarketNoFuture = H5A_MarketPresent AND H5A_MarketDT<=H5A_DT;
+
+// Tai dung guard H3: raw StaticVar co the carry-forward vao ngay co phieu ma
+// benchmark khong co bar. Dong nhu vay phai bi tu choi, khong duoc coi la context.
+H5A_MarketEffectiveValid = H5A_IntervalValid AND H5A_MarketReady AND
+                           H5A_MarketValid==1 AND H5A_MarketExactMatch AND H5A_MarketNoFuture;
+H5A_MarketRejectedDate = H5A_MarketReady AND H5A_MarketValid==1 AND NOT H5A_MarketExactMatch;
+H5A_MarketRejectedFuture = H5A_MarketReady AND H5A_MarketValid==1 AND H5A_MarketPresent AND
+                            H5A_MarketDT>H5A_DT;
+
+// Vi pham chi tinh neu mot dong duoc chap nhan la context hop le ma van sai
+// exact-date / no-future. Hai dieu nay phai bang 0.
+H5A_MarketFutureBad = H5A_MarketEffectiveValid AND H5A_MarketDT>H5A_DT;
+H5A_MarketExactBad = H5A_MarketEffectiveValid AND
                       (H5A_MarketKey!=H5A_DN OR H5A_MarketDT!=H5A_DT);
-H5A_MarketValidCount = LastValue(Cum(H5A_MarketValid==1));
+H5A_MarketEffectiveValidCount = LastValue(Cum(H5A_MarketEffectiveValid));
+H5A_MarketRejectedDateCount = LastValue(Cum(H5A_MarketRejectedDate));
+H5A_MarketRejectedFutureCount = LastValue(Cum(H5A_MarketRejectedFuture));
 H5A_MarketFutureBadCount = LastValue(Cum(H5A_MarketFutureBad));
 H5A_MarketExactBadCount = LastValue(Cum(H5A_MarketExactBad));
 _SECTION_END();
 
 _SECTION_BEGIN("05. KET QUA H5A");
 H5A_Prereq = H5A_IntervalValid AND H5A_HighEventCount>0 AND H5A_LowEventCount>0 AND
-              H5A_PhaseRowCount>0 AND H5A_WSelectedCount>0 AND H5A_MSelectedCount>0 AND
-              H5A_MarketValidCount>0;
+              H5A_PhaseRowCount>0 AND H5A_WSelectedValidCount>0 AND H5A_MSelectedValidCount>0 AND
+              H5A_MarketEffectiveValidCount>0;
 H5A_AllPass = H5A_Prereq AND
               H5A_PivotTimingBadCount==0 AND H5A_PivotFutureBadCount==0 AND
               H5A_RangeKnownBadCount==0 AND H5A_PhaseKnownBadCount==0 AND H5A_FamilyKnownBadCount==0 AND
@@ -198,7 +232,7 @@ H5A_AllPass = H5A_Prereq AND
               H5A_MarketFutureBadCount==0 AND H5A_MarketExactBadCount==0;
 H5A_Status = IIf(NOT H5A_IntervalValid,0,IIf(NOT H5A_Prereq,1,IIf(H5A_AllPass,2,3)));
 H5A_StatusText = "Sai khung thoi gian\nThieu prerequisite lich su\nDat kiem tra causal / boundary\nCo vi pham causal / boundary";
-H5A_Version = "HISTORICAL_ANTI_LOOKAHEAD_CAUSALITY_V01_20260914_A";
+H5A_Version = "HISTORICAL_ANTI_LOOKAHEAD_CAUSALITY_V01_20260914_B";
 H5A_Last = H5A_BI==LastValue(H5A_BI);
 Filter = H5A_Last;
 
@@ -211,10 +245,14 @@ AddColumn(H5A_Zero+H5A_RangeRowCount,"So dong mot vung",1.0);
 AddColumn(H5A_Zero+H5A_RangeKnownBadCount,"Loi Range KnownAt",1.0);
 AddColumn(H5A_Zero+H5A_PhaseKnownBadCount,"Loi Phase KnownAt",1.0);
 AddColumn(H5A_Zero+H5A_FamilyKnownBadCount,"Loi Family KnownAt",1.0);
-AddColumn(H5A_Zero+H5A_WBoundaryBadCount,"Loi bien Tuan",1.0);
-AddColumn(H5A_Zero+H5A_MBoundaryBadCount,"Loi bien Thang",1.0);
-AddColumn(H5A_Zero+H5A_MarketFutureBadCount,"Loi benchmark tu tuong lai",1.0);
-AddColumn(H5A_Zero+H5A_MarketExactBadCount,"Loi benchmark khong khop ngay",1.0);
+AddColumn(H5A_Zero+H5A_WRejectedStaleCount,"Dong Tuan stale bi loai",1.0);
+AddColumn(H5A_Zero+H5A_WBoundaryBadCount,"Loi bien Tuan da chap nhan",1.0);
+AddColumn(H5A_Zero+H5A_MRejectedStaleCount,"Dong Thang stale bi loai",1.0);
+AddColumn(H5A_Zero+H5A_MBoundaryBadCount,"Loi bien Thang da chap nhan",1.0);
+AddColumn(H5A_Zero+H5A_MarketRejectedFutureCount,"Benchmark future bi loai",1.0);
+AddColumn(H5A_Zero+H5A_MarketRejectedDateCount,"Benchmark sai ngay bi loai",1.0);
+AddColumn(H5A_Zero+H5A_MarketFutureBadCount,"Loi benchmark future da chap nhan",1.0);
+AddColumn(H5A_Zero+H5A_MarketExactBadCount,"Loi benchmark sai ngay da chap nhan",1.0);
 AddMultiTextColumn(H5A_Zero+H5A_Status,H5A_StatusText,"Trang thai H5A");
 AddTextColumn(H5A_Version,"Phien ban H5A");
 _SECTION_END();
