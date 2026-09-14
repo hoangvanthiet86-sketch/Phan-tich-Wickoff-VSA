@@ -33,6 +33,17 @@ Chay:
 - Range: `From-To`, 01/01/2019 den hien tai (hoac All quotes)
 - Explore va xuat TXT.
 
+### Semantics fail-closed bat buoc
+
+W/M StaticVar timeline va Market StaticVar co the de lai payload carry-forward tai mot bar Daily ma payload do khong con dung previous completed calendar period, hoac benchmark khong co exact-date bar. Day khong tu dong la lookahead violation.
+
+Bat bien can kiem la:
+- payload stale / sai ngay phai bi gate tu choi;
+- payload duoc chap nhan moi bat buoc dung completed-calendar / exact-date / source < T;
+- khong duoc bien dong bi tu choi thanh context hop le.
+
+Vi vay cac cot diagnostic `... bi loai` co the > 0. Cac cot `Loi ... da chap nhan` bat buoc bang 0.
+
 Acceptance:
 - co pivot dinh va pivot day da xac nhan;
 - `Loi thoi diem cong bo pivot = 0`;
@@ -40,11 +51,17 @@ Acceptance:
 - `Loi Range KnownAt = 0`;
 - `Loi Phase KnownAt = 0`;
 - `Loi Family KnownAt = 0`;
-- `Loi bien Tuan = 0`;
-- `Loi bien Thang = 0`;
-- `Loi benchmark tu tuong lai = 0`;
-- `Loi benchmark khong khop ngay = 0` tren cac benchmark row hop le;
+- `Loi bien Tuan da chap nhan = 0`;
+- `Loi bien Thang da chap nhan = 0`;
+- `Loi benchmark future da chap nhan = 0`;
+- `Loi benchmark sai ngay da chap nhan = 0`;
 - `Trang thai H5A = Dat kiem tra causal / boundary`.
+
+Diagnostic khong phai failure neu guard da loai dung:
+- `Dong Tuan stale bi loai`;
+- `Dong Thang stale bi loai`;
+- `Benchmark future bi loai`;
+- `Benchmark sai ngay bi loai`.
 
 Checkpoint neu dat:
 `HISTORICAL_SCANNER_V01_H5A_CAUSAL_BOUNDARY = PASS`
@@ -92,8 +109,8 @@ Neu ca 3 moc dat:
 Khong rerun H2/H3 neu H5-A khong phat hien mismatch moi.
 
 H5 su dung lai evidence da khoa:
-- H2A/H2B: completed calendar W/M, zero ordinal/date violation;
-- H3-B: benchmark exact-date/source <= T;
+- H2A/H2B: completed calendar W/M, zero ordinal/date violation tren payload duoc chap nhan;
+- H3-B: benchmark exact-date/source <= T tren context duoc chap nhan;
 - H3-C: missing benchmark fail closed.
 
 Neu H5-A + H5-B dat va evidence H2/H3 van hop le:
@@ -106,5 +123,6 @@ Sau H5 moi chuyen H6 terminal/universe equivalence.
 
 - Compile/include error: sua dependency/path truoc; Verify Formula/Verify Syntax; khong sua decision logic de ne loi.
 - H5-A violation: lap mismatch report theo nhom pivot / KnownAt / W/M / benchmark truoc khi sua.
+- Khong duoc danh dong stale / benchmark sai ngay da bi fail-closed la causal violation.
 - H5-B mismatch: ghi ro moc T va field lech; khong noi long threshold/filter.
 - Khong thay doi methodology, enum, weight, threshold hoac production scanner semantics trong H5.
