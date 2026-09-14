@@ -96,11 +96,14 @@ Cau hinh:
 
 - Apply to: `SNZ`
 - Periodicity: `Daily`
-- Range: tu 2019 den du lieu hien tai neu co the; toi thieu phai co 2 rollover Tuan va 2 rollover Thang.
+- **Khong duoc de `Range = 1 recent bar`.** O che do `Chi ngay doi tuan / doi thang`, neu bar moi nhat khong phai ngay rollover thi AmiBroker se hien `No results` du H2B khong bi loi.
+- Chon `Range = From-To dates` hoac tuong duong, khuyen nghi tu `01/01/2019` den ngay du lieu hien tai; toi thieu phai bao gom 2 rollover Tuan va 2 rollover Thang.
 - Parameters:
   - `1.1 Dong hien thi = Chi ngay doi tuan / doi thang`
 
 Explore va xuat TXT.
+
+Neu van `No results` sau khi Range da mo rong, chuyen tam thoi `1.1 Dong hien thi = Tat ca ngay co payload` de chan doan timeline/payload; khong dung che do nay de thay the acceptance rollover.
 
 ## 5. Acceptance
 
