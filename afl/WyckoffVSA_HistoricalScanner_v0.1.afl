@@ -12,10 +12,17 @@
     KHONG tao Buy/Sell/Short/Cover/PositionScore/P&L.
 
     Profile v0.1: Market-only, Full Top-Down Group deferred.
-    UI dung tieng Viet khong dau theo HS14.
+    UI dung tieng Viet ASCII khong dau theo HS14.
+
+    2026-09-16 B — presentation only:
+    - bo cot mac dinh va tu xuat Ma co phieu / Ngay gio;
+    - chuyen nhan hien thi nguoi dung sang tieng Viet ASCII;
+    - RangePosition chi hien khi RangePositionValid = 1;
+    - khong thay methodology/threshold/enum/decision semantics.
 */
 #pragma nocache
 SetBarsRequired(sbrAll,sbrAll);
+SetOption("NoDefaultColumns",True);
 
 #include_once <WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl>
 
@@ -46,10 +53,10 @@ function H4_StageFromPhase(phaseCode)
 _SECTION_BEGIN("01. CAU HINH H4");
 H4_FilterMode = ParamList(
     "1.1 Che do loc lich su",
-    "Tat ca du lieu hop le|Watch tro len|Review|Toan bo audit",0);
+    "Tat ca du lieu hop le|Theo doi tro len|Can xem xet|Toan bo kiem tra",0);
 _SECTION_END();
 
-_SECTION_BEGIN("02. DOC STOCK TIMELINE LICH SU");
+_SECTION_BEGIN("02. DOC DONG THOI GIAN CO PHIEU LICH SU");
 H4_Symbol = Name();
 H4_DT = DateTime();
 H4_DateKey = DateNum();
@@ -105,7 +112,7 @@ H4_HistoricalStockSourceOK =
     H4_StockReady AND H4_StockExactDate AND H4_StockNoFuture AND H4_StockSourceValid==1;
 _SECTION_END();
 
-_SECTION_BEGIN("03. DOC MARKET CONTEXT LICH SU");
+_SECTION_BEGIN("03. DOC BOI CANH THI TRUONG LICH SU");
 H4_MarketSymbol = WVRC_SelectionMarketSymbol;
 H4_MarketPrefix = "WVSA_HIST_MKT_v01_" + H4_MarketSymbol + "_";
 H4_MarketReady =
@@ -152,7 +159,7 @@ H4_MarketSelection = H4_SelectionContext(
     H4_MarketEvidence,H4_MarketHypAlign,H4_MarketMTFDir);
 _SECTION_END();
 
-_SECTION_BEGIN("04. DATA ELIGIBILITY LICH SU");
+_SECTION_BEGIN("04. DIEU KIEN DU LIEU LICH SU");
 H4_Stage = H4_StageFromPhase(H4_StockPhase);
 H4_MarketConfigMatch =
     StrLen(WVRC_RSMarketSymbol)>0 AND
@@ -190,7 +197,7 @@ H4_ExclusionMask =
 H4_DataEligible = H4_HistoricalStockSourceOK AND H4_ExclusionMask==0;
 _SECTION_END();
 
-_SECTION_BEGIN("05. REVIEW VA METHOD BLOCK");
+_SECTION_BEGIN("05. XEM XET VA MA CHAN PHUONG PHAP");
 H4_PriceRSNonConfirmation = H4_PriceRSRelationship==2 OR H4_PriceRSRelationship==3;
 H4_StockVSAMixedOrConflict = H4_StockEvidence==3 OR H4_StockHypAlign==3;
 H4_StockMTFConflict = H4_MTFDir==4 OR H4_MTFDir==5 OR H4_MTFDir==6;
@@ -273,8 +280,8 @@ H4_CandidateSide = IIf(H4_CandidateClass==3 OR H4_CandidateClass==4,1,
 H4_WatchPlus = H4_CandidateClass>=2 AND H4_CandidateClass<=8;
 _SECTION_END();
 
-_SECTION_BEGIN("07. TRANG THAI VA OUTPUT H4");
-// 0 sai khung; 1 stock publisher chua san sang; 2 stock khong khop ngay;
+_SECTION_BEGIN("07. TRANG THAI VA KET QUA H4");
+// 0 sai khung; 1 bo ghi chua san sang; 2 stock khong khop ngay;
 // 3 stock payload khong hop le; 4 market chua san sang/khong khop ngay;
 // 5 data gated; 6 da phan loai point-in-time.
 H4_StatusCode = IIf(
@@ -287,27 +294,27 @@ H4_StatusCode = IIf(
 
 H4_StatusText =
     "Sai khung thoi gian\n"
-    + "Stock publisher lich su chua san sang\n"
-    + "Stock source khong khop dung ngay\n"
-    + "Stock payload khong hop le\n"
-    + "Market context khong hop le / khong khop ngay\n"
-    + "Data gated theo production semantics\n"
-    + "Da phan loai point-in-time";
+    + "Bo ghi lich su co phieu chua san sang\n"
+    + "Nguon co phieu khong khop dung ngay\n"
+    + "Du lieu co phieu khong hop le\n"
+    + "Boi canh thi truong khong hop le / khong khop ngay\n"
+    + "Du lieu bi chan theo quy tac van hanh\n"
+    + "Da phan loai dung thoi diem";
 H4_YesNoText = "Khong\nCo";
 H4_ClassText =
-    "Khong du du lieu / Data gated\n"
+    "Khong du du lieu / du lieu bi chan\n"
     + "Khong phai ung vien hien tai\n"
-    + "Watch\n"
+    + "Theo doi\n"
     + "Dang phat trien tang\n"
     + "Dat chuan tang - dong thuan thi truong\n"
-    + "Dat chuan tang - Full Top-Down\n"
+    + "Dat chuan tang - dong thuan day du\n"
     + "Dang phat trien giam\n"
     + "Dat chuan giam - dong thuan thi truong\n"
-    + "Dat chuan giam - Full Top-Down\n"
+    + "Dat chuan giam - dong thuan day du\n"
     + "Can xem xet - xung dot / mo ho";
 H4_SideText = "Chua xac dinh\nTang\nGiam";
 H4_StageText =
-    "Khong du du lieu\nWatch - hinh thanh / phat trien vung\nDang phat trien - kiem tra cuoi\nPhat trien co huong\nMo rong xu huong\nKet thuc / bi thay the";
+    "Khong du du lieu\nTheo doi - hinh thanh / phat trien vung\nDang phat trien - kiem tra cuoi\nPhat trien co huong\nMo rong xu huong\nKet thuc / bi thay the";
 H4_PhaseText =
     "Khong du du lieu\nPha A\nPha B\nPha C ung vien\nPha C\nPha D\nPha E\nDa het hieu luc";
 H4_FamilyText =
@@ -317,20 +324,22 @@ H4_MTFText =
 H4_RSText = "Khong du du lieu\nRS tang\nRS giam\nRS hon hop";
 H4_MarketText =
     "Khong du du lieu\nTrung tinh / chua ro\nHo tro tang\nHo tro giam\nHon hop / xung dot";
-H4_Version = "HISTORICAL_SCANNER_V01_H4_20260914_A";
+H4_RangeDisplay = IIf(H4_RangePositionValid==1,H4_RangePosition,Null);
+H4_Version = "HISTORICAL_SCANNER_V01_H4_20260916_B";
 
 Filter = IIf(H4_FilterMode=="Tat ca du lieu hop le",H4_DataEligible,
-         IIf(H4_FilterMode=="Watch tro len",H4_WatchPlus,
-         IIf(H4_FilterMode=="Review",H4_CandidateClass==9,1)));
+         IIf(H4_FilterMode=="Theo doi tro len",H4_WatchPlus,
+         IIf(H4_FilterMode=="Can xem xet",H4_CandidateClass==9,1)));
 
-// Giu cot Ticker va Date/Time mac dinh cua AmiBroker, khong them cot trung lap.
+AddTextColumn(H4_Symbol,"Ma co phieu");
+AddColumn(H4_DT,"Ngay gio",formatDateTime);
 AddMultiTextColumn(H4_DataEligible,H4_YesNoText,"Du lieu hop le");
 AddMultiTextColumn(H4_CandidateClass,H4_ClassText,"Lop ung vien");
 AddMultiTextColumn(H4_CandidateSide,H4_SideText,"Huong");
 AddMultiTextColumn(H4_Stage,H4_StageText,"Giai doan");
 AddMultiTextColumn(H4_StockPhase,H4_PhaseText,"Pha");
 AddMultiTextColumn(H4_StockFamily,H4_FamilyText,"Gia thuyet");
-AddColumn(100*H4_RangePosition,"Vi tri trong vung (%)",1.2);
+AddColumn(100*H4_RangeDisplay,"Vi tri trong vung (%)",1.2);
 AddMultiTextColumn(H4_MTFDir,H4_MTFText,"MTF");
 AddMultiTextColumn(H4_RSStructure,H4_RSText,"RS voi thi truong");
 AddMultiTextColumn(H4_Review,H4_YesNoText,"Can xem xet");
