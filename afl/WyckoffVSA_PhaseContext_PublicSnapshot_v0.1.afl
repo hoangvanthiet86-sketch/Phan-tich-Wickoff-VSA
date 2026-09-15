@@ -1,0 +1,382 @@
+/*
+    Wyckoff VSA Phase / Context Engine v0.1 — public snapshot facade
+
+    Completes the D32/D34/D35/D36/D42 public audit contract on top of the
+    causal Phase/Context state machines. This facade is the intended input for
+    future Composite development.
+
+    SPEC-ALIGNED DEVELOPMENT FACADE. UNTESTED NATIVE.
+    No trading signal.
+*/
+#include_once <WyckoffVSA_PhaseContext_v0.1.afl>
+
+_SECTION_BEGIN("74. Phase Context public audit arrays");
+WPCP_SourceBI = BarIndex();
+WPCP_SourceDT = DateTime();
+WPCP_Zero = 0 * WPCP_SourceBI;
+WPCP_Null = Null + WPCP_Zero;
+
+WPCP_RangeStatusText = "NO RANGE CONTEXT\nACTIVE RANGE CONTEXT\nPHASE-E TERMINAL CONTEXT\nINVALIDATED CONTEXT";
+WPCP_RevisionReasonText = "NO REVISION\nUNRESOLVED TO BULLISH HYPOTHESIS\nUNRESOLVED TO BEARISH HYPOTHESIS\nBULLISH TO BEARISH HYPOTHESIS\nBEARISH TO BULLISH HYPOTHESIS\nMIXED / CONFLICTING EVIDENCE";
+WPCP_PhaseCSourceText = "NONE\nSPRING / SHAKEOUT\nSUPPLY TEST\nUPTHRUST\nLPSY\nRESERVED\nRESERVED\nRESERVED\nRESERVED\nMIXED PHASE-C SOURCES";
+
+// Old-context terminal records emitted on a same-bar supersession. The newly
+// created RangeContext may coexist on that row; no arbitrary winner is chosen.
+WPCP_L_SupersededPhaseStateCode = IIf(WPC_L_SupersessionOccurred,7,Null);
+WPCP_U_SupersededPhaseStateCode = IIf(WPC_U_SupersessionOccurred,7,Null);
+WPCP_L_SupersededFlag = IIf(WPC_L_SupersessionOccurred,1,0);
+WPCP_U_SupersededFlag = IIf(WPC_U_SupersessionOccurred,1,0);
+
+// Public status and invalidation are built causally per RangeContextID. If a
+// frozen upstream range contract becomes structurally invalid, that context is
+// terminal in this public facade and cannot silently resurrect under the same ID.
+WPCP_L_RangeStatusCode = WPCP_Zero;
+WPCP_U_RangeStatusCode = WPCP_Zero;
+WPCP_L_RangeActivePublic = WPCP_Zero;
+WPCP_U_RangeActivePublic = WPCP_Zero;
+WPCP_L_RangeInvalidated = WPCP_Zero;
+WPCP_U_RangeInvalidated = WPCP_Zero;
+WPCP_L_PublicPhaseStateCode = WPCP_Zero;
+WPCP_U_PublicPhaseStateCode = WPCP_Zero;
+
+// D09/D42 cumulative event diagnostics not already held by the base machine.
+WPCP_L_SpringLinkedCount = WPCP_Zero;
+WPCP_L_SupplyTestLinkedCount = WPCP_Zero;
+WPCP_L_UpthrustLinkedCount = WPCP_Zero;
+WPCP_L_ConfirmedPivotLowCount = WPCP_Zero;
+WPCP_L_ConfirmedPivotHighCount = WPCP_Zero;
+WPCP_U_SpringLinkedCount = WPCP_Zero;
+WPCP_U_SupplyTestLinkedCount = WPCP_Zero;
+WPCP_U_UpthrustLinkedCount = WPCP_Zero;
+WPCP_U_ConfirmedPivotLowCount = WPCP_Zero;
+WPCP_U_ConfirmedPivotHighCount = WPCP_Zero;
+
+// D34/D42 full coordinates and source-key constituents.
+WPCP_L_PhaseOriginDateTime = WPCP_Null;
+WPCP_L_PhaseCKnownAtDateTime = WPCP_Null;
+WPCP_L_PhaseDKnownAtDateTime = WPCP_Null;
+WPCP_L_PhaseEKnownAtDateTime = WPCP_Null;
+WPCP_L_HypothesisKnownAtDateTime = WPCP_Null;
+WPCP_L_PriorHigh1DateTime = WPCP_Null;
+WPCP_L_PriorHigh2DateTime = WPCP_Null;
+WPCP_L_PriorLow1DateTime = WPCP_Null;
+WPCP_L_PriorLow2DateTime = WPCP_Null;
+WPCP_L_PhaseCSourceEventKey = WPCP_Null;
+WPCP_L_PhaseCSourceKnownAtBarIndex = WPCP_Null;
+WPCP_L_PhaseCSourceStatusCode = WPCP_Zero;
+WPCP_L_HypothesisRevisionReasonCode = WPCP_Zero;
+
+WPCP_U_PhaseOriginDateTime = WPCP_Null;
+WPCP_U_PhaseCKnownAtDateTime = WPCP_Null;
+WPCP_U_PhaseDKnownAtDateTime = WPCP_Null;
+WPCP_U_PhaseEKnownAtDateTime = WPCP_Null;
+WPCP_U_HypothesisKnownAtDateTime = WPCP_Null;
+WPCP_U_PriorHigh1DateTime = WPCP_Null;
+WPCP_U_PriorHigh2DateTime = WPCP_Null;
+WPCP_U_PriorLow1DateTime = WPCP_Null;
+WPCP_U_PriorLow2DateTime = WPCP_Null;
+WPCP_U_PhaseCSourceEventKey = WPCP_Null;
+WPCP_U_PhaseCSourceKnownAtBarIndex = WPCP_Null;
+WPCP_U_PhaseCSourceStatusCode = WPCP_Zero;
+WPCP_U_HypothesisRevisionReasonCode = WPCP_Zero;
+_SECTION_END();
+
+_SECTION_BEGIN("75. Causal public-snapshot completion loop");
+WPCP_LLastID=-1; WPCP_LInvalid=0; WPCP_LSpringN=0; WPCP_LSupplyN=0; WPCP_LUTN=0; WPCP_LPivotLowN=0; WPCP_LPivotHighN=0;
+WPCP_LPrevPhaseOriginBI=-1; WPCP_LPhaseOriginDT=0; WPCP_LPhaseOriginDTValid=0;
+WPCP_LPrevCKnownBI=-1; WPCP_LCKnownDT=0; WPCP_LCKnownDTValid=0;
+WPCP_LPrevDKnownBI=-1; WPCP_LDKnownDT=0; WPCP_LDKnownDTValid=0;
+WPCP_LPrevEKnownBI=-1; WPCP_LEKnownDT=0; WPCP_LEKnownDTValid=0;
+WPCP_LPrevHypKnownBI=-1; WPCP_LHypKnownDT=0; WPCP_LHypKnownDTValid=0;
+WPCP_LPH1DT=0; WPCP_LPH1DTValid=0; WPCP_LPH2DT=0; WPCP_LPH2DTValid=0;
+WPCP_LPL1DT=0; WPCP_LPL1DTValid=0; WPCP_LPL2DT=0; WPCP_LPL2DTValid=0;
+
+WPCP_ULastID=-1; WPCP_UInvalid=0; WPCP_USpringN=0; WPCP_USupplyN=0; WPCP_UUTN=0; WPCP_UPivotLowN=0; WPCP_UPivotHighN=0;
+WPCP_UPrevPhaseOriginBI=-1; WPCP_UPhaseOriginDT=0; WPCP_UPhaseOriginDTValid=0;
+WPCP_UPrevCKnownBI=-1; WPCP_UCKnownDT=0; WPCP_UCKnownDTValid=0;
+WPCP_UPrevDKnownBI=-1; WPCP_UDKnownDT=0; WPCP_UDKnownDTValid=0;
+WPCP_UPrevEKnownBI=-1; WPCP_UEKnownDT=0; WPCP_UEKnownDTValid=0;
+WPCP_UPrevHypKnownBI=-1; WPCP_UHypKnownDT=0; WPCP_UHypKnownDTValid=0;
+WPCP_UPH1DT=0; WPCP_UPH1DTValid=0; WPCP_UPH2DT=0; WPCP_UPH2DTValid=0;
+WPCP_UPL1DT=0; WPCP_UPL1DTValid=0; WPCP_UPL2DT=0; WPCP_UPL2DTValid=0;
+
+for (WPCP_i=0; WPCP_i<BarCount; WPCP_i++)
+{
+    // ---------------- LOWER ----------------
+    if (WPC_L_ContextPresent[WPCP_i]==1 AND WPC_Finite(WPC_L_RangeContextID[WPCP_i]))
+    {
+        WPCP_LID = WPC_L_RangeContextID[WPCP_i];
+        if (WPCP_LID != WPCP_LLastID)
+        {
+            WPCP_LLastID=WPCP_LID; WPCP_LInvalid=0;
+            WPCP_LSpringN=0; WPCP_LSupplyN=0; WPCP_LUTN=0; WPCP_LPivotLowN=0; WPCP_LPivotHighN=0;
+            WPCP_LPrevPhaseOriginBI=-1; WPCP_LPrevCKnownBI=-1; WPCP_LPrevDKnownBI=-1; WPCP_LPrevEKnownBI=-1; WPCP_LPrevHypKnownBI=-1;
+            WPCP_LPhaseOriginDTValid=0; WPCP_LCKnownDTValid=0; WPCP_LDKnownDTValid=0; WPCP_LEKnownDTValid=0; WPCP_LHypKnownDTValid=0;
+            WPCP_LPH1DTValid=0; WPCP_LPH2DTValid=0; WPCP_LPL1DTValid=0; WPCP_LPL2DTValid=0;
+
+            // Prior-trend pivot coordinates are frozen for this context. Resolve
+            // their DateTimes once from already loaded historical bars.
+            for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++)
+            {
+                if (WPC_Finite(WPC_L_PriorHigh1BarIndex[WPCP_i]) AND WPCP_SourceBI[WPCP_j]==WPC_L_PriorHigh1BarIndex[WPCP_i]) { WPCP_LPH1DT=WPCP_SourceDT[WPCP_j]; WPCP_LPH1DTValid=1; }
+                if (WPC_Finite(WPC_L_PriorHigh2BarIndex[WPCP_i]) AND WPCP_SourceBI[WPCP_j]==WPC_L_PriorHigh2BarIndex[WPCP_i]) { WPCP_LPH2DT=WPCP_SourceDT[WPCP_j]; WPCP_LPH2DTValid=1; }
+                if (WPC_Finite(WPC_L_PriorLow1BarIndex[WPCP_i]) AND WPCP_SourceBI[WPCP_j]==WPC_L_PriorLow1BarIndex[WPCP_i]) { WPCP_LPL1DT=WPCP_SourceDT[WPCP_j]; WPCP_LPL1DTValid=1; }
+                if (WPC_Finite(WPC_L_PriorLow2BarIndex[WPCP_i]) AND WPCP_SourceBI[WPCP_j]==WPC_L_PriorLow2BarIndex[WPCP_i]) { WPCP_LPL2DT=WPCP_SourceDT[WPCP_j]; WPCP_LPL2DTValid=1; }
+            }
+        }
+
+        if (WPCIF_L_RangeSnapshotValid[WPCP_i]!=1) WPCP_LInvalid=1;
+        if (WPC_L_CurrentSpringLinked[WPCP_i]) WPCP_LSpringN++;
+        if (WPC_L_CurrentSupplyTestLinked[WPCP_i]) WPCP_LSupplyN++;
+        if (WPC_L_CurrentUpthrustLinked[WPCP_i]) WPCP_LUTN++;
+        if (SL_PivotLowEventCode[WPCP_i]==2 AND SL_PivotLowExtremeBarIndex[WPCP_i]>WPC_L_RangeKnownAtBarIndex[WPCP_i]) WPCP_LPivotLowN++;
+        if (SL_PivotHighEventCode[WPCP_i]==2 AND SL_PivotHighExtremeBarIndex[WPCP_i]>WPC_L_RangeKnownAtBarIndex[WPCP_i]) WPCP_LPivotHighN++;
+
+        WPCP_L_SpringLinkedCount[WPCP_i]=WPCP_LSpringN;
+        WPCP_L_SupplyTestLinkedCount[WPCP_i]=WPCP_LSupplyN;
+        WPCP_L_UpthrustLinkedCount[WPCP_i]=WPCP_LUTN;
+        WPCP_L_ConfirmedPivotLowCount[WPCP_i]=WPCP_LPivotLowN;
+        WPCP_L_ConfirmedPivotHighCount[WPCP_i]=WPCP_LPivotHighN;
+        WPCP_L_PriorHigh1DateTime[WPCP_i]=IIf(WPCP_LPH1DTValid,WPCP_LPH1DT,Null);
+        WPCP_L_PriorHigh2DateTime[WPCP_i]=IIf(WPCP_LPH2DTValid,WPCP_LPH2DT,Null);
+        WPCP_L_PriorLow1DateTime[WPCP_i]=IIf(WPCP_LPL1DTValid,WPCP_LPL1DT,Null);
+        WPCP_L_PriorLow2DateTime[WPCP_i]=IIf(WPCP_LPL2DTValid,WPCP_LPL2DT,Null);
+
+        // Resolve dynamic known-at coordinates only when the stored BI changes.
+        WPCP_TargetBI=WPC_L_PhaseOriginBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_LPrevPhaseOriginBI)
+        {
+            WPCP_LPrevPhaseOriginBI=WPCP_TargetBI; WPCP_LPhaseOriginDTValid=0;
+            for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_LPhaseOriginDT=WPCP_SourceDT[WPCP_j]; WPCP_LPhaseOriginDTValid=1; }
+        }
+        WPCP_L_PhaseOriginDateTime[WPCP_i]=IIf(WPCP_LPhaseOriginDTValid,WPCP_LPhaseOriginDT,Null);
+
+        WPCP_TargetBI=WPC_L_PhaseCKnownAtBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_LPrevCKnownBI)
+        {
+            WPCP_LPrevCKnownBI=WPCP_TargetBI; WPCP_LCKnownDTValid=0;
+            for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_LCKnownDT=WPCP_SourceDT[WPCP_j]; WPCP_LCKnownDTValid=1; }
+        }
+        WPCP_L_PhaseCKnownAtDateTime[WPCP_i]=IIf(WPCP_LCKnownDTValid,WPCP_LCKnownDT,Null);
+
+        WPCP_TargetBI=WPC_L_PhaseDKnownAtBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_LPrevDKnownBI)
+        {
+            WPCP_LPrevDKnownBI=WPCP_TargetBI; WPCP_LDKnownDTValid=0;
+            for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_LDKnownDT=WPCP_SourceDT[WPCP_j]; WPCP_LDKnownDTValid=1; }
+        }
+        WPCP_L_PhaseDKnownAtDateTime[WPCP_i]=IIf(WPCP_LDKnownDTValid,WPCP_LDKnownDT,Null);
+
+        WPCP_TargetBI=WPC_L_PhaseEKnownAtBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_LPrevEKnownBI)
+        {
+            WPCP_LPrevEKnownBI=WPCP_TargetBI; WPCP_LEKnownDTValid=0;
+            for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_LEKnownDT=WPCP_SourceDT[WPCP_j]; WPCP_LEKnownDTValid=1; }
+        }
+        WPCP_L_PhaseEKnownAtDateTime[WPCP_i]=IIf(WPCP_LEKnownDTValid,WPCP_LEKnownDT,Null);
+
+        WPCP_TargetBI=WPC_L_HypothesisKnownAtBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_LPrevHypKnownBI)
+        {
+            WPCP_LPrevHypKnownBI=WPCP_TargetBI; WPCP_LHypKnownDTValid=0;
+            for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_LHypKnownDT=WPCP_SourceDT[WPCP_j]; WPCP_LHypKnownDTValid=1; }
+        }
+        WPCP_L_HypothesisKnownAtDateTime[WPCP_i]=IIf(WPCP_LHypKnownDTValid,WPCP_LHypKnownDT,Null);
+
+        if (WPC_L_PhaseCSourceCode[WPCP_i]>0 AND WPC_Finite(WPC_L_PhaseCOriginBarIndex[WPCP_i]))
+        {
+            // Symbol is implicit in AmiBroker's per-symbol execution. Pair this
+            // token with RangeContextID for a stable within-symbol source key.
+            WPCP_L_PhaseCSourceEventKey[WPCP_i]=WPC_L_PhaseCSourceCode[WPCP_i]*1000000000 + WPC_L_PhaseCOriginBarIndex[WPCP_i];
+            WPCP_L_PhaseCSourceKnownAtBarIndex[WPCP_i]=WPC_L_PhaseKnownAtBarIndex[WPCP_i];
+            WPCP_L_PhaseCSourceStatusCode[WPCP_i]=IIf(WPC_L_PhaseStateCode[WPCP_i]==3,1,IIf(WPC_L_PhaseStateCode[WPCP_i]>=4,2,0));
+        }
+        WPCP_L_HypothesisRevisionReasonCode[WPCP_i]=WPC_L_HypothesisRevisionCode[WPCP_i];
+
+        if (WPCP_LInvalid)
+        {
+            WPCP_L_RangeStatusCode[WPCP_i]=3; WPCP_L_RangeInvalidated[WPCP_i]=1; WPCP_L_RangeActivePublic[WPCP_i]=0; WPCP_L_PublicPhaseStateCode[WPCP_i]=7;
+        }
+        else if (WPC_L_RangeTerminal[WPCP_i])
+        {
+            WPCP_L_RangeStatusCode[WPCP_i]=2; WPCP_L_RangeActivePublic[WPCP_i]=0; WPCP_L_PublicPhaseStateCode[WPCP_i]=WPC_L_PhaseStateCode[WPCP_i];
+        }
+        else
+        {
+            WPCP_L_RangeStatusCode[WPCP_i]=1; WPCP_L_RangeActivePublic[WPCP_i]=1; WPCP_L_PublicPhaseStateCode[WPCP_i]=WPC_L_PhaseStateCode[WPCP_i];
+        }
+    }
+    else
+    {
+        WPCP_LLastID=-1; WPCP_LInvalid=0;
+    }
+
+    // ---------------- UPPER ----------------
+    if (WPC_U_ContextPresent[WPCP_i]==1 AND WPC_Finite(WPC_U_RangeContextID[WPCP_i]))
+    {
+        WPCP_UID = WPC_U_RangeContextID[WPCP_i];
+        if (WPCP_UID != WPCP_ULastID)
+        {
+            WPCP_ULastID=WPCP_UID; WPCP_UInvalid=0;
+            WPCP_USpringN=0; WPCP_USupplyN=0; WPCP_UUTN=0; WPCP_UPivotLowN=0; WPCP_UPivotHighN=0;
+            WPCP_UPrevPhaseOriginBI=-1; WPCP_UPrevCKnownBI=-1; WPCP_UPrevDKnownBI=-1; WPCP_UPrevEKnownBI=-1; WPCP_UPrevHypKnownBI=-1;
+            WPCP_UPhaseOriginDTValid=0; WPCP_UCKnownDTValid=0; WPCP_UDKnownDTValid=0; WPCP_UEKnownDTValid=0; WPCP_UHypKnownDTValid=0;
+            WPCP_UPH1DTValid=0; WPCP_UPH2DTValid=0; WPCP_UPL1DTValid=0; WPCP_UPL2DTValid=0;
+            for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++)
+            {
+                if (WPC_Finite(WPC_U_PriorHigh1BarIndex[WPCP_i]) AND WPCP_SourceBI[WPCP_j]==WPC_U_PriorHigh1BarIndex[WPCP_i]) { WPCP_UPH1DT=WPCP_SourceDT[WPCP_j]; WPCP_UPH1DTValid=1; }
+                if (WPC_Finite(WPC_U_PriorHigh2BarIndex[WPCP_i]) AND WPCP_SourceBI[WPCP_j]==WPC_U_PriorHigh2BarIndex[WPCP_i]) { WPCP_UPH2DT=WPCP_SourceDT[WPCP_j]; WPCP_UPH2DTValid=1; }
+                if (WPC_Finite(WPC_U_PriorLow1BarIndex[WPCP_i]) AND WPCP_SourceBI[WPCP_j]==WPC_U_PriorLow1BarIndex[WPCP_i]) { WPCP_UPL1DT=WPCP_SourceDT[WPCP_j]; WPCP_UPL1DTValid=1; }
+                if (WPC_Finite(WPC_U_PriorLow2BarIndex[WPCP_i]) AND WPCP_SourceBI[WPCP_j]==WPC_U_PriorLow2BarIndex[WPCP_i]) { WPCP_UPL2DT=WPCP_SourceDT[WPCP_j]; WPCP_UPL2DTValid=1; }
+            }
+        }
+
+        if (WPCIF_U_RangeSnapshotValid[WPCP_i]!=1) WPCP_UInvalid=1;
+        if (WPC_U_CurrentSpringLinked[WPCP_i]) WPCP_USpringN++;
+        if (WPC_U_CurrentSupplyTestLinked[WPCP_i]) WPCP_USupplyN++;
+        if (WPC_U_CurrentUpthrustLinked[WPCP_i]) WPCP_UUTN++;
+        if (SL_PivotLowEventCode[WPCP_i]==2 AND SL_PivotLowExtremeBarIndex[WPCP_i]>WPC_U_RangeKnownAtBarIndex[WPCP_i]) WPCP_UPivotLowN++;
+        if (SL_PivotHighEventCode[WPCP_i]==2 AND SL_PivotHighExtremeBarIndex[WPCP_i]>WPC_U_RangeKnownAtBarIndex[WPCP_i]) WPCP_UPivotHighN++;
+
+        WPCP_U_SpringLinkedCount[WPCP_i]=WPCP_USpringN; WPCP_U_SupplyTestLinkedCount[WPCP_i]=WPCP_USupplyN; WPCP_U_UpthrustLinkedCount[WPCP_i]=WPCP_UUTN;
+        WPCP_U_ConfirmedPivotLowCount[WPCP_i]=WPCP_UPivotLowN; WPCP_U_ConfirmedPivotHighCount[WPCP_i]=WPCP_UPivotHighN;
+        WPCP_U_PriorHigh1DateTime[WPCP_i]=IIf(WPCP_UPH1DTValid,WPCP_UPH1DT,Null); WPCP_U_PriorHigh2DateTime[WPCP_i]=IIf(WPCP_UPH2DTValid,WPCP_UPH2DT,Null);
+        WPCP_U_PriorLow1DateTime[WPCP_i]=IIf(WPCP_UPL1DTValid,WPCP_UPL1DT,Null); WPCP_U_PriorLow2DateTime[WPCP_i]=IIf(WPCP_UPL2DTValid,WPCP_UPL2DT,Null);
+
+        WPCP_TargetBI=WPC_U_PhaseOriginBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_UPrevPhaseOriginBI)
+        { WPCP_UPrevPhaseOriginBI=WPCP_TargetBI; WPCP_UPhaseOriginDTValid=0; for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_UPhaseOriginDT=WPCP_SourceDT[WPCP_j]; WPCP_UPhaseOriginDTValid=1; } }
+        WPCP_U_PhaseOriginDateTime[WPCP_i]=IIf(WPCP_UPhaseOriginDTValid,WPCP_UPhaseOriginDT,Null);
+
+        WPCP_TargetBI=WPC_U_PhaseCKnownAtBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_UPrevCKnownBI)
+        { WPCP_UPrevCKnownBI=WPCP_TargetBI; WPCP_UCKnownDTValid=0; for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_UCKnownDT=WPCP_SourceDT[WPCP_j]; WPCP_UCKnownDTValid=1; } }
+        WPCP_U_PhaseCKnownAtDateTime[WPCP_i]=IIf(WPCP_UCKnownDTValid,WPCP_UCKnownDT,Null);
+
+        WPCP_TargetBI=WPC_U_PhaseDKnownAtBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_UPrevDKnownBI)
+        { WPCP_UPrevDKnownBI=WPCP_TargetBI; WPCP_UDKnownDTValid=0; for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_UDKnownDT=WPCP_SourceDT[WPCP_j]; WPCP_UDKnownDTValid=1; } }
+        WPCP_U_PhaseDKnownAtDateTime[WPCP_i]=IIf(WPCP_UDKnownDTValid,WPCP_UDKnownDT,Null);
+
+        WPCP_TargetBI=WPC_U_PhaseEKnownAtBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_UPrevEKnownBI)
+        { WPCP_UPrevEKnownBI=WPCP_TargetBI; WPCP_UEKnownDTValid=0; for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_UEKnownDT=WPCP_SourceDT[WPCP_j]; WPCP_UEKnownDTValid=1; } }
+        WPCP_U_PhaseEKnownAtDateTime[WPCP_i]=IIf(WPCP_UEKnownDTValid,WPCP_UEKnownDT,Null);
+
+        WPCP_TargetBI=WPC_U_HypothesisKnownAtBarIndex[WPCP_i];
+        if (WPC_Finite(WPCP_TargetBI) AND WPCP_TargetBI!=WPCP_UPrevHypKnownBI)
+        { WPCP_UPrevHypKnownBI=WPCP_TargetBI; WPCP_UHypKnownDTValid=0; for (WPCP_j=0; WPCP_j<=WPCP_i; WPCP_j++) if (WPCP_SourceBI[WPCP_j]==WPCP_TargetBI) { WPCP_UHypKnownDT=WPCP_SourceDT[WPCP_j]; WPCP_UHypKnownDTValid=1; } }
+        WPCP_U_HypothesisKnownAtDateTime[WPCP_i]=IIf(WPCP_UHypKnownDTValid,WPCP_UHypKnownDT,Null);
+
+        if (WPC_U_PhaseCSourceCode[WPCP_i]>0 AND WPC_Finite(WPC_U_PhaseCOriginBarIndex[WPCP_i]))
+        {
+            WPCP_U_PhaseCSourceEventKey[WPCP_i]=WPC_U_PhaseCSourceCode[WPCP_i]*1000000000 + WPC_U_PhaseCOriginBarIndex[WPCP_i];
+            WPCP_U_PhaseCSourceKnownAtBarIndex[WPCP_i]=WPC_U_PhaseKnownAtBarIndex[WPCP_i];
+            WPCP_U_PhaseCSourceStatusCode[WPCP_i]=IIf(WPC_U_PhaseStateCode[WPCP_i]==3,1,IIf(WPC_U_PhaseStateCode[WPCP_i]>=4,2,0));
+        }
+        WPCP_U_HypothesisRevisionReasonCode[WPCP_i]=WPC_U_HypothesisRevisionCode[WPCP_i];
+
+        if (WPCP_UInvalid)
+        { WPCP_U_RangeStatusCode[WPCP_i]=3; WPCP_U_RangeInvalidated[WPCP_i]=1; WPCP_U_RangeActivePublic[WPCP_i]=0; WPCP_U_PublicPhaseStateCode[WPCP_i]=7; }
+        else if (WPC_U_RangeTerminal[WPCP_i])
+        { WPCP_U_RangeStatusCode[WPCP_i]=2; WPCP_U_RangeActivePublic[WPCP_i]=0; WPCP_U_PublicPhaseStateCode[WPCP_i]=WPC_U_PhaseStateCode[WPCP_i]; }
+        else
+        { WPCP_U_RangeStatusCode[WPCP_i]=1; WPCP_U_RangeActivePublic[WPCP_i]=1; WPCP_U_PublicPhaseStateCode[WPCP_i]=WPC_U_PhaseStateCode[WPCP_i]; }
+    }
+    else
+    {
+        WPCP_ULastID=-1; WPCP_UInvalid=0;
+    }
+}
+_SECTION_END();
+
+_SECTION_BEGIN("76. Phase Context public Exploration contract");
+// Lower RangeContext status / full coordinates.
+AddColumn(WPCP_L_RangeStatusCode,"WPCP_L_RangeStatusCode",1.0);
+AddMultiTextColumn(WPCP_L_RangeStatusCode,WPCP_RangeStatusText,"WPCP_L_RangeStatus");
+AddColumn(WPCP_L_RangeActivePublic,"WPCP_L_RangeActive",1.0);
+AddColumn(WPCP_L_SupersededFlag,"WPCP_L_RangeSupersededEvent",1.0);
+AddColumn(WPCP_L_RangeInvalidated,"WPCP_L_RangeInvalidated",1.0);
+AddColumn(WPCP_L_PublicPhaseStateCode,"WPCP_L_PublicPhaseStateCode",1.0);
+AddMultiTextColumn(WPCP_L_PublicPhaseStateCode,WPC_PhaseText,"WPCP_L_PublicPhaseState");
+AddColumn(WPCP_L_SupersededPhaseStateCode,"WPCP_L_SupersededPhaseStateCode",1.0);
+AddColumn(WPC_L_RangeKnownAtDateTime,"WPCP_L_RangeKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_L_PhaseOriginDateTime,"WPCP_L_PhaseOriginDateTime",formatDateTime);
+AddColumn(WPC_L_PhaseKnownAtDateTime,"WPCP_L_PhaseKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_L_PhaseCKnownAtDateTime,"WPCP_L_PhaseCKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_L_PhaseDKnownAtDateTime,"WPCP_L_PhaseDKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_L_PhaseEKnownAtDateTime,"WPCP_L_PhaseEKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_L_HypothesisKnownAtDateTime,"WPCP_L_HypothesisKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_L_PriorHigh1DateTime,"WPCP_L_PriorHigh1DateTime",formatDateTime);
+AddColumn(WPCP_L_PriorHigh2DateTime,"WPCP_L_PriorHigh2DateTime",formatDateTime);
+AddColumn(WPCP_L_PriorLow1DateTime,"WPCP_L_PriorLow1DateTime",formatDateTime);
+AddColumn(WPCP_L_PriorLow2DateTime,"WPCP_L_PriorLow2DateTime",formatDateTime);
+AddColumn(WPCP_L_PhaseCSourceEventKey,"WPCP_L_PhaseCSourceEventKey",1.0);
+AddColumn(WPCP_L_PhaseCSourceKnownAtBarIndex,"WPCP_L_PhaseCSourceKnownAtBarIndex",1.0);
+AddColumn(WPCP_L_PhaseCSourceStatusCode,"WPCP_L_PhaseCSourceStatusCode",1.0);
+AddMultiTextColumn(WPC_L_PhaseCSourceCode,WPCP_PhaseCSourceText,"WPCP_L_PhaseCSource");
+AddColumn(WPCP_L_HypothesisRevisionReasonCode,"WPCP_L_HypothesisRevisionReasonCode",1.0);
+AddMultiTextColumn(WPCP_L_HypothesisRevisionReasonCode,WPCP_RevisionReasonText,"WPCP_L_HypothesisRevisionReason");
+AddColumn(WPCP_L_SpringLinkedCount,"WPCP_L_SpringLinkedCount",1.0);
+AddColumn(WPCP_L_SupplyTestLinkedCount,"WPCP_L_SupplyTestLinkedCount",1.0);
+AddColumn(WPCP_L_UpthrustLinkedCount,"WPCP_L_UpthrustLinkedCount",1.0);
+AddColumn(WPCP_L_ConfirmedPivotLowCount,"WPCP_L_ConfirmedPivotLowCount",1.0);
+AddColumn(WPCP_L_ConfirmedPivotHighCount,"WPCP_L_ConfirmedPivotHighCount",1.0);
+AddColumn(WPC_L_CurrentSpringLinked,"WPCP_L_CurrentSpringLinked",1.0);
+AddColumn(WPC_L_CurrentSupplyTestLinked,"WPCP_L_CurrentSupplyTestLinked",1.0);
+AddColumn(WPC_L_CurrentUpthrustLinked,"WPCP_L_CurrentUpthrustLinked",1.0);
+AddColumn(WPC_L_CurrentSOSLinked,"WPCP_L_CurrentSOSLinked",1.0);
+AddColumn(WPC_L_CurrentLPSLinked,"WPCP_L_CurrentLPSLinked",1.0);
+AddColumn(WPC_L_CurrentSOWLinked,"WPCP_L_CurrentSOWLinked",1.0);
+AddColumn(WPC_L_CurrentLPSYLinked,"WPCP_L_CurrentLPSYLinked",1.0);
+AddColumn(WPC_L_CurrentNoSupplyAfterStrength,"WPCP_L_CurrentNoSupplyAfterStrength",1.0);
+AddColumn(WPC_L_CurrentNoDemandAfterWeakness,"WPCP_L_CurrentNoDemandAfterWeakness",1.0);
+AddColumn(WPC_L_CurrentBullishAbsorptionResponse,"WPCP_L_CurrentBullishAbsorptionResponse",1.0);
+AddColumn(WPC_L_CurrentBearishAbsorptionResponse,"WPCP_L_CurrentBearishAbsorptionResponse",1.0);
+
+// Upper RangeContext status / full coordinates.
+AddColumn(WPCP_U_RangeStatusCode,"WPCP_U_RangeStatusCode",1.0);
+AddMultiTextColumn(WPCP_U_RangeStatusCode,WPCP_RangeStatusText,"WPCP_U_RangeStatus");
+AddColumn(WPCP_U_RangeActivePublic,"WPCP_U_RangeActive",1.0);
+AddColumn(WPCP_U_SupersededFlag,"WPCP_U_RangeSupersededEvent",1.0);
+AddColumn(WPCP_U_RangeInvalidated,"WPCP_U_RangeInvalidated",1.0);
+AddColumn(WPCP_U_PublicPhaseStateCode,"WPCP_U_PublicPhaseStateCode",1.0);
+AddMultiTextColumn(WPCP_U_PublicPhaseStateCode,WPC_PhaseText,"WPCP_U_PublicPhaseState");
+AddColumn(WPCP_U_SupersededPhaseStateCode,"WPCP_U_SupersededPhaseStateCode",1.0);
+AddColumn(WPC_U_RangeKnownAtDateTime,"WPCP_U_RangeKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_U_PhaseOriginDateTime,"WPCP_U_PhaseOriginDateTime",formatDateTime);
+AddColumn(WPC_U_PhaseKnownAtDateTime,"WPCP_U_PhaseKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_U_PhaseCKnownAtDateTime,"WPCP_U_PhaseCKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_U_PhaseDKnownAtDateTime,"WPCP_U_PhaseDKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_U_PhaseEKnownAtDateTime,"WPCP_U_PhaseEKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_U_HypothesisKnownAtDateTime,"WPCP_U_HypothesisKnownAtDateTime",formatDateTime);
+AddColumn(WPCP_U_PriorHigh1DateTime,"WPCP_U_PriorHigh1DateTime",formatDateTime);
+AddColumn(WPCP_U_PriorHigh2DateTime,"WPCP_U_PriorHigh2DateTime",formatDateTime);
+AddColumn(WPCP_U_PriorLow1DateTime,"WPCP_U_PriorLow1DateTime",formatDateTime);
+AddColumn(WPCP_U_PriorLow2DateTime,"WPCP_U_PriorLow2DateTime",formatDateTime);
+AddColumn(WPCP_U_PhaseCSourceEventKey,"WPCP_U_PhaseCSourceEventKey",1.0);
+AddColumn(WPCP_U_PhaseCSourceKnownAtBarIndex,"WPCP_U_PhaseCSourceKnownAtBarIndex",1.0);
+AddColumn(WPCP_U_PhaseCSourceStatusCode,"WPCP_U_PhaseCSourceStatusCode",1.0);
+AddMultiTextColumn(WPC_U_PhaseCSourceCode,WPCP_PhaseCSourceText,"WPCP_U_PhaseCSource");
+AddColumn(WPCP_U_HypothesisRevisionReasonCode,"WPCP_U_HypothesisRevisionReasonCode",1.0);
+AddMultiTextColumn(WPCP_U_HypothesisRevisionReasonCode,WPCP_RevisionReasonText,"WPCP_U_HypothesisRevisionReason");
+AddColumn(WPCP_U_SpringLinkedCount,"WPCP_U_SpringLinkedCount",1.0);
+AddColumn(WPCP_U_SupplyTestLinkedCount,"WPCP_U_SupplyTestLinkedCount",1.0);
+AddColumn(WPCP_U_UpthrustLinkedCount,"WPCP_U_UpthrustLinkedCount",1.0);
+AddColumn(WPCP_U_ConfirmedPivotLowCount,"WPCP_U_ConfirmedPivotLowCount",1.0);
+AddColumn(WPCP_U_ConfirmedPivotHighCount,"WPCP_U_ConfirmedPivotHighCount",1.0);
+AddColumn(WPC_U_CurrentSpringLinked,"WPCP_U_CurrentSpringLinked",1.0);
+AddColumn(WPC_U_CurrentSupplyTestLinked,"WPCP_U_CurrentSupplyTestLinked",1.0);
+AddColumn(WPC_U_CurrentUpthrustLinked,"WPCP_U_CurrentUpthrustLinked",1.0);
+AddColumn(WPC_U_CurrentSOSLinked,"WPCP_U_CurrentSOSLinked",1.0);
+AddColumn(WPC_U_CurrentLPSLinked,"WPCP_U_CurrentLPSLinked",1.0);
+AddColumn(WPC_U_CurrentSOWLinked,"WPCP_U_CurrentSOWLinked",1.0);
+AddColumn(WPC_U_CurrentLPSYLinked,"WPCP_U_CurrentLPSYLinked",1.0);
+AddColumn(WPC_U_CurrentNoSupplyAfterStrength,"WPCP_U_CurrentNoSupplyAfterStrength",1.0);
+AddColumn(WPC_U_CurrentNoDemandAfterWeakness,"WPCP_U_CurrentNoDemandAfterWeakness",1.0);
+AddColumn(WPC_U_CurrentBullishAbsorptionResponse,"WPCP_U_CurrentBullishAbsorptionResponse",1.0);
+AddColumn(WPC_U_CurrentBearishAbsorptionResponse,"WPCP_U_CurrentBearishAbsorptionResponse",1.0);
+
+// Public facade intentionally preserves the upstream Filter. It is research and
+// audit output, not a market scanner and not a trading system.
+_SECTION_END();

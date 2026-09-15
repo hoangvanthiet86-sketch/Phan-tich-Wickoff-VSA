@@ -1,0 +1,354 @@
+/*
+    Wyckoff VSA Relative Strength Context Engine v0.1
+
+    Approved specification: PR #32, R01-R36.
+    Approval merge commit: 2dedab4168c4845b66a92021ce9a59137a939e82
+    Derived-Series Pivot contract: PR #33, K01-K32.
+
+    Comparative-strength research/context layer only.
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+
+    No Buy/Sell/Short/Cover, no ranking, no percentile, no confidence or
+    probability output. Market Scanner is a downstream consumer.
+
+    AmiBroker 6.20 compatibility correction:
+    - user-defined function parameters A/B were renamed because AFL is
+      case-insensitive and "a" is a predefined identifier.
+    - no analytical logic was changed.
+*/
+SetBarsRequired(sbrAll,sbrAll);
+#include_once <WyckoffVSA_StructureLocation_v1.0.afl>
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+
+_SECTION_BEGIN("110. Relative Strength configuration and data health");
+function WRS_Finite(x)
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WRS_SourceBarIndex = BarIndex();
+WRS_SourceDateTime = DateTime();
+WRS_SourceOffset = Cum(1)-1;
+WRS_Zero = 0 * WRS_SourceBarIndex;
+WRS_Null = Null + WRS_Zero;
+WRS_SchemaVersion = WRS_Zero + 1;
+
+WRS_CurrentSymbol = Name();
+WRS_MarketBenchmarkSymbol = ParamStr("RS Market Benchmark","");
+WRS_GroupBenchmarkSymbol = ParamStr("RS Group Benchmark","");
+WRS_AdjustmentBasisDeclaration = ParamStr("RS Adjustment Basis","NOT VERIFIED");
+WRS_AdjustmentBasisStatusScalar = Param("RS Adjustment Basis Status: 0=unverified 1=compatible 2=incompatible",0,0,2,1);
+WRS_AdjustmentBasisStatusCode = WRS_Zero + WRS_AdjustmentBasisStatusScalar;
+WRS_RuntimeLastBarIsProvisional = ParamToggle("RS: last bar provisional","No|Yes",0);
+
+WRS_NativeInterval = WRS_Zero + Interval();
+WRS_OfficialDailyIntegration = IIf(Interval()==inDaily,1,0);
+WRS_MarketConfigured = StrLen(WRS_MarketBenchmarkSymbol)>0;
+WRS_GroupConfigured = StrLen(WRS_GroupBenchmarkSymbol)>0;
+
+WRS_MarketClose = WRS_Null;
+if(WRS_MarketConfigured)
+{
+    WRS_MarketClose = Foreign(WRS_MarketBenchmarkSymbol,"C",0);
+}
+
+WRS_GroupClose = WRS_Null;
+if(WRS_GroupConfigured)
+{
+    WRS_GroupClose = Foreign(WRS_GroupBenchmarkSymbol,"C",0);
+}
+
+WRS_StockCloseValid = WRS_Finite(Close) AND Close>0;
+WRS_MarketCloseFinite = WRS_Finite(WRS_MarketClose);
+WRS_GroupCloseFinite = WRS_Finite(WRS_GroupClose);
+
+WRS_MarketBenchmarkStatusCode = IIf(
+    NOT WRS_MarketConfigured,0,
+    IIf(IsNull(WRS_MarketClose),1,
+    IIf(NOT WRS_MarketCloseFinite OR WRS_MarketClose<=0,2,3)));
+WRS_GroupBenchmarkStatusCode = IIf(
+    NOT WRS_GroupConfigured,0,
+    IIf(IsNull(WRS_GroupClose),1,
+    IIf(NOT WRS_GroupCloseFinite OR WRS_GroupClose<=0,2,3)));
+
+WRS_MarketCloseValid = WRS_MarketBenchmarkStatusCode==3;
+WRS_GroupCloseValid = WRS_GroupBenchmarkStatusCode==3;
+WRS_PivotConfigValid = VarGet("SL_PivotConfigValid");
+WRS_PivotLeft = VarGet("SL_PivotLeft");
+WRS_PivotRight = VarGet("SL_PivotRight");
+
+WRS_UpstreamProvisionalRaw = VarGet("WCI_ProvisionalFlag");
+WRS_UpstreamProvisionalKnown = WRS_Finite(WRS_UpstreamProvisionalRaw);
+WRS_ProvisionalFlag = IIf(
+    Status("lastbarinrange") AND
+    (WRS_RuntimeLastBarIsProvisional==1 OR
+     (WRS_UpstreamProvisionalKnown AND WRS_UpstreamProvisionalRaw==1)),1,0);
+
+WRS_SourceRevisionStatusCode = WRS_Zero;
+_SECTION_END();
+
+_SECTION_BEGIN("111. Generic pairwise RS ratio and structure");
+
+function WRS_RunPair(
+    wrsChannel,
+    wrsNumerator,
+    wrsNumeratorValid,
+    wrsDenominator,
+    wrsDenominatorValid,
+    pivotLeftBars,
+    pivotRightBars,
+    wrsSrcBI,
+    wrsSrcDT,
+    wrsSrcOffset )
+{
+    local wrsPfx, wrsKernelPfx, wrsRatioValidLocal, wrsRatioLocal;
+    local wrsHiCode, wrsLoCode, wrsHiValue, wrsLoValue;
+    local wrsHiCount, wrsLoCount, wrsHi1, wrsHi2, wrsLo1, wrsLo2, wrsStructureValid, wrsStructureCode;
+    local wrsHiBI1, wrsHiBI2, wrsLoBI1, wrsLoBI2, wrsHiDT1, wrsHiDT2, wrsLoDT1, wrsLoDT2;
+    local wrsAnyEvent, wrsAnyKind, wrsAnyValue, wrsAnyExtremeBI, wrsAnyExtremeDT, wrsAnyOffset;
+    local wrsAnyCount, wrsEndKind, wrsStartKind, wrsEndValue, wrsStartValue, wrsEndBI, wrsStartBI, wrsEndDT, wrsStartDT, wrsEndOff, wrsStartOff;
+    local wrsWaveValid, wrsWaveDirection, wrsWavePct, wrsWaveBars;
+
+    wrsPfx = "WRS_"+wrsChannel+"_";
+    wrsKernelPfx = "WDP_"+wrsChannel+"_";
+
+    wrsRatioValidLocal = wrsNumeratorValid AND wrsDenominatorValid AND WRS_Finite(wrsNumerator)
+                         AND WRS_Finite(wrsDenominator) AND wrsNumerator>0 AND wrsDenominator>0;
+    wrsRatioLocal = IIf(wrsRatioValidLocal,wrsNumerator/wrsDenominator,Null);
+
+    VarSet(wrsPfx+"RatioValid",IIf(wrsRatioValidLocal,1,0));
+    VarSet(wrsPfx+"Ratio",wrsRatioLocal);
+    VarSet(wrsPfx+"SourceDateTime",IIf(wrsRatioValidLocal,wrsSrcDT,Null));
+
+    WDP_RunDerivedSeries(
+        wrsChannel,wrsRatioLocal,wrsRatioValidLocal,
+        pivotLeftBars,pivotRightBars,wrsSrcBI,wrsSrcDT,wrsSrcOffset);
+
+    wrsHiCode = VarGet(wrsKernelPfx+"PivotHighEventCode");
+    wrsLoCode = VarGet(wrsKernelPfx+"PivotLowEventCode");
+    wrsHiValue = VarGet(wrsKernelPfx+"PivotHighEventValue");
+    wrsLoValue = VarGet(wrsKernelPfx+"PivotLowEventValue");
+
+    wrsHiCount = Cum(wrsHiCode==2);
+    wrsLoCount = Cum(wrsLoCode==2);
+    wrsHi1 = ValueWhen(wrsHiCode==2,wrsHiValue,1);
+    wrsHi2 = ValueWhen(wrsHiCode==2,wrsHiValue,2);
+    wrsLo1 = ValueWhen(wrsLoCode==2,wrsLoValue,1);
+    wrsLo2 = ValueWhen(wrsLoCode==2,wrsLoValue,2);
+
+    wrsHiBI1 = ValueWhen(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeBarIndex"),1);
+    wrsHiBI2 = ValueWhen(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeBarIndex"),2);
+    wrsLoBI1 = ValueWhen(wrsLoCode==2,VarGet(wrsKernelPfx+"PivotLowExtremeBarIndex"),1);
+    wrsLoBI2 = ValueWhen(wrsLoCode==2,VarGet(wrsKernelPfx+"PivotLowExtremeBarIndex"),2);
+    wrsHiDT1 = ValueWhen(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeDateTime"),1);
+    wrsHiDT2 = ValueWhen(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeDateTime"),2);
+    wrsLoDT1 = ValueWhen(wrsLoCode==2,VarGet(wrsKernelPfx+"PivotLowExtremeDateTime"),1);
+    wrsLoDT2 = ValueWhen(wrsLoCode==2,VarGet(wrsKernelPfx+"PivotLowExtremeDateTime"),2);
+
+    wrsStructureValid = wrsHiCount>=2 AND wrsLoCount>=2;
+    wrsStructureCode = IIf(NOT wrsStructureValid,0,
+        IIf(wrsHi1>wrsHi2 AND wrsLo1>wrsLo2,1,
+        IIf(wrsHi1<wrsHi2 AND wrsLo1<wrsLo2,2,3)));
+
+    VarSet(wrsPfx+"StructureValid",IIf(wrsStructureValid,1,0));
+    VarSet(wrsPfx+"StructureCode",wrsStructureCode);
+    VarSet(wrsPfx+"PivotHighConfirmedCount",wrsHiCount);
+    VarSet(wrsPfx+"PivotLowConfirmedCount",wrsLoCount);
+
+    VarSet(wrsPfx+"PivotHighLatestValue",IIf(wrsHiCount>=1,wrsHi1,Null));
+    VarSet(wrsPfx+"PivotHighPreviousValue",IIf(wrsHiCount>=2,wrsHi2,Null));
+    VarSet(wrsPfx+"PivotHighLatestExtremeBarIndex",IIf(wrsHiCount>=1,wrsHiBI1,Null));
+    VarSet(wrsPfx+"PivotHighPreviousExtremeBarIndex",IIf(wrsHiCount>=2,wrsHiBI2,Null));
+    VarSet(wrsPfx+"PivotHighLatestExtremeDateTime",IIf(wrsHiCount>=1,wrsHiDT1,Null));
+    VarSet(wrsPfx+"PivotHighPreviousExtremeDateTime",IIf(wrsHiCount>=2,wrsHiDT2,Null));
+    VarSet(wrsPfx+"PivotHighLatestConfirmBarIndex",VarGet(wrsKernelPfx+"PivotHighLatestConfirmBarIndex"));
+    VarSet(wrsPfx+"PivotHighLatestConfirmDateTime",VarGet(wrsKernelPfx+"PivotHighLatestConfirmDateTime"));
+
+    VarSet(wrsPfx+"PivotLowLatestValue",IIf(wrsLoCount>=1,wrsLo1,Null));
+    VarSet(wrsPfx+"PivotLowPreviousValue",IIf(wrsLoCount>=2,wrsLo2,Null));
+    VarSet(wrsPfx+"PivotLowLatestExtremeBarIndex",IIf(wrsLoCount>=1,wrsLoBI1,Null));
+    VarSet(wrsPfx+"PivotLowPreviousExtremeBarIndex",IIf(wrsLoCount>=2,wrsLoBI2,Null));
+    VarSet(wrsPfx+"PivotLowLatestExtremeDateTime",IIf(wrsLoCount>=1,wrsLoDT1,Null));
+    VarSet(wrsPfx+"PivotLowPreviousExtremeDateTime",IIf(wrsLoCount>=2,wrsLoDT2,Null));
+    VarSet(wrsPfx+"PivotLowLatestConfirmBarIndex",VarGet(wrsKernelPfx+"PivotLowLatestConfirmBarIndex"));
+    VarSet(wrsPfx+"PivotLowLatestConfirmDateTime",VarGet(wrsKernelPfx+"PivotLowLatestConfirmDateTime"));
+
+    wrsAnyEvent = (wrsHiCode==2) OR (wrsLoCode==2);
+    wrsAnyKind = IIf(wrsHiCode==2,1,IIf(wrsLoCode==2,2,0));
+    wrsAnyValue = IIf(wrsHiCode==2,wrsHiValue,wrsLoValue);
+    wrsAnyExtremeBI = IIf(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeBarIndex"),VarGet(wrsKernelPfx+"PivotLowExtremeBarIndex"));
+    wrsAnyExtremeDT = IIf(wrsHiCode==2,VarGet(wrsKernelPfx+"PivotHighExtremeDateTime"),VarGet(wrsKernelPfx+"PivotLowExtremeDateTime"));
+    wrsAnyOffset = wrsSrcOffset;
+    wrsAnyCount = Cum(wrsAnyEvent);
+
+    wrsEndKind = ValueWhen(wrsAnyEvent,wrsAnyKind,1);
+    wrsStartKind = ValueWhen(wrsAnyEvent,wrsAnyKind,2);
+    wrsEndValue = ValueWhen(wrsAnyEvent,wrsAnyValue,1);
+    wrsStartValue = ValueWhen(wrsAnyEvent,wrsAnyValue,2);
+    wrsEndBI = ValueWhen(wrsAnyEvent,wrsAnyExtremeBI,1);
+    wrsStartBI = ValueWhen(wrsAnyEvent,wrsAnyExtremeBI,2);
+    wrsEndDT = ValueWhen(wrsAnyEvent,wrsAnyExtremeDT,1);
+    wrsStartDT = ValueWhen(wrsAnyEvent,wrsAnyExtremeDT,2);
+    wrsEndOff = ValueWhen(wrsAnyEvent,wrsAnyOffset,1);
+    wrsStartOff = ValueWhen(wrsAnyEvent,wrsAnyOffset,2);
+
+    wrsWaveValid = wrsAnyCount>=2 AND wrsEndKind!=wrsStartKind AND WRS_Finite(wrsStartValue)
+                   AND WRS_Finite(wrsEndValue) AND wrsStartValue>0;
+    wrsWaveDirection = IIf(NOT wrsWaveValid,0,
+                       IIf(wrsEndValue>wrsStartValue,1,
+                       IIf(wrsEndValue<wrsStartValue,2,3)));
+    wrsWavePct = IIf(wrsWaveValid,100*(wrsEndValue/wrsStartValue-1),Null);
+    wrsWaveBars = IIf(wrsWaveValid,wrsEndOff-wrsStartOff,Null);
+
+    VarSet(wrsPfx+"WaveValid",IIf(wrsWaveValid,1,0));
+    VarSet(wrsPfx+"WaveDirectionCode",wrsWaveDirection);
+    VarSet(wrsPfx+"WaveStartRatio",IIf(wrsWaveValid,wrsStartValue,Null));
+    VarSet(wrsPfx+"WaveEndRatio",IIf(wrsWaveValid,wrsEndValue,Null));
+    VarSet(wrsPfx+"WaveChangePct",wrsWavePct);
+    VarSet(wrsPfx+"WaveStartBarIndex",IIf(wrsWaveValid,wrsStartBI,Null));
+    VarSet(wrsPfx+"WaveEndBarIndex",IIf(wrsWaveValid,wrsEndBI,Null));
+    VarSet(wrsPfx+"WaveStartDateTime",IIf(wrsWaveValid,wrsStartDT,Null));
+    VarSet(wrsPfx+"WaveEndDateTime",IIf(wrsWaveValid,wrsEndDT,Null));
+    VarSet(wrsPfx+"WaveDurationBars",wrsWaveBars);
+    return 1;
+}
+
+WRS_StockVsMarket_Calculated = WRS_RunPair(
+    "SVM",Close,WRS_StockCloseValid,WRS_MarketClose,WRS_MarketCloseValid,
+    WRS_PivotLeft,WRS_PivotRight,WRS_SourceBarIndex,WRS_SourceDateTime,WRS_SourceOffset);
+
+WRS_StockVsGroup_Calculated = 0;
+WRS_GroupVsMarket_Calculated = 0;
+
+if(WRS_GroupConfigured)
+{
+    WRS_StockVsGroup_Calculated = WRS_RunPair(
+        "SVG",Close,WRS_StockCloseValid,WRS_GroupClose,WRS_GroupCloseValid,
+        WRS_PivotLeft,WRS_PivotRight,WRS_SourceBarIndex,WRS_SourceDateTime,WRS_SourceOffset);
+
+    WRS_GroupVsMarket_Calculated = WRS_RunPair(
+        "GVM",WRS_GroupClose,WRS_GroupCloseValid,WRS_MarketClose,WRS_MarketCloseValid,
+        WRS_PivotLeft,WRS_PivotRight,WRS_SourceBarIndex,WRS_SourceDateTime,WRS_SourceOffset);
+}
+else
+{
+    WRS_SVG_RatioValid = WRS_Zero;
+    WRS_SVG_Ratio = WRS_Null;
+    WRS_SVG_StructureValid = WRS_Zero;
+    WRS_SVG_StructureCode = WRS_Zero;
+    WRS_GVM_RatioValid = WRS_Zero;
+    WRS_GVM_Ratio = WRS_Null;
+    WRS_GVM_StructureValid = WRS_Zero;
+    WRS_GVM_StructureCode = WRS_Zero;
+}
+
+WRS_SVM_RatioValid = VarGet("WRS_SVM_RatioValid");
+WRS_SVM_Ratio = VarGet("WRS_SVM_Ratio");
+WRS_SVM_StructureValid = VarGet("WRS_SVM_StructureValid");
+WRS_SVM_StructureCode = VarGet("WRS_SVM_StructureCode");
+WRS_SVG_RatioValid = VarGet("WRS_SVG_RatioValid");
+WRS_SVG_Ratio = VarGet("WRS_SVG_Ratio");
+WRS_SVG_StructureValid = VarGet("WRS_SVG_StructureValid");
+WRS_SVG_StructureCode = VarGet("WRS_SVG_StructureCode");
+WRS_GVM_RatioValid = VarGet("WRS_GVM_RatioValid");
+WRS_GVM_Ratio = VarGet("WRS_GVM_Ratio");
+WRS_GVM_StructureValid = VarGet("WRS_GVM_StructureValid");
+WRS_GVM_StructureCode = VarGet("WRS_GVM_StructureCode");
+_SECTION_END();
+
+_SECTION_BEGIN("112. Price structure and pairwise relationships");
+WRS_PriceHighEventCode = VarGet("SL_PivotHighEventCode");
+WRS_PriceLowEventCode = VarGet("SL_PivotLowEventCode");
+WRS_PriceHighEventPrice = VarGet("SL_PivotHighEventPrice");
+WRS_PriceLowEventPrice = VarGet("SL_PivotLowEventPrice");
+WRS_PriceHighCount = Cum(WRS_PriceHighEventCode==2);
+WRS_PriceLowCount = Cum(WRS_PriceLowEventCode==2);
+WRS_PriceHigh1 = ValueWhen(WRS_PriceHighEventCode==2,WRS_PriceHighEventPrice,1);
+WRS_PriceHigh2 = ValueWhen(WRS_PriceHighEventCode==2,WRS_PriceHighEventPrice,2);
+WRS_PriceLow1 = ValueWhen(WRS_PriceLowEventCode==2,WRS_PriceLowEventPrice,1);
+WRS_PriceLow2 = ValueWhen(WRS_PriceLowEventCode==2,WRS_PriceLowEventPrice,2);
+WRS_PriceStructureValid = WRS_PriceHighCount>=2 AND WRS_PriceLowCount>=2;
+WRS_PriceStructureCode = IIf(NOT WRS_PriceStructureValid,0,
+    IIf(WRS_PriceHigh1>WRS_PriceHigh2 AND WRS_PriceLow1>WRS_PriceLow2,1,
+    IIf(WRS_PriceHigh1<WRS_PriceHigh2 AND WRS_PriceLow1<WRS_PriceLow2,2,3)));
+
+WRS_SVM_PriceRSRelationshipCode = IIf(
+    NOT WRS_PriceStructureValid OR WRS_SVM_StructureCode==0,0,
+    IIf(WRS_PriceStructureCode==1 AND WRS_SVM_StructureCode==1,1,
+    IIf(WRS_PriceStructureCode==1 AND WRS_SVM_StructureCode==2,2,
+    IIf(WRS_PriceStructureCode==2 AND WRS_SVM_StructureCode==1,3,
+    IIf(WRS_PriceStructureCode==2 AND WRS_SVM_StructureCode==2,4,5)))));
+
+WRS_SVG_PriceRSRelationshipCode = IIf(
+    NOT WRS_GroupConfigured OR NOT WRS_PriceStructureValid OR WRS_SVG_StructureCode==0,0,
+    IIf(WRS_PriceStructureCode==1 AND WRS_SVG_StructureCode==1,1,
+    IIf(WRS_PriceStructureCode==1 AND WRS_SVG_StructureCode==2,2,
+    IIf(WRS_PriceStructureCode==2 AND WRS_SVG_StructureCode==1,3,
+    IIf(WRS_PriceStructureCode==2 AND WRS_SVG_StructureCode==2,4,5)))));
+_SECTION_END();
+
+_SECTION_BEGIN("113. Leadership and upstream-context diagnostics");
+WRS_LeadershipChainCode = IIf(
+    NOT WRS_GroupConfigured OR WRS_SVG_StructureCode==0 OR WRS_GVM_StructureCode==0,0,
+    IIf(WRS_GVM_StructureCode==1 AND WRS_SVG_StructureCode==1,1,
+    IIf(WRS_GVM_StructureCode==2 AND WRS_SVG_StructureCode==2,2,
+    IIf(WRS_GVM_StructureCode==2 AND WRS_SVG_StructureCode==1,3,
+    IIf(WRS_GVM_StructureCode==1 AND WRS_SVG_StructureCode==2,4,5)))));
+
+WRS_UpstreamDirectionalContextCode = VarGet("WCI_DirectionalContextCode");
+WRS_UpstreamEvidenceBalanceCode = VarGet("WCI_EvidenceBalanceCode");
+WRS_UpstreamMTFAlignmentCode = VarGet("WMTF_DirectionalAlignmentCode");
+
+WRS_PhaseRSAlignmentCode = IIf(
+    WRS_SVM_StructureCode==0,0,
+    IIf(WRS_UpstreamDirectionalContextCode==2 AND WRS_SVM_StructureCode==1,1,
+    IIf(WRS_UpstreamDirectionalContextCode==2 AND WRS_SVM_StructureCode==2,2,
+    IIf(WRS_UpstreamDirectionalContextCode==3 AND WRS_SVM_StructureCode==2,3,
+    IIf(WRS_UpstreamDirectionalContextCode==3 AND WRS_SVM_StructureCode==1,4,
+    IIf(WRS_UpstreamDirectionalContextCode==0 OR IsNull(WRS_UpstreamDirectionalContextCode),0,5))))));
+
+WRS_VSARSAlignmentCode = IIf(
+    WRS_SVM_StructureCode==0,0,
+    IIf(WRS_UpstreamEvidenceBalanceCode==1 AND WRS_SVM_StructureCode==1,1,
+    IIf(WRS_UpstreamEvidenceBalanceCode==1 AND WRS_SVM_StructureCode==2,2,
+    IIf(WRS_UpstreamEvidenceBalanceCode==2 AND WRS_SVM_StructureCode==2,3,
+    IIf(WRS_UpstreamEvidenceBalanceCode==2 AND WRS_SVM_StructureCode==1,4,
+    IIf(WRS_UpstreamEvidenceBalanceCode==0 OR IsNull(WRS_UpstreamEvidenceBalanceCode),0,5))))));
+
+WRS_RSMTFRelationshipCode = IIf(
+    WRS_SVM_StructureCode==0,0,
+    IIf(WRS_UpstreamMTFAlignmentCode==2 AND WRS_SVM_StructureCode==1,1,
+    IIf(WRS_UpstreamMTFAlignmentCode==2 AND WRS_SVM_StructureCode==2,2,
+    IIf(WRS_UpstreamMTFAlignmentCode==3 AND WRS_SVM_StructureCode==2,3,
+    IIf(WRS_UpstreamMTFAlignmentCode==3 AND WRS_SVM_StructureCode==1,4,
+    IIf(WRS_UpstreamMTFAlignmentCode==0 OR IsNull(WRS_UpstreamMTFAlignmentCode),0,5))))));
+_SECTION_END();
+
+_SECTION_BEGIN("114. Relative Strength public interface and validity");
+WRS_ContextComputable = IIf(
+    WRS_OfficialDailyIntegration AND WRS_PivotConfigValid AND WRS_SVM_RatioValid,1,0);
+
+WRS_ContextValid = IIf(
+    WRS_ContextComputable AND WRS_AdjustmentBasisStatusScalar==1,1,0);
+
+WRS_ContextStatusCode = IIf(
+    NOT WRS_OfficialDailyIntegration,1,
+    IIf(NOT WRS_MarketConfigured,2,
+    IIf(WRS_MarketBenchmarkStatusCode!=3,3,
+    IIf(NOT WRS_PivotConfigValid,4,
+    IIf(WRS_AdjustmentBasisStatusScalar==2,5,
+    IIf(WRS_AdjustmentBasisStatusScalar!=1,6,
+    IIf(WRS_ProvisionalFlag,7,0)))))));
+
+WRS_StockVsMarketRatioValid = WRS_SVM_RatioValid;
+WRS_StockVsMarketRatio = WRS_SVM_Ratio;
+WRS_StockVsMarketRSStructureCode = WRS_SVM_StructureCode;
+WRS_StockVsGroupRatioValid = WRS_SVG_RatioValid;
+WRS_StockVsGroupRatio = WRS_SVG_Ratio;
+WRS_StockVsGroupRSStructureCode = WRS_SVG_StructureCode;
+WRS_GroupVsMarketRatioValid = WRS_GVM_RatioValid;
+WRS_GroupVsMarketRatio = WRS_GVM_Ratio;
+WRS_GroupVsMarketRSStructureCode = WRS_GVM_StructureCode;
+WRS_PriceRSRelationshipCode = WRS_SVM_PriceRSRelationshipCode;
+WRS_CurrentDescriptorProvisional = WRS_ProvisionalFlag;
+_SECTION_END();

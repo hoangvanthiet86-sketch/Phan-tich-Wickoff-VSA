@@ -1,0 +1,26 @@
+/*
+    Wyckoff VSA Multi-Timeframe Context v0.1 — selection snapshot projection
+
+    Projection facade only for Cross-Symbol Selection Context Snapshot XS01-XS38.
+    No new Wyckoff/VSA interpretation. No ranking or trading signal.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+#include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>
+
+_SECTION_BEGIN("97. MTF selection snapshot public projection");
+WMTF_PublicSchemaMajor = 1;
+WMTF_PublicSchemaMinor = 0;
+WMTF_PublicProducerVersion = "0.1";
+
+WMTF_WeeklyValid = WMTF_Zero + WMTF_WeeklyValidScalar;
+WMTF_MonthlyValid = WMTF_Zero + WMTF_MonthlyValidScalar;
+WMTF_D_SourceBarDateTime = WMTF_Zero + WMTF_D_SourceBarDateTimeRaw;
+
+AddColumn(WMTF_PublicSchemaMajor,"WMTF_PublicSchemaMajor",1.0);
+AddColumn(WMTF_PublicSchemaMinor,"WMTF_PublicSchemaMinor",1.0);
+AddColumn(WMTF_DailyValid,"WMTF_DailyValid",1.0);
+AddColumn(WMTF_WeeklyValid,"WMTF_WeeklyValid",1.0);
+AddColumn(WMTF_MonthlyValid,"WMTF_MonthlyValid",1.0);
+AddColumn(WMTF_D_SourceBarDateTime,"WMTF_D_SourceBarDateTime",formatDateTime);
+_SECTION_END();

@@ -1,0 +1,23 @@
+/*
+    Wyckoff VSA Composite Indicator v0.1 — Exploration entrypoint
+
+    The included Composite facade already exports the numeric/categorical audit
+    fields. This wrapper adds explicit symbol and range-status text fields for
+    the D21 human-audit interface.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
+
+_SECTION_BEGIN("87. Composite exploration identity and status text");
+WCI_SingletonRangeStatusCode = IIf(WCI_ContextMultiplicityCode==1,WCI_RangeStatusCode,Null);
+
+AddTextColumn(Name(),"WCI_Symbol");
+AddMultiTextColumn(WCI_SingletonRangeStatusCode,WPCP_RangeStatusText,"WCI_SingletonRangeStatus");
+AddMultiTextColumn(WCI_L_RangeStatusCode,WPCP_RangeStatusText,"WCI_L_RangeStatus");
+AddMultiTextColumn(WCI_U_RangeStatusCode,WPCP_RangeStatusText,"WCI_U_RangeStatus");
+AddMultiTextColumn(WCI_L_PhaseStateCode,WPC_PhaseText,"WCI_L_PhaseState");
+AddMultiTextColumn(WCI_U_PhaseStateCode,WPC_PhaseText,"WCI_U_PhaseState");
+AddMultiTextColumn(WCI_L_FamilyHypothesisCode,WPC_FamilyText,"WCI_L_FamilyHypothesis");
+AddMultiTextColumn(WCI_U_FamilyHypothesisCode,WPC_FamilyText,"WCI_U_FamilyHypothesis");
+_SECTION_END();

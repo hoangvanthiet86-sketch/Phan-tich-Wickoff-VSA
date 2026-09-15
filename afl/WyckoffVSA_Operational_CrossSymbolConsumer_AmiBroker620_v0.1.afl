@@ -1,0 +1,61 @@
+/*
+    Wyckoff VSA Operational Cross-Symbol Consumer Audit v0.1
+    AmiBroker 6.20 native checkpoint wrapper.
+
+    Purpose:
+    - consume already-published Market / Group selection-context snapshots;
+    - apply the producer version guard;
+    - expose the final Consumer status in one compact Exploration surface.
+
+    IMPORTANT:
+    - the Consumer now performs the actual read at top level;
+    - this wrapper MUST NOT call the retired WXS_ReadSelectionSnapshot function;
+    - run with Analysis Range = 1 recent bar(s).
+
+    No Wyckoff/VSA analytical methodology is changed.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl>
+
+_SECTION_BEGIN("152. Operational Cross-Symbol Consumer Audit");
+
+// Deterministic audit surface. Use Range = 1 recent bar(s).
+Filter = 1;
+
+AddTextColumn(Name(),"Stock Symbol");
+AddColumn(DateTime(),"Visible Bar",formatDateTime);
+AddColumn(0*BarIndex()+WCLK_ModeCode,"Clock Mode",1.0);
+AddColumn(0*BarIndex()+WCLK_AsOfDateTime,"Visible-Data As-Of",formatDateTime);
+AddColumn(0*BarIndex()+WXS_ConsumerBusinessDateKey,"Consumer DateNum Key",1.0);
+AddColumn(0*BarIndex()+WXS_RoleConfigConflict,"Role Config Conflict",1.0);
+
+AddTextColumn(WXS_RequestedMarketSymbol,"Market Requested");
+AddTextColumn(VarGetText("WXSM_SnapshotSourceSymbol"),"Market Source");
+AddColumn(0*BarIndex()+WXS_MarketStatusCodeScalar,"Market StatusCode",1.0);
+AddMultiTextColumn(0*BarIndex()+WXS_MarketStatusCodeScalar,WXS_ConsumerStatusText,"Market Status");
+AddColumn(0*BarIndex()+WXS_MarketValidScalar,"Market Valid",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_ProducerVersionCompatible"),"Market Version Compatible",1.0);
+AddTextColumn(VarGetText("WXSM_ProducerContractVersion"),"Market Contract Version");
+AddTextColumn(VarGetText("WXSM_ProducerCompositeVersion"),"Market Composite Version");
+AddTextColumn(VarGetText("WXSM_ProducerMTFVersion"),"Market MTF Version");
+
+AddColumn(0*BarIndex()+VarGet("WXSM_SourceBusinessDateKey"),"Market Source DateNum Key",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_SourceBarDateTime"),"Market Source DateTime",formatDateTime);
+AddColumn(0*BarIndex()+VarGet("WXSM_ClockBasisCode"),"Market Clock Basis",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_CompletionBasisCode"),"Market Completion Basis",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_CompletionDeclarationCode"),"Market Completion Declaration",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_GenerationA"),"Market Generation A",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_GenerationB"),"Market Generation B",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_ReadyA"),"Market Ready A",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_ReadyB"),"Market Ready B",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_CompositePayloadValid"),"Market Composite Payload",1.0);
+AddColumn(0*BarIndex()+VarGet("WXSM_MTFPayloadValid"),"Market MTF Payload",1.0);
+
+AddTextColumn(WXS_RequestedGroupSymbol,"Group Requested");
+AddColumn(0*BarIndex()+WXS_GroupStatusCodeScalar,"Group StatusCode",1.0);
+AddMultiTextColumn(0*BarIndex()+WXS_GroupStatusCodeScalar,WXS_ConsumerStatusText,"Group Status");
+AddColumn(0*BarIndex()+WXS_GroupValidScalar,"Group Valid",1.0);
+
+_SECTION_END();

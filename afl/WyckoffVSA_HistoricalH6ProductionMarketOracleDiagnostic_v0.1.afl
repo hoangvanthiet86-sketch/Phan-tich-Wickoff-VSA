@@ -1,0 +1,80 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H6 production Market oracle diagnostic.
+
+    StaticVar-only diagnostic. Khong chay analytical runtime, khong ghi StaticVar,
+    khong thay methodology/threshold/decision surface.
+
+    UI: tieng Viet ASCII khong dau cho AmiBroker 6.20.01.
+
+    2026-09-15 B:
+    - target key dung AmiBroker DateNum 1260911 cho 11/09/2026;
+    - bo YYYYMMDD literal vi khong cung encoding voi SourceBusinessDateKey.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+SetOption("NoDefaultColumns",True);
+
+H6M_Version = "HISTORICAL_H6_PROD_MARKET_ORACLE_DIAGNOSTIC_V01_20260915_B";
+H6M_TargetDateNum = 1260911;
+H6M_MarketSymbol = "VNINDEX";
+H6M_Prefix = "WVSA_SELCTX_v01_" + H6M_MarketSymbol + "_";
+H6M_YesNo = "Khong\nCo";
+
+H6M_ReadyRaw = Nz(StaticVarGet(H6M_Prefix+"Ready"),0);
+H6M_Generation = Nz(StaticVarGet(H6M_Prefix+"CommittedGenerationID"),0);
+H6M_SchemaMajor = Nz(StaticVarGet(H6M_Prefix+"SchemaMajor"),0);
+H6M_SchemaMinor = Nz(StaticVarGet(H6M_Prefix+"SchemaMinor"),0);
+H6M_SourceSymbol = StaticVarGetText(H6M_Prefix+"SourceSymbol");
+H6M_SourceBusinessDateKey = Nz(StaticVarGet(H6M_Prefix+"SourceBusinessDateKey"),0);
+H6M_SourceBarDateTime = StaticVarGet(H6M_Prefix+"SourceBarDateTime");
+H6M_CompositePayloadValid = Nz(StaticVarGet(H6M_Prefix+"CompositePayloadValid"),0);
+H6M_MTFPayloadValid = Nz(StaticVarGet(H6M_Prefix+"MTFPayloadValid"),0);
+H6M_ProducerContractVersion = StaticVarGetText(H6M_Prefix+"ProducerContractVersion");
+H6M_ProducerCompositeVersion = StaticVarGetText(H6M_Prefix+"ProducerCompositeVersion");
+H6M_ProducerMTFVersion = StaticVarGetText(H6M_Prefix+"ProducerMTFVersion");
+
+H6M_Mult = StaticVarGet(H6M_Prefix+"ContextMultiplicityCode");
+H6M_Dir = StaticVarGet(H6M_Prefix+"DirectionalContextCode");
+H6M_Evidence = StaticVarGet(H6M_Prefix+"EvidenceBalanceCode");
+H6M_HypAlign = StaticVarGet(H6M_Prefix+"HypothesisAlignmentCode");
+H6M_MTF = StaticVarGet(H6M_Prefix+"MTF_DirectionalAlignmentCode");
+
+H6M_Ready = H6M_ReadyRaw==1 AND H6M_Generation>0;
+H6M_SymbolMatch = H6M_SourceSymbol==H6M_MarketSymbol;
+H6M_TargetDateMatch = H6M_SourceBusinessDateKey==H6M_TargetDateNum;
+H6M_SchemaOK = H6M_SchemaMajor==1 AND H6M_SchemaMinor==0;
+H6M_CorePayloadPresent =
+    NOT IsNull(H6M_Mult) AND NOT IsNull(H6M_Dir) AND
+    NOT IsNull(H6M_Evidence) AND NOT IsNull(H6M_HypAlign) AND
+    NOT IsNull(H6M_MTF);
+H6M_OracleReadyAtTarget = H6M_Ready AND H6M_SymbolMatch AND H6M_TargetDateMatch AND
+    H6M_SchemaOK AND H6M_CompositePayloadValid==1 AND H6M_MTFPayloadValid==1 AND
+    H6M_CorePayloadPresent;
+
+Filter = BarIndex()==LastValue(BarIndex());
+
+AddTextColumn(H6M_MarketSymbol,"Market oracle");
+AddMultiTextColumn(H6M_Ready,H6M_YesNo,"Ready + generation");
+AddColumn(0*BarIndex()+H6M_Generation,"Generation",1.0);
+AddColumn(0*BarIndex()+H6M_SchemaMajor,"Schema major",1.0);
+AddColumn(0*BarIndex()+H6M_SchemaMinor,"Schema minor",1.0);
+AddTextColumn(H6M_SourceSymbol,"Source symbol da luu");
+AddMultiTextColumn(H6M_SymbolMatch,H6M_YesNo,"Dung symbol VNINDEX");
+AddColumn(0*BarIndex()+H6M_SourceBusinessDateKey,"Business date key da luu",1.0);
+AddColumn(0*BarIndex()+H6M_TargetDateNum,"Business date key muc tieu",1.0);
+AddMultiTextColumn(H6M_TargetDateMatch,H6M_YesNo,"Dung moc 11/09");
+AddColumn(0*BarIndex()+H6M_SourceBarDateTime,"Source datetime",formatDateTime);
+AddMultiTextColumn(H6M_CompositePayloadValid==1,H6M_YesNo,"Composite payload hop le");
+AddMultiTextColumn(H6M_MTFPayloadValid==1,H6M_YesNo,"MTF payload hop le");
+AddMultiTextColumn(H6M_CorePayloadPresent,H6M_YesNo,"Core payload ton tai");
+AddColumn(0*BarIndex()+Nz(H6M_Mult,-1),"Context multiplicity",1.0);
+AddColumn(0*BarIndex()+Nz(H6M_Dir,-1),"Directional context",1.0);
+AddColumn(0*BarIndex()+Nz(H6M_Evidence,-1),"Evidence balance",1.0);
+AddColumn(0*BarIndex()+Nz(H6M_HypAlign,-1),"Hypothesis alignment",1.0);
+AddColumn(0*BarIndex()+Nz(H6M_MTF,-1),"MTF directional alignment",1.0);
+AddMultiTextColumn(H6M_OracleReadyAtTarget,H6M_YesNo,"Oracle production dung moc san sang");
+AddTextColumn(H6M_ProducerContractVersion,"Producer contract version");
+AddTextColumn(H6M_ProducerCompositeVersion,"Producer composite version");
+AddTextColumn(H6M_ProducerMTFVersion,"Producer MTF version");
+AddTextColumn(H6M_Version,"Phien ban diagnostic");

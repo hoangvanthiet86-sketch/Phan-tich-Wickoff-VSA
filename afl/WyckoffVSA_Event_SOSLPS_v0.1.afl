@@ -1,0 +1,622 @@
+/*
+    Wyckoff VSA SOS / LPS Event v0.1
+    Development implementation aligned to D01-D22 approved in PR #17.
+    Approval merge commit: b21ec3af34481b68e07b8268c6658114a09777fe
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT. No trading signal.
+
+    Canonical implementation document on this branch:
+    docs/wyckoff-event-sos-lps-v0.1-spec.md
+
+    IMPORTANT:
+    - Event layer publishes SOS-LIKE / LPS-LIKE only.
+    - Canonical SOS/LPS, BUEC and Phase D are reserved for Phase/Context Engine.
+    - No Supply and contraction metrics are context evidence, not LPS gates.
+*/
+#include_once <WyckoffVSA_Confirmation_v1.0.afl>
+
+_SECTION_BEGIN("38. SOS LPS constants and input contract");
+WE_SL_SOS_MinRSpread = 1.20;
+WE_SL_SOS_MinRVOL = 1.25;
+WE_SL_SOS_StrongClosePositionMin = 0.60;
+WE_SL_LPS_NearBreakoutATR = 0.50;
+
+function WE_SL_Finite( x )
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WE_SL_SourceBarIndex = BarIndex();
+WE_SL_SourceDateTime = DateTime();
+
+WE_SL_PriceValid = IIf(
+    PriceInputValid==1
+    AND WE_SL_Finite(High)
+    AND WE_SL_Finite(Low)
+    AND WE_SL_Finite(Close)
+    AND High>0
+    AND Low>0
+    AND Close>0
+    AND High>=Low
+    AND Close>=Low
+    AND Close<=High,1,0);
+
+WE_SL_PreviousCloseDescriptorValid = IIf(
+    PreviousCloseValid==1
+    AND WE_SL_Finite(PreviousClose)
+    AND PreviousClose>0,1,0);
+
+WE_SL_PriorResistancePriceRaw = SL_PivotHighLatestPriorPrice;
+WE_SL_PriorResistanceValid = IIf(
+    SL_PivotHighLatestPriorValid==1
+    AND WE_SL_Finite(WE_SL_PriorResistancePriceRaw)
+    AND WE_SL_PriorResistancePriceRaw>0
+    AND WE_SL_Finite(SL_PivotHighLatestPriorExtremeBarIndex)
+    AND NOT IsNull(SL_PivotHighLatestPriorExtremeDateTime)
+    AND WE_SL_Finite(SL_PivotHighLatestPriorConfirmBarIndex)
+    AND NOT IsNull(SL_PivotHighLatestPriorConfirmDateTime)
+    AND SL_PivotHighLatestPriorConfirmBarIndex<WE_SL_SourceBarIndex,1,0);
+
+WE_SL_SOSEffortDataValid = IIf(
+    RSpreadValid==1
+    AND RVOLValid==1
+    AND WE_SL_Finite(RSpread)
+    AND WE_SL_Finite(RVOL),1,0);
+
+WE_SL_ClosePositionDescriptorValid = IIf(
+    ClosePositionValid==1
+    AND WE_SL_Finite(ClosePosition),1,0);
+
+WE_SL_PriorATRDescriptorValid = IIf(
+    PriorATRValid==1
+    AND WE_SL_Finite(PriorATR)
+    AND PriorATR>0,1,0);
+
+WE_SL_SOSStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nSOS-LIKE";
+WE_SL_LPSOriginStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nLPS-LIKE CANDIDATE";
+WE_SL_LPSResolutionStatusText = "INSUFFICIENT DATA\nNO PRIOR LPS-LIKE CANDIDATE\nLPS-LIKE REJECTED\nLPS-LIKE CONFIRMED";
+_SECTION_END();
+
+_SECTION_BEGIN("39. SOS price observation and SOS-like event");
+WE_SL_SOSPriceBreakoutObservationValid = IIf(
+    WE_SL_PriceValid
+    AND WE_SL_PriorResistanceValid
+    AND WE_SL_PreviousCloseDescriptorValid,1,0);
+
+WE_SL_SOSFreshFromBelowOrAtResistance = IIf(
+    WE_SL_SOSPriceBreakoutObservationValid
+    AND PreviousClose<=WE_SL_PriorResistancePriceRaw,1,0);
+
+WE_SL_SOSPriceBreakoutObservation = IIf(
+    WE_SL_SOSPriceBreakoutObservationValid
+    AND PreviousClose<=WE_SL_PriorResistancePriceRaw
+    AND High>WE_SL_PriorResistancePriceRaw
+    AND Close>WE_SL_PriorResistancePriceRaw
+    AND Close>PreviousClose,1,0);
+
+WE_SL_SOSSpreadStrong = IIf(
+    WE_SL_SOSEffortDataValid
+    AND RSpread>=WE_SL_SOS_MinRSpread,1,0);
+WE_SL_SOSVolumeStrong = IIf(
+    WE_SL_SOSEffortDataValid
+    AND RVOL>=WE_SL_SOS_MinRVOL,1,0);
+
+WE_SL_SOSCode = IIf(
+    NOT WE_SL_PriceValid,0,
+    IIf(NOT WE_SL_PriorResistanceValid,0,
+    IIf(NOT WE_SL_PreviousCloseDescriptorValid,0,
+    IIf(NOT WE_SL_SOSPriceBreakoutObservation,1,
+    IIf(NOT WE_SL_SOSEffortDataValid,0,
+    IIf(WE_SL_SOSSpreadStrong AND WE_SL_SOSVolumeStrong,2,1))))));
+
+WE_SL_SOSValid = IIf(WE_SL_SOSCode>0,1,0);
+WE_SL_SOSReasonCode = IIf(
+    NOT WE_SL_PriceValid,4,
+    IIf(NOT WE_SL_PriorResistanceValid,2,
+    IIf(NOT WE_SL_PreviousCloseDescriptorValid,3,
+    IIf(NOT WE_SL_SOSPriceBreakoutObservation,1,
+    IIf(NOT WE_SL_SOSEffortDataValid,6,
+    IIf(NOT (WE_SL_SOSSpreadStrong AND WE_SL_SOSVolumeStrong),7,0))))));
+
+WE_SL_SOS_StrongCloseFlag = IIf(
+    WE_SL_SOSCode==2,
+    IIf(WE_SL_ClosePositionDescriptorValid
+        AND ClosePosition>WE_SL_SOS_StrongClosePositionMin,1,0),Null);
+
+WE_SL_SOSPenetrationRaw = High-WE_SL_PriorResistancePriceRaw;
+WE_SL_SOSPenetrationValid = IIf(
+    WE_SL_SOSCode==2
+    AND WE_SL_Finite(WE_SL_SOSPenetrationRaw)
+    AND WE_SL_SOSPenetrationRaw>0,1,0);
+WE_SL_SOSSafeATR = IIf(WE_SL_PriorATRDescriptorValid,PriorATR,1);
+WE_SL_SOSPenetrationATRRaw = WE_SL_SOSPenetrationRaw/WE_SL_SOSSafeATR;
+WE_SL_SOSPenetrationATRValid = IIf(
+    WE_SL_SOSPenetrationValid
+    AND WE_SL_PriorATRDescriptorValid
+    AND WE_SL_Finite(WE_SL_SOSPenetrationATRRaw),1,0);
+
+WE_SL_SOSPriceBreakoutBarIndex = IIf(WE_SL_SOSPriceBreakoutObservation,WE_SL_SourceBarIndex,Null);
+WE_SL_SOSPriceBreakoutDateTime = IIf(WE_SL_SOSPriceBreakoutObservation,WE_SL_SourceDateTime,Null);
+WE_SL_SOSPriceBreakoutResistance = IIf(WE_SL_SOSPriceBreakoutObservation,WE_SL_PriorResistancePriceRaw,Null);
+WE_SL_SOSPriceBreakoutHigh = IIf(WE_SL_SOSPriceBreakoutObservation,High,Null);
+WE_SL_SOSPriceBreakoutClose = IIf(WE_SL_SOSPriceBreakoutObservation,Close,Null);
+
+WE_SL_SOSBarIndex = IIf(WE_SL_SOSCode==2,WE_SL_SourceBarIndex,Null);
+WE_SL_SOSDateTime = IIf(WE_SL_SOSCode==2,WE_SL_SourceDateTime,Null);
+WE_SL_SOSHigh = IIf(WE_SL_SOSCode==2,High,Null);
+WE_SL_SOSLow = IIf(WE_SL_SOSCode==2,Low,Null);
+WE_SL_SOSClose = IIf(WE_SL_SOSCode==2,Close,Null);
+WE_SL_SOSPreviousClose = IIf(WE_SL_SOSCode==2,PreviousClose,Null);
+WE_SL_SOSBreakoutLevel = IIf(WE_SL_SOSCode==2,WE_SL_PriorResistancePriceRaw,Null);
+
+WE_SL_SOSPivotExtremeBarIndex = IIf(WE_SL_SOSCode==2,SL_PivotHighLatestPriorExtremeBarIndex,Null);
+WE_SL_SOSPivotExtremeDateTime = IIf(WE_SL_SOSCode==2,SL_PivotHighLatestPriorExtremeDateTime,Null);
+WE_SL_SOSPivotConfirmBarIndex = IIf(WE_SL_SOSCode==2,SL_PivotHighLatestPriorConfirmBarIndex,Null);
+WE_SL_SOSPivotConfirmDateTime = IIf(WE_SL_SOSCode==2,SL_PivotHighLatestPriorConfirmDateTime,Null);
+WE_SL_SOSResistanceAge = IIf(WE_SL_SOSCode==2,SL_PivotHighLatestPriorAge,Null);
+WE_SL_SOSResistanceBarsSinceConfirmation = IIf(WE_SL_SOSCode==2,SL_PivotHighLatestPriorBarsSinceConfirmation,Null);
+
+WE_SL_SOSRSpread = IIf(WE_SL_SOSCode==2,RSpread,Null);
+WE_SL_SOSRSpreadValid = IIf(WE_SL_SOSCode==2,RSpreadValid,Null);
+WE_SL_SOSRVOL = IIf(WE_SL_SOSCode==2,RVOL,Null);
+WE_SL_SOSRVOLValid = IIf(WE_SL_SOSCode==2,RVOLValid,Null);
+WE_SL_SOSClosePosition = IIf(WE_SL_SOSCode==2 AND WE_SL_ClosePositionDescriptorValid,ClosePosition,Null);
+WE_SL_SOSClosePositionValid = IIf(WE_SL_SOSCode==2,WE_SL_ClosePositionDescriptorValid,Null);
+WE_SL_SOSPriorATR = IIf(WE_SL_SOSCode==2 AND WE_SL_PriorATRDescriptorValid,PriorATR,Null);
+WE_SL_SOSPriorATRValid = IIf(WE_SL_SOSCode==2,WE_SL_PriorATRDescriptorValid,Null);
+WE_SL_SOSPenetration = IIf(WE_SL_SOSCode==2 AND WE_SL_SOSPenetrationValid,WE_SL_SOSPenetrationRaw,Null);
+WE_SL_SOSPenetrationValueValid = IIf(WE_SL_SOSCode==2,WE_SL_SOSPenetrationValid,Null);
+WE_SL_SOSPenetrationATR = IIf(WE_SL_SOSCode==2 AND WE_SL_SOSPenetrationATRValid,WE_SL_SOSPenetrationATRRaw,Null);
+WE_SL_SOSPenetrationATRValueValid = IIf(WE_SL_SOSCode==2,WE_SL_SOSPenetrationATRValid,Null);
+
+// S/M/L are context snapshots only; they never gate SOS-LIKE.
+WE_SL_SOSContextSReferenceStatusCode = IIf(WE_SL_SOSCode==2,SL_S_ReferenceStatusCode,Null);
+WE_SL_SOSContextSPositionStateCode = IIf(WE_SL_SOSCode==2,SL_S_PositionStateCode,Null);
+WE_SL_SOSContextSLocationValid = IIf(WE_SL_SOSCode==2,SL_S_LocationValid,Null);
+WE_SL_SOSContextSLocation = IIf(WE_SL_SOSCode==2 AND SL_S_LocationValid==1,SL_S_Location,Null);
+WE_SL_SOSContextMReferenceStatusCode = IIf(WE_SL_SOSCode==2,SL_M_ReferenceStatusCode,Null);
+WE_SL_SOSContextMPositionStateCode = IIf(WE_SL_SOSCode==2,SL_M_PositionStateCode,Null);
+WE_SL_SOSContextMLocationValid = IIf(WE_SL_SOSCode==2,SL_M_LocationValid,Null);
+WE_SL_SOSContextMLocation = IIf(WE_SL_SOSCode==2 AND SL_M_LocationValid==1,SL_M_Location,Null);
+WE_SL_SOSContextLReferenceStatusCode = IIf(WE_SL_SOSCode==2,SL_L_ReferenceStatusCode,Null);
+WE_SL_SOSContextLPositionStateCode = IIf(WE_SL_SOSCode==2,SL_L_PositionStateCode,Null);
+WE_SL_SOSContextLLocationValid = IIf(WE_SL_SOSCode==2,SL_L_LocationValid,Null);
+WE_SL_SOSContextLLocation = IIf(WE_SL_SOSCode==2 AND SL_L_LocationValid==1,SL_L_Location,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("40. Causal SOS anchor state for future LPS candidates");
+WE_SL_PriorSOSAnchorActive = 0;
+WE_SL_BarsSinceSOS = Null;
+WE_SL_PriorSOSBarIndex = Null;
+WE_SL_PriorSOSDateTime = Null;
+WE_SL_PriorSOSBreakoutLevel = Null;
+WE_SL_PriorSOSHigh = Null;
+WE_SL_PriorSOSLow = Null;
+WE_SL_PriorSOSClose = Null;
+WE_SL_PriorSOSPreviousClose = Null;
+WE_SL_PriorSOSRSpread = Null;
+WE_SL_PriorSOSRVOL = Null;
+WE_SL_PriorSOSPivotExtremeBarIndex = Null;
+WE_SL_PriorSOSPivotExtremeDateTime = Null;
+WE_SL_PriorSOSPivotConfirmBarIndex = Null;
+WE_SL_PriorSOSPivotConfirmDateTime = Null;
+WE_SL_PriorSOSResistanceAge = Null;
+WE_SL_PriorSOSResistanceBarsSinceConfirmation = Null;
+WE_SL_AnchorInvalidatedByCloseCurrent = 0;
+
+WE_SL_StoredSOSActive = 0;
+WE_SL_StoredSOSOffset = 0;
+WE_SL_StoredSOSBarIndex = 0;
+WE_SL_StoredSOSDateTime = 0;
+WE_SL_StoredSOSBreakoutLevel = 0;
+WE_SL_StoredSOSHigh = 0;
+WE_SL_StoredSOSLow = 0;
+WE_SL_StoredSOSClose = 0;
+WE_SL_StoredSOSPreviousClose = 0;
+WE_SL_StoredSOSRSpread = 0;
+WE_SL_StoredSOSRVOL = 0;
+WE_SL_StoredSOSPivotExtremeBarIndex = 0;
+WE_SL_StoredSOSPivotExtremeDateTime = 0;
+WE_SL_StoredSOSPivotConfirmBarIndex = 0;
+WE_SL_StoredSOSPivotConfirmDateTime = 0;
+WE_SL_StoredSOSResistanceAge = 0;
+WE_SL_StoredSOSResistanceBarsSinceConfirmation = 0;
+
+for (WE_SL_i=0; WE_SL_i<BarCount; WE_SL_i++)
+{
+    // Expose only the anchor known before the current bar.
+    WE_SL_PriorSOSAnchorActive[WE_SL_i] = WE_SL_StoredSOSActive;
+    if (WE_SL_StoredSOSActive)
+    {
+        WE_SL_BarsSinceSOS[WE_SL_i] = WE_SL_i-WE_SL_StoredSOSOffset;
+        WE_SL_PriorSOSBarIndex[WE_SL_i] = WE_SL_StoredSOSBarIndex;
+        WE_SL_PriorSOSDateTime[WE_SL_i] = WE_SL_StoredSOSDateTime;
+        WE_SL_PriorSOSBreakoutLevel[WE_SL_i] = WE_SL_StoredSOSBreakoutLevel;
+        WE_SL_PriorSOSHigh[WE_SL_i] = WE_SL_StoredSOSHigh;
+        WE_SL_PriorSOSLow[WE_SL_i] = WE_SL_StoredSOSLow;
+        WE_SL_PriorSOSClose[WE_SL_i] = WE_SL_StoredSOSClose;
+        WE_SL_PriorSOSPreviousClose[WE_SL_i] = WE_SL_StoredSOSPreviousClose;
+        WE_SL_PriorSOSRSpread[WE_SL_i] = WE_SL_StoredSOSRSpread;
+        WE_SL_PriorSOSRVOL[WE_SL_i] = WE_SL_StoredSOSRVOL;
+        WE_SL_PriorSOSPivotExtremeBarIndex[WE_SL_i] = WE_SL_StoredSOSPivotExtremeBarIndex;
+        WE_SL_PriorSOSPivotExtremeDateTime[WE_SL_i] = WE_SL_StoredSOSPivotExtremeDateTime;
+        WE_SL_PriorSOSPivotConfirmBarIndex[WE_SL_i] = WE_SL_StoredSOSPivotConfirmBarIndex;
+        WE_SL_PriorSOSPivotConfirmDateTime[WE_SL_i] = WE_SL_StoredSOSPivotConfirmDateTime;
+        WE_SL_PriorSOSResistanceAge[WE_SL_i] = WE_SL_StoredSOSResistanceAge;
+        WE_SL_PriorSOSResistanceBarsSinceConfirmation[WE_SL_i] = WE_SL_StoredSOSResistanceBarsSinceConfirmation;
+
+        if (WE_SL_PriceValid[WE_SL_i]
+            AND Close[WE_SL_i] < WE_SL_StoredSOSBreakoutLevel)
+            WE_SL_AnchorInvalidatedByCloseCurrent[WE_SL_i] = 1;
+    }
+
+    // A current SOS becomes an anchor only for future bars.
+    if (WE_SL_SOSCode[WE_SL_i]==2)
+    {
+        WE_SL_StoredSOSActive = 1;
+        WE_SL_StoredSOSOffset = WE_SL_i;
+        WE_SL_StoredSOSBarIndex = WE_SL_SOSBarIndex[WE_SL_i];
+        WE_SL_StoredSOSDateTime = WE_SL_SOSDateTime[WE_SL_i];
+        WE_SL_StoredSOSBreakoutLevel = WE_SL_SOSBreakoutLevel[WE_SL_i];
+        WE_SL_StoredSOSHigh = WE_SL_SOSHigh[WE_SL_i];
+        WE_SL_StoredSOSLow = WE_SL_SOSLow[WE_SL_i];
+        WE_SL_StoredSOSClose = WE_SL_SOSClose[WE_SL_i];
+        WE_SL_StoredSOSPreviousClose = WE_SL_SOSPreviousClose[WE_SL_i];
+        WE_SL_StoredSOSRSpread = WE_SL_SOSRSpread[WE_SL_i];
+        WE_SL_StoredSOSRVOL = WE_SL_SOSRVOL[WE_SL_i];
+        WE_SL_StoredSOSPivotExtremeBarIndex = WE_SL_SOSPivotExtremeBarIndex[WE_SL_i];
+        WE_SL_StoredSOSPivotExtremeDateTime = WE_SL_SOSPivotExtremeDateTime[WE_SL_i];
+        WE_SL_StoredSOSPivotConfirmBarIndex = WE_SL_SOSPivotConfirmBarIndex[WE_SL_i];
+        WE_SL_StoredSOSPivotConfirmDateTime = WE_SL_SOSPivotConfirmDateTime[WE_SL_i];
+        WE_SL_StoredSOSResistanceAge = WE_SL_SOSResistanceAge[WE_SL_i];
+        WE_SL_StoredSOSResistanceBarsSinceConfirmation = WE_SL_SOSResistanceBarsSinceConfirmation[WE_SL_i];
+    }
+    else
+    {
+        // A completed close below frozen support invalidates the old anchor for future bars.
+        if (WE_SL_StoredSOSActive
+            AND WE_SL_PriceValid[WE_SL_i]
+            AND Close[WE_SL_i] < WE_SL_StoredSOSBreakoutLevel)
+            WE_SL_StoredSOSActive = 0;
+    }
+}
+
+WE_SL_PriorSOSSnapshotValid = IIf(
+    WE_SL_PriorSOSAnchorActive==1
+    AND WE_SL_Finite(WE_SL_PriorSOSBarIndex)
+    AND WE_SL_Finite(WE_SL_PriorSOSBreakoutLevel)
+    AND WE_SL_PriorSOSBreakoutLevel>0
+    AND WE_SL_Finite(WE_SL_PriorSOSPivotConfirmBarIndex)
+    AND NOT IsNull(WE_SL_PriorSOSDateTime)
+    AND NOT IsNull(WE_SL_PriorSOSPivotConfirmDateTime),1,0);
+_SECTION_END();
+
+_SECTION_BEGIN("41. LPS-like reaction origin");
+WE_SL_LPSPriorLowRaw = Ref(Low,-1);
+WE_SL_LPSPriorCloseRaw = Ref(Close,-1);
+WE_SL_LPSPriorPriceInputValidRaw = Ref(PriceInputValid,-1);
+WE_SL_LPSPriorPriceValid = IIf(
+    Nz(WE_SL_LPSPriorPriceInputValidRaw,0)==1
+    AND WE_SL_Finite(WE_SL_LPSPriorLowRaw)
+    AND WE_SL_Finite(WE_SL_LPSPriorCloseRaw)
+    AND WE_SL_LPSPriorLowRaw>0
+    AND WE_SL_LPSPriorCloseRaw>0,1,0);
+
+WE_SL_LPSCurrentPriceValid = IIf(
+    WE_SL_PriceValid
+    AND WE_SL_Finite(Low)
+    AND WE_SL_Finite(Close),1,0);
+
+WE_SL_LPSReactionProgress = IIf(
+    WE_SL_LPSCurrentPriceValid
+    AND WE_SL_LPSPriorPriceValid
+    AND (Close<WE_SL_LPSPriorCloseRaw OR Low<WE_SL_LPSPriorLowRaw),1,0);
+
+WE_SL_LPSStrictSupportHeldAtOrigin = IIf(
+    WE_SL_PriorSOSSnapshotValid
+    AND WE_SL_LPSCurrentPriceValid
+    AND Low>=WE_SL_PriorSOSBreakoutLevel,1,0);
+
+WE_SL_LPSOriginCode = IIf(
+    NOT WE_SL_PriorSOSAnchorActive,1,
+    IIf(NOT WE_SL_PriorSOSSnapshotValid,0,
+    IIf(NOT WE_SL_LPSCurrentPriceValid OR NOT WE_SL_LPSPriorPriceValid,0,
+    IIf(WE_SL_AnchorInvalidatedByCloseCurrent,1,
+    IIf(Low<WE_SL_PriorSOSBreakoutLevel,1,
+    IIf(NOT WE_SL_LPSReactionProgress,1,2))))));
+
+WE_SL_LPSOriginValid = IIf(WE_SL_LPSOriginCode>0,1,0);
+WE_SL_LPSOriginReasonCode = IIf(
+    NOT WE_SL_PriorSOSAnchorActive,1,
+    IIf(NOT WE_SL_PriorSOSSnapshotValid,6,
+    IIf(NOT WE_SL_LPSCurrentPriceValid OR NOT WE_SL_LPSPriorPriceValid,2,
+    IIf(WE_SL_AnchorInvalidatedByCloseCurrent,5,
+    IIf(Low<WE_SL_PriorSOSBreakoutLevel,4,
+    IIf(NOT WE_SL_LPSReactionProgress,3,0))))));
+
+WE_SL_LPSDistanceAboveBreakoutRaw = Low-WE_SL_PriorSOSBreakoutLevel;
+WE_SL_LPSDistanceAboveBreakoutValid = IIf(
+    WE_SL_LPSOriginCode==2
+    AND WE_SL_Finite(WE_SL_LPSDistanceAboveBreakoutRaw)
+    AND WE_SL_LPSDistanceAboveBreakoutRaw>=0,1,0);
+WE_SL_LPSSafeATR = IIf(WE_SL_PriorATRDescriptorValid,PriorATR,1);
+WE_SL_LPSDistanceAboveBreakoutATRRaw = WE_SL_LPSDistanceAboveBreakoutRaw/WE_SL_LPSSafeATR;
+WE_SL_LPSDistanceAboveBreakoutATRValid = IIf(
+    WE_SL_LPSDistanceAboveBreakoutValid
+    AND WE_SL_PriorATRDescriptorValid
+    AND WE_SL_Finite(WE_SL_LPSDistanceAboveBreakoutATRRaw),1,0);
+WE_SL_LPSNearBreakoutEdgeFlag = IIf(
+    WE_SL_LPSOriginCode==2,
+    IIf(WE_SL_LPSDistanceAboveBreakoutATRValid
+        AND WE_SL_LPSDistanceAboveBreakoutATRRaw<=WE_SL_LPS_NearBreakoutATR,1,0),Null);
+
+WE_SL_LPSCurrentRSpreadValid = IIf(RSpreadValid==1 AND WE_SL_Finite(RSpread),1,0);
+WE_SL_LPSCurrentRVOLValid = IIf(RVOLValid==1 AND WE_SL_Finite(RVOL),1,0);
+WE_SL_LPSContractionDataValid = IIf(
+    WE_SL_LPSOriginCode==2
+    AND WE_SL_LPSCurrentRSpreadValid
+    AND WE_SL_LPSCurrentRVOLValid
+    AND WE_SL_Finite(WE_SL_PriorSOSRSpread)
+    AND WE_SL_Finite(WE_SL_PriorSOSRVOL),1,0);
+WE_SL_LPSSpreadContractedVsSOS = IIf(
+    WE_SL_LPSOriginCode==2,
+    IIf(WE_SL_LPSContractionDataValid AND RSpread<WE_SL_PriorSOSRSpread,1,0),Null);
+WE_SL_LPSVolumeContractedVsSOS = IIf(
+    WE_SL_LPSOriginCode==2,
+    IIf(WE_SL_LPSContractionDataValid AND RVOL<WE_SL_PriorSOSRVOL,1,0),Null);
+WE_SL_LPSTextbookSupplyContraction = IIf(
+    WE_SL_LPSOriginCode==2,
+    IIf(WE_SL_LPSContractionDataValid
+        AND RSpread<WE_SL_PriorSOSRSpread
+        AND RVOL<WE_SL_PriorSOSRVOL,1,0),Null);
+
+WE_SL_LPSNoSupplyCandidateContextValid = IIf(
+    WE_SL_LPSOriginCode==2
+    AND NoSupplyCandidateValid==1
+    AND WE_SL_Finite(NoSupplyCandidateCode)
+    AND (NoSupplyCandidateCode==1 OR NoSupplyCandidateCode==2),1,0);
+WE_SL_LPSNoSupplyCandidateAtOrigin = IIf(
+    WE_SL_LPSOriginCode==2,
+    IIf(WE_SL_LPSNoSupplyCandidateContextValid AND NoSupplyCandidateCode==2,1,0),Null);
+WE_SL_LPSLowEffortContextValid = IIf(
+    WE_SL_LPSOriginCode==2
+    AND EffortDirectionalResultValid==1,1,0);
+WE_SL_LPSLowEffortAtOrigin = IIf(
+    WE_SL_LPSOriginCode==2,
+    IIf(WE_SL_LPSLowEffortContextValid AND LowEffort,1,0),Null);
+
+WE_SL_LPSOriginBarIndex = IIf(WE_SL_LPSOriginCode==2,WE_SL_SourceBarIndex,Null);
+WE_SL_LPSOriginDateTime = IIf(WE_SL_LPSOriginCode==2,WE_SL_SourceDateTime,Null);
+WE_SL_LPSOriginLow = IIf(WE_SL_LPSOriginCode==2,Low,Null);
+WE_SL_LPSOriginClose = IIf(WE_SL_LPSOriginCode==2,Close,Null);
+WE_SL_LPSOriginPriorLow = IIf(WE_SL_LPSOriginCode==2,WE_SL_LPSPriorLowRaw,Null);
+WE_SL_LPSOriginPriorClose = IIf(WE_SL_LPSOriginCode==2,WE_SL_LPSPriorCloseRaw,Null);
+WE_SL_LPSBreakoutLevel = IIf(WE_SL_LPSOriginCode==2,WE_SL_PriorSOSBreakoutLevel,Null);
+WE_SL_LPSAnchorSOSBarIndex = IIf(WE_SL_LPSOriginCode==2,WE_SL_PriorSOSBarIndex,Null);
+WE_SL_LPSAnchorSOSDateTime = IIf(WE_SL_LPSOriginCode==2,WE_SL_PriorSOSDateTime,Null);
+WE_SL_LPSBarsSinceSOS = IIf(WE_SL_LPSOriginCode==2,WE_SL_BarsSinceSOS,Null);
+WE_SL_LPSAnchorSOSRSpread = IIf(WE_SL_LPSOriginCode==2,WE_SL_PriorSOSRSpread,Null);
+WE_SL_LPSAnchorSOSRVOL = IIf(WE_SL_LPSOriginCode==2,WE_SL_PriorSOSRVOL,Null);
+WE_SL_LPSAnchorPivotConfirmBarIndex = IIf(WE_SL_LPSOriginCode==2,WE_SL_PriorSOSPivotConfirmBarIndex,Null);
+WE_SL_LPSAnchorPivotConfirmDateTime = IIf(WE_SL_LPSOriginCode==2,WE_SL_PriorSOSPivotConfirmDateTime,Null);
+WE_SL_LPSOriginPriorATR = IIf(WE_SL_LPSOriginCode==2 AND WE_SL_PriorATRDescriptorValid,PriorATR,Null);
+WE_SL_LPSOriginPriorATRValid = IIf(WE_SL_LPSOriginCode==2,WE_SL_PriorATRDescriptorValid,Null);
+WE_SL_LPSDistanceAboveBreakout = IIf(WE_SL_LPSDistanceAboveBreakoutValid,WE_SL_LPSDistanceAboveBreakoutRaw,Null);
+WE_SL_LPSDistanceAboveBreakoutATR = IIf(WE_SL_LPSDistanceAboveBreakoutATRValid,WE_SL_LPSDistanceAboveBreakoutATRRaw,Null);
+WE_SL_LPSDistanceAboveBreakoutATRValueValid = IIf(WE_SL_LPSOriginCode==2,WE_SL_LPSDistanceAboveBreakoutATRValid,Null);
+
+// S/M/L are context only.
+WE_SL_LPSContextSReferenceStatusCode = IIf(WE_SL_LPSOriginCode==2,SL_S_ReferenceStatusCode,Null);
+WE_SL_LPSContextSPositionStateCode = IIf(WE_SL_LPSOriginCode==2,SL_S_PositionStateCode,Null);
+WE_SL_LPSContextSLocationValid = IIf(WE_SL_LPSOriginCode==2,SL_S_LocationValid,Null);
+WE_SL_LPSContextSLocation = IIf(WE_SL_LPSOriginCode==2 AND SL_S_LocationValid==1,SL_S_Location,Null);
+WE_SL_LPSContextMReferenceStatusCode = IIf(WE_SL_LPSOriginCode==2,SL_M_ReferenceStatusCode,Null);
+WE_SL_LPSContextMPositionStateCode = IIf(WE_SL_LPSOriginCode==2,SL_M_PositionStateCode,Null);
+WE_SL_LPSContextMLocationValid = IIf(WE_SL_LPSOriginCode==2,SL_M_LocationValid,Null);
+WE_SL_LPSContextMLocation = IIf(WE_SL_LPSOriginCode==2 AND SL_M_LocationValid==1,SL_M_Location,Null);
+WE_SL_LPSContextLReferenceStatusCode = IIf(WE_SL_LPSOriginCode==2,SL_L_ReferenceStatusCode,Null);
+WE_SL_LPSContextLPositionStateCode = IIf(WE_SL_LPSOriginCode==2,SL_L_PositionStateCode,Null);
+WE_SL_LPSContextLLocationValid = IIf(WE_SL_LPSOriginCode==2,SL_L_LocationValid,Null);
+WE_SL_LPSContextLLocation = IIf(WE_SL_LPSOriginCode==2 AND SL_L_LocationValid==1,SL_L_Location,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("42. LPS next-bar resolution");
+WE_SL_PriorLPSOriginPresent = IIf(Nz(Ref(WE_SL_LPSOriginCode,-1),-1)==2,1,0);
+WE_SL_PriorLPSOriginBarIndex = Ref(WE_SL_LPSOriginBarIndex,-1);
+WE_SL_PriorLPSOriginDateTime = Ref(WE_SL_LPSOriginDateTime,-1);
+WE_SL_PriorLPSOriginLow = Ref(WE_SL_LPSOriginLow,-1);
+WE_SL_PriorLPSOriginClose = Ref(WE_SL_LPSOriginClose,-1);
+WE_SL_PriorLPSBreakoutLevel = Ref(WE_SL_LPSBreakoutLevel,-1);
+WE_SL_PriorLPSAnchorSOSBarIndex = Ref(WE_SL_LPSAnchorSOSBarIndex,-1);
+WE_SL_PriorLPSAnchorSOSDateTime = Ref(WE_SL_LPSAnchorSOSDateTime,-1);
+WE_SL_PriorLPSAnchorPivotConfirmBarIndex = Ref(WE_SL_LPSAnchorPivotConfirmBarIndex,-1);
+WE_SL_PriorLPSAnchorPivotConfirmDateTime = Ref(WE_SL_LPSAnchorPivotConfirmDateTime,-1);
+WE_SL_PriorLPSBarsSinceSOS = Ref(WE_SL_LPSBarsSinceSOS,-1);
+WE_SL_PriorLPSSpreadContractedVsSOS = Ref(WE_SL_LPSSpreadContractedVsSOS,-1);
+WE_SL_PriorLPSVolumeContractedVsSOS = Ref(WE_SL_LPSVolumeContractedVsSOS,-1);
+WE_SL_PriorLPSTextbookSupplyContraction = Ref(WE_SL_LPSTextbookSupplyContraction,-1);
+WE_SL_PriorLPSNoSupplyCandidateAtOrigin = Ref(WE_SL_LPSNoSupplyCandidateAtOrigin,-1);
+
+WE_SL_LPSEvaluationPriceValid = IIf(
+    WE_SL_PriceValid
+    AND WE_SL_Finite(Low)
+    AND WE_SL_Finite(Close),1,0);
+
+WE_SL_LPSResolutionSnapshotValid = IIf(
+    WE_SL_PriorLPSOriginPresent
+    AND WE_SL_Finite(WE_SL_PriorLPSOriginLow)
+    AND WE_SL_Finite(WE_SL_PriorLPSOriginClose)
+    AND WE_SL_Finite(WE_SL_PriorLPSBreakoutLevel)
+    AND WE_SL_PriorLPSBreakoutLevel>0
+    AND WE_SL_Finite(WE_SL_PriorLPSAnchorSOSBarIndex)
+    AND WE_SL_Finite(WE_SL_PriorLPSAnchorPivotConfirmBarIndex),1,0);
+
+WE_SL_LPSEvaluationSupportHeld = IIf(
+    WE_SL_PriorLPSOriginPresent
+    AND WE_SL_LPSEvaluationPriceValid
+    AND WE_SL_LPSResolutionSnapshotValid
+    AND Low>=WE_SL_PriorLPSBreakoutLevel,1,0);
+WE_SL_LPSEvaluationNoLowerLow = IIf(
+    WE_SL_PriorLPSOriginPresent
+    AND WE_SL_LPSEvaluationPriceValid
+    AND WE_SL_LPSResolutionSnapshotValid
+    AND Low>=WE_SL_PriorLPSOriginLow,1,0);
+WE_SL_LPSEvaluationCloseImproved = IIf(
+    WE_SL_PriorLPSOriginPresent
+    AND WE_SL_LPSEvaluationPriceValid
+    AND WE_SL_LPSResolutionSnapshotValid
+    AND Close>WE_SL_PriorLPSOriginClose,1,0);
+
+WE_SL_LPSResolutionCode = IIf(
+    NOT WE_SL_PriorLPSOriginPresent,1,
+    IIf(NOT WE_SL_LPSResolutionSnapshotValid,0,
+    IIf(NOT WE_SL_LPSEvaluationPriceValid,0,
+    IIf(WE_SL_LPSEvaluationSupportHeld
+        AND WE_SL_LPSEvaluationNoLowerLow
+        AND WE_SL_LPSEvaluationCloseImproved,3,2))));
+
+WE_SL_LPSResolutionValid = IIf(WE_SL_LPSResolutionCode>0,1,0);
+WE_SL_LPSConfirmed = IIf(WE_SL_LPSResolutionCode==3,1,0);
+
+WE_SL_LPSFailureCount =
+    (1-WE_SL_LPSEvaluationSupportHeld)
+    + (1-WE_SL_LPSEvaluationNoLowerLow)
+    + (1-WE_SL_LPSEvaluationCloseImproved);
+
+WE_SL_LPSResolutionReasonCode = IIf(
+    NOT WE_SL_PriorLPSOriginPresent,0,
+    IIf(NOT WE_SL_LPSResolutionSnapshotValid,6,
+    IIf(NOT WE_SL_LPSEvaluationPriceValid,5,
+    IIf(WE_SL_LPSResolutionCode==3,0,
+    IIf(WE_SL_LPSFailureCount>1,4,
+    IIf(NOT WE_SL_LPSEvaluationSupportHeld,1,
+    IIf(NOT WE_SL_LPSEvaluationNoLowerLow,2,
+    IIf(NOT WE_SL_LPSEvaluationCloseImproved,3,0))))))));
+
+// Confirmation No Supply is context only, never a resolution gate.
+WE_SL_LPSCEContextValid = IIf(
+    WE_SL_PriorLPSOriginPresent
+    AND CE_NoSupply_EvaluationValid==1
+    AND WE_SL_Finite(CE_NoSupply_StatusCode)
+    AND WE_SL_Finite(CE_NoSupply_Confirmed),1,0);
+WE_SL_LPSCECoordinateMatchesOrigin = IIf(
+    WE_SL_PriorLPSOriginPresent
+    AND WE_SL_LPSCEContextValid
+    AND WE_SL_Finite(CE_NoSupply_CandidateBarIndex)
+    AND CE_NoSupply_CandidateBarIndex==WE_SL_PriorLPSOriginBarIndex,1,0);
+WE_SL_LPSNoSupplyConfirmedAtEvaluation = IIf(
+    WE_SL_PriorLPSOriginPresent,
+    IIf(WE_SL_LPSCEContextValid
+        AND WE_SL_LPSCECoordinateMatchesOrigin
+        AND CE_NoSupply_StatusCode==3
+        AND CE_NoSupply_Confirmed==1,1,0),Null);
+
+WE_SL_LPSResolutionOriginBarIndex = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSOriginBarIndex,Null);
+WE_SL_LPSResolutionOriginDateTime = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSOriginDateTime,Null);
+WE_SL_LPSResolutionOriginLow = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSOriginLow,Null);
+WE_SL_LPSResolutionOriginClose = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSOriginClose,Null);
+WE_SL_LPSResolutionBreakoutLevel = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSBreakoutLevel,Null);
+WE_SL_LPSResolutionAnchorSOSBarIndex = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSAnchorSOSBarIndex,Null);
+WE_SL_LPSResolutionAnchorSOSDateTime = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSAnchorSOSDateTime,Null);
+WE_SL_LPSResolutionAnchorPivotConfirmBarIndex = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSAnchorPivotConfirmBarIndex,Null);
+WE_SL_LPSResolutionAnchorPivotConfirmDateTime = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSAnchorPivotConfirmDateTime,Null);
+WE_SL_LPSResolutionBarsSinceSOSAtOrigin = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSBarsSinceSOS,Null);
+WE_SL_LPSResolutionTextbookSupplyContraction = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSTextbookSupplyContraction,Null);
+WE_SL_LPSResolutionNoSupplyCandidateAtOrigin = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_PriorLPSNoSupplyCandidateAtOrigin,Null);
+WE_SL_LPSEvaluationBarIndex = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_SourceBarIndex,Null);
+WE_SL_LPSEvaluationDateTime = IIf(WE_SL_PriorLPSOriginPresent,WE_SL_SourceDateTime,Null);
+WE_SL_LPSEvaluationLow = IIf(WE_SL_PriorLPSOriginPresent AND WE_SL_LPSEvaluationPriceValid,Low,Null);
+WE_SL_LPSEvaluationClose = IIf(WE_SL_PriorLPSOriginPresent AND WE_SL_LPSEvaluationPriceValid,Close,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("43. SOS LPS exploration");
+// Development output only. Do not alter upstream Filter or create trading assignments.
+AddColumn(WE_SL_SourceBarIndex,"WE_SL_SourceBarIndex",1.0);
+AddColumn(WE_SL_SourceDateTime,"WE_SL_SourceDateTime",formatDateTime);
+
+AddColumn(WE_SL_SOSPriceBreakoutObservationValid,"WE_SL_SOSPriceBreakoutObservationValid",1.0);
+AddColumn(WE_SL_SOSPriceBreakoutObservation,"WE_SL_SOSPriceBreakoutObservation",1.0);
+AddColumn(WE_SL_SOSPriceBreakoutBarIndex,"WE_SL_SOSPriceBreakoutBarIndex",1.0);
+AddColumn(WE_SL_SOSPriceBreakoutDateTime,"WE_SL_SOSPriceBreakoutDateTime",formatDateTime);
+AddColumn(WE_SL_SOSPriceBreakoutResistance,"WE_SL_SOSPriceBreakoutResistance",1.12);
+AddColumn(WE_SL_SOSPriceBreakoutHigh,"WE_SL_SOSPriceBreakoutHigh",1.12);
+AddColumn(WE_SL_SOSPriceBreakoutClose,"WE_SL_SOSPriceBreakoutClose",1.12);
+
+AddColumn(WE_SL_SOSCode,"WE_SL_SOSCode",1.0);
+AddColumn(WE_SL_SOSValid,"WE_SL_SOSValid",1.0);
+AddColumn(WE_SL_SOSReasonCode,"WE_SL_SOSReasonCode",1.0);
+AddMultiTextColumn(WE_SL_SOSCode,WE_SL_SOSStatusText,"WE_SL_SOSStatus");
+AddColumn(WE_SL_SOSBarIndex,"WE_SL_SOSBarIndex",1.0);
+AddColumn(WE_SL_SOSDateTime,"WE_SL_SOSDateTime",formatDateTime);
+AddColumn(WE_SL_SOSBreakoutLevel,"WE_SL_SOSBreakoutLevel",1.12);
+AddColumn(WE_SL_SOSHigh,"WE_SL_SOSHigh",1.12);
+AddColumn(WE_SL_SOSLow,"WE_SL_SOSLow",1.12);
+AddColumn(WE_SL_SOSClose,"WE_SL_SOSClose",1.12);
+AddColumn(WE_SL_SOSPreviousClose,"WE_SL_SOSPreviousClose",1.12);
+AddColumn(WE_SL_SOSRSpread,"WE_SL_SOSRSpread",1.12);
+AddColumn(WE_SL_SOSRVOL,"WE_SL_SOSRVOL",1.12);
+AddColumn(WE_SL_SOSClosePosition,"WE_SL_SOSClosePosition",1.12);
+AddColumn(WE_SL_SOS_StrongCloseFlag,"WE_SL_SOS_StrongCloseFlag",1.0);
+AddColumn(WE_SL_SOSPriorATR,"WE_SL_SOSPriorATR",1.12);
+AddColumn(WE_SL_SOSPriorATRValid,"WE_SL_SOSPriorATRValid",1.0);
+AddColumn(WE_SL_SOSPenetration,"WE_SL_SOSPenetration",1.12);
+AddColumn(WE_SL_SOSPenetrationATR,"WE_SL_SOSPenetrationATR",1.12);
+AddColumn(WE_SL_SOSPenetrationATRValueValid,"WE_SL_SOSPenetrationATRValueValid",1.0);
+AddColumn(WE_SL_SOSPivotExtremeBarIndex,"WE_SL_SOSPivotExtremeBarIndex",1.0);
+AddColumn(WE_SL_SOSPivotExtremeDateTime,"WE_SL_SOSPivotExtremeDateTime",formatDateTime);
+AddColumn(WE_SL_SOSPivotConfirmBarIndex,"WE_SL_SOSPivotConfirmBarIndex",1.0);
+AddColumn(WE_SL_SOSPivotConfirmDateTime,"WE_SL_SOSPivotConfirmDateTime",formatDateTime);
+AddColumn(WE_SL_SOSResistanceAge,"WE_SL_SOSResistanceAge",1.0);
+AddColumn(WE_SL_SOSResistanceBarsSinceConfirmation,"WE_SL_SOSResistanceBarsSinceConfirmation",1.0);
+
+AddColumn(WE_SL_PriorSOSAnchorActive,"WE_SL_PriorSOSAnchorActive",1.0);
+AddColumn(WE_SL_BarsSinceSOS,"WE_SL_BarsSinceSOS",1.0);
+AddColumn(WE_SL_PriorSOSBarIndex,"WE_SL_PriorSOSBarIndex",1.0);
+AddColumn(WE_SL_PriorSOSBreakoutLevel,"WE_SL_PriorSOSBreakoutLevel",1.12);
+AddColumn(WE_SL_AnchorInvalidatedByCloseCurrent,"WE_SL_AnchorInvalidatedByCloseCurrent",1.0);
+
+AddColumn(WE_SL_LPSOriginCode,"WE_SL_LPSOriginCode",1.0);
+AddColumn(WE_SL_LPSOriginValid,"WE_SL_LPSOriginValid",1.0);
+AddColumn(WE_SL_LPSOriginReasonCode,"WE_SL_LPSOriginReasonCode",1.0);
+AddMultiTextColumn(WE_SL_LPSOriginCode,WE_SL_LPSOriginStatusText,"WE_SL_LPSOriginStatus");
+AddColumn(WE_SL_LPSReactionProgress,"WE_SL_LPSReactionProgress",1.0);
+AddColumn(WE_SL_LPSOriginBarIndex,"WE_SL_LPSOriginBarIndex",1.0);
+AddColumn(WE_SL_LPSOriginDateTime,"WE_SL_LPSOriginDateTime",formatDateTime);
+AddColumn(WE_SL_LPSOriginLow,"WE_SL_LPSOriginLow",1.12);
+AddColumn(WE_SL_LPSOriginClose,"WE_SL_LPSOriginClose",1.12);
+AddColumn(WE_SL_LPSBreakoutLevel,"WE_SL_LPSBreakoutLevel",1.12);
+AddColumn(WE_SL_LPSAnchorSOSBarIndex,"WE_SL_LPSAnchorSOSBarIndex",1.0);
+AddColumn(WE_SL_LPSAnchorSOSDateTime,"WE_SL_LPSAnchorSOSDateTime",formatDateTime);
+AddColumn(WE_SL_LPSBarsSinceSOS,"WE_SL_LPSBarsSinceSOS",1.0);
+AddColumn(WE_SL_LPSDistanceAboveBreakout,"WE_SL_LPSDistanceAboveBreakout",1.12);
+AddColumn(WE_SL_LPSDistanceAboveBreakoutATR,"WE_SL_LPSDistanceAboveBreakoutATR",1.12);
+AddColumn(WE_SL_LPSDistanceAboveBreakoutATRValueValid,"WE_SL_LPSDistanceAboveBreakoutATRValueValid",1.0);
+AddColumn(WE_SL_LPSNearBreakoutEdgeFlag,"WE_SL_LPSNearBreakoutEdgeFlag",1.0);
+AddColumn(WE_SL_LPSContractionDataValid,"WE_SL_LPSContractionDataValid",1.0);
+AddColumn(WE_SL_LPSSpreadContractedVsSOS,"WE_SL_LPSSpreadContractedVsSOS",1.0);
+AddColumn(WE_SL_LPSVolumeContractedVsSOS,"WE_SL_LPSVolumeContractedVsSOS",1.0);
+AddColumn(WE_SL_LPSTextbookSupplyContraction,"WE_SL_LPSTextbookSupplyContraction",1.0);
+AddColumn(WE_SL_LPSNoSupplyCandidateContextValid,"WE_SL_LPSNoSupplyCandidateContextValid",1.0);
+AddColumn(WE_SL_LPSNoSupplyCandidateAtOrigin,"WE_SL_LPSNoSupplyCandidateAtOrigin",1.0);
+AddColumn(WE_SL_LPSLowEffortContextValid,"WE_SL_LPSLowEffortContextValid",1.0);
+AddColumn(WE_SL_LPSLowEffortAtOrigin,"WE_SL_LPSLowEffortAtOrigin",1.0);
+
+AddColumn(WE_SL_LPSResolutionCode,"WE_SL_LPSResolutionCode",1.0);
+AddColumn(WE_SL_LPSResolutionValid,"WE_SL_LPSResolutionValid",1.0);
+AddColumn(WE_SL_LPSConfirmed,"WE_SL_LPSConfirmed",1.0);
+AddColumn(WE_SL_LPSResolutionReasonCode,"WE_SL_LPSResolutionReasonCode",1.0);
+AddMultiTextColumn(WE_SL_LPSResolutionCode,WE_SL_LPSResolutionStatusText,"WE_SL_LPSResolutionStatus");
+AddColumn(WE_SL_LPSResolutionOriginBarIndex,"WE_SL_LPSResolutionOriginBarIndex",1.0);
+AddColumn(WE_SL_LPSResolutionOriginDateTime,"WE_SL_LPSResolutionOriginDateTime",formatDateTime);
+AddColumn(WE_SL_LPSResolutionBreakoutLevel,"WE_SL_LPSResolutionBreakoutLevel",1.12);
+AddColumn(WE_SL_LPSResolutionAnchorSOSBarIndex,"WE_SL_LPSResolutionAnchorSOSBarIndex",1.0);
+AddColumn(WE_SL_LPSEvaluationBarIndex,"WE_SL_LPSEvaluationBarIndex",1.0);
+AddColumn(WE_SL_LPSEvaluationDateTime,"WE_SL_LPSEvaluationDateTime",formatDateTime);
+AddColumn(WE_SL_LPSEvaluationLow,"WE_SL_LPSEvaluationLow",1.12);
+AddColumn(WE_SL_LPSEvaluationClose,"WE_SL_LPSEvaluationClose",1.12);
+AddColumn(WE_SL_LPSEvaluationSupportHeld,"WE_SL_LPSEvaluationSupportHeld",1.0);
+AddColumn(WE_SL_LPSEvaluationNoLowerLow,"WE_SL_LPSEvaluationNoLowerLow",1.0);
+AddColumn(WE_SL_LPSEvaluationCloseImproved,"WE_SL_LPSEvaluationCloseImproved",1.0);
+AddColumn(WE_SL_LPSCEContextValid,"WE_SL_LPSCEContextValid",1.0);
+AddColumn(WE_SL_LPSCECoordinateMatchesOrigin,"WE_SL_LPSCECoordinateMatchesOrigin",1.0);
+AddColumn(WE_SL_LPSNoSupplyConfirmedAtEvaluation,"WE_SL_LPSNoSupplyConfirmedAtEvaluation",1.0);
+_SECTION_END();

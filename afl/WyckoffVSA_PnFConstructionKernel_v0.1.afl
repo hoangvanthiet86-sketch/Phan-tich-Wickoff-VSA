@@ -1,0 +1,437 @@
+/*
+    Wyckoff VSA P&F Construction Kernel v0.1
+
+    PFK01-PFK44 approved at PR #42.
+    Geometry/provenance infrastructure only.
+
+    Integration correction after AmiBroker native smoke execution:
+    - no loop-local h/l/c identifiers (AFL H/L/C are built-in arrays);
+    - no array-returning Min/Max in scalar loop decisions;
+    - scalar source values always come from High[i]/Low[i]/Close[i].
+
+    No Phase/Family/Event interpretation, no horizontal Cause selection,
+    no Price Objective and no trading signal.
+
+    INTEGRATED DEVELOPMENT / NATIVE ACCEPTANCE PENDING.
+*/
+SetBarsRequired(sbrAll,sbrAll);
+
+_SECTION_BEGIN("120. P&F Construction Kernel configuration");
+function WPFK_Finite(x)
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WPFK_BI = BarIndex();
+WPFK_DT = DateTime();
+WPFK_Zero = 0 * WPFK_BI;
+WPFK_Null = Null + WPFK_Zero;
+
+WPFK_BoxSizeScalar = Param("P&F fixed BoxSize",1,0.000001,1000000,0.01);
+WPFK_GridOriginScalar = Param("P&F GridOrigin",0,-1000000000,1000000000,0.01);
+WPFK_ReversalBoxesScalar = Param("P&F ReversalBoxes: 1 or 3",3,1,3,2);
+WPFK_AdjustmentBasisStatusScalar = Param("P&F adjustment basis: 0=unverified 1=compatible 2=incompatible",0,0,2,1);
+WPFK_AdjustmentBasisDeclaration = ParamStr("P&F adjustment basis declaration","NOT VERIFIED");
+WPFK_RuntimeLastBarIsProvisional = ParamToggle("P&F: last bar in analysis range is provisional","No|Yes",0);
+WPFK_SourceRevisionStatusScalar = Param("P&F source revision: 0=not assessed 1=same 2=revised",0,0,2,1);
+
+WPFK_ConfigValidScalar = Interval()==inDaily
+    AND WPFK_Finite(WPFK_BoxSizeScalar) AND WPFK_BoxSizeScalar>0
+    AND WPFK_Finite(WPFK_GridOriginScalar)
+    AND (WPFK_ReversalBoxesScalar==1 OR WPFK_ReversalBoxesScalar==3);
+
+WPFK_ConfigValid = WPFK_Zero + WPFK_ConfigValidScalar;
+WPFK_BoxSize = WPFK_Zero + WPFK_BoxSizeScalar;
+WPFK_GridOrigin = WPFK_Zero + WPFK_GridOriginScalar;
+WPFK_ReversalBoxes = WPFK_Zero + WPFK_ReversalBoxesScalar;
+WPFK_PriceMethodCode = WPFK_Zero + 1;
+WPFK_KernelSchemaMajor = WPFK_Zero + 1;
+WPFK_KernelSchemaMinor = WPFK_Zero;
+WPFK_AdjustmentBasisStatusCode = WPFK_Zero + WPFK_AdjustmentBasisStatusScalar;
+WPFK_SourceRevisionStatusCode = WPFK_Zero + WPFK_SourceRevisionStatusScalar;
+WPFK_ProductionConstructionValid = WPFK_Zero + (WPFK_ConfigValidScalar AND WPFK_AdjustmentBasisStatusScalar==1);
+WPFK_SourceBarValid = WPFK_Finite(High) AND WPFK_Finite(Low) AND High>0 AND Low>0 AND High>=Low;
+WPFK_BootstrapCloseValid = WPFK_Finite(Close) AND Close>0;
+WPFK_ProvisionalFlag = IIf(Status("lastbarinrange") AND WPFK_RuntimeLastBarIsProvisional,1,0);
+_SECTION_END();
+
+_SECTION_BEGIN("121. P&F causal state machine");
+WPFK_ChartUpdateCode = WPFK_Zero;
+WPFK_BoxesAddedCount = WPFK_Zero;
+WPFK_ReversalOccurredFlag = WPFK_Zero;
+WPFK_OneBoxReversalBlockedFlag = WPFK_Zero;
+WPFK_DataGapEventFlag = WPFK_Zero;
+WPFK_BootstrapAmbiguousFlag = WPFK_Zero;
+WPFK_BoundaryToleranceUsedFlag = WPFK_Zero;
+WPFK_ProvisionalWouldSeedFlag = WPFK_Zero;
+WPFK_ProvisionalWouldInitializeFlag = WPFK_Zero;
+WPFK_ProvisionalWouldExtendFlag = WPFK_Zero;
+WPFK_ProvisionalWouldReverseFlag = WPFK_Zero;
+
+WPFK_BootstrapSeedBarIndex = WPFK_Null;
+WPFK_BootstrapSeedDateTime = WPFK_Null;
+WPFK_BootstrapSeedPrice = WPFK_Null;
+WPFK_BootstrapSeedBoxIndex = WPFK_Null;
+WPFK_FirstColumnKnownAtBarIndex = WPFK_Null;
+WPFK_FirstColumnKnownAtDateTime = WPFK_Null;
+WPFK_FirstReversalKnownAtBarIndex = WPFK_Null;
+WPFK_FirstReversalKnownAtDateTime = WPFK_Null;
+WPFK_ConstructionMatureFlag = WPFK_Zero;
+WPFK_BootstrapAmbiguousCount = WPFK_Zero;
+WPFK_CumulativeDataGapCount = WPFK_Zero;
+
+WPFK_CurrentColumnIndex = WPFK_Null;
+WPFK_CurrentColumnDirectionCode = WPFK_Zero;
+WPFK_CurrentColumnStartBoxIndex = WPFK_Null;
+WPFK_CurrentColumnTopBoxIndex = WPFK_Null;
+WPFK_CurrentColumnBottomBoxIndex = WPFK_Null;
+WPFK_CurrentColumnBoxCount = WPFK_Null;
+WPFK_CurrentColumnStartPrice = WPFK_Null;
+WPFK_CurrentColumnTopPrice = WPFK_Null;
+WPFK_CurrentColumnBottomPrice = WPFK_Null;
+WPFK_CurrentColumnFirstKnownAtBarIndex = WPFK_Null;
+WPFK_CurrentColumnFirstKnownAtDateTime = WPFK_Null;
+WPFK_CurrentColumnLastExtendedAtBarIndex = WPFK_Null;
+WPFK_CurrentColumnLastExtendedAtDateTime = WPFK_Null;
+WPFK_CurrentColumnSourceValidBarCount = WPFK_Null;
+WPFK_CurrentColumnBoundaryToleranceUseCount = WPFK_Null;
+WPFK_CurrentColumnDataGapObservedFlag = WPFK_Zero;
+
+WPFK_ClosedColumnEventCode = WPFK_Zero;
+WPFK_ClosedColumnIndex = WPFK_Null;
+WPFK_ClosedColumnDirectionCode = WPFK_Zero;
+WPFK_ClosedColumnStartBoxIndex = WPFK_Null;
+WPFK_ClosedColumnTopBoxIndex = WPFK_Null;
+WPFK_ClosedColumnBottomBoxIndex = WPFK_Null;
+WPFK_ClosedColumnBoxCount = WPFK_Null;
+WPFK_ClosedColumnFirstKnownAtBarIndex = WPFK_Null;
+WPFK_ClosedColumnFirstKnownAtDateTime = WPFK_Null;
+WPFK_ClosedColumnLastExtendedAtBarIndex = WPFK_Null;
+WPFK_ClosedColumnLastExtendedAtDateTime = WPFK_Null;
+WPFK_ClosedColumnFinalizedAtBarIndex = WPFK_Null;
+WPFK_ClosedColumnFinalizedAtDateTime = WPFK_Null;
+WPFK_ClosedColumnSourceValidBarCount = WPFK_Null;
+WPFK_ClosedColumnBoundaryToleranceUseCount = WPFK_Null;
+WPFK_ClosedColumnDataGapObservedFlag = WPFK_Zero;
+
+WPFK_ColumnIndexKnownAtOrBeforeBar = WPFK_Null;
+WPFK_ColumnDirectionKnownAtOrBeforeBar = WPFK_Zero;
+WPFK_ColumnTopBoxKnownAtOrBeforeBar = WPFK_Null;
+WPFK_ColumnBottomBoxKnownAtOrBeforeBar = WPFK_Null;
+WPFK_SameBarColumnCreationFlag = WPFK_Zero;
+WPFK_MappingStatusCode = WPFK_Zero;
+
+pfk_seeded = 0;
+pfk_seedBI = Null; pfk_seedDT = Null; pfk_seedPrice = Null; pfk_seedBox = Null;
+pfk_firstColBI = Null; pfk_firstColDT = Null;
+pfk_firstRevBI = Null; pfk_firstRevDT = Null;
+pfk_mature = 0; pfk_ambiguousCount = 0; pfk_gapCount = 0;
+pfk_colExists = 0; pfk_colIndex = Null; pfk_colDir = 0;
+pfk_colStart = Null; pfk_colTop = Null; pfk_colBottom = Null;
+pfk_colFirstBI = Null; pfk_colFirstDT = Null; pfk_colLastBI = Null; pfk_colLastDT = Null;
+pfk_colValidBars = 0; pfk_colTolCount = 0; pfk_colGapFlag = 0;
+
+for(pfk_i=0;pfk_i<BarCount;pfk_i++)
+{
+    pfk_update = 0; pfk_added = 0; pfk_reversal = 0; pfk_blocked = 0;
+    pfk_gapEvent = 0; pfk_ambiguous = 0; pfk_tolUsed = 0; pfk_sameBarCreation = 0;
+
+    WPFK_ClosedColumnEventCode[pfk_i] = 0;
+    WPFK_ClosedColumnDirectionCode[pfk_i] = 0;
+    WPFK_ClosedColumnDataGapObservedFlag[pfk_i] = 0;
+
+    pfk_sourceValid = WPFK_SourceBarValid[pfk_i];
+    pfk_closeValid = WPFK_BootstrapCloseValid[pfk_i];
+    pfk_provisional = WPFK_ProvisionalFlag[pfk_i];
+
+    if(NOT WPFK_ConfigValidScalar)
+    {
+        pfk_update = 0;
+    }
+    else
+    if(pfk_provisional)
+    {
+        pfk_update = 6;
+        if(pfk_sourceValid)
+        {
+            pfk_highVal = High[pfk_i];
+            pfk_lowVal = Low[pfk_i];
+
+            pfk_magH = pfk_highVal; if(pfk_magH<1) pfk_magH=1;
+            pfk_tolH = WPFK_BoxSizeScalar*1e-9;
+            pfk_altTolH = 1e-10*pfk_magH; if(pfk_altTolH<pfk_tolH) pfk_tolH=pfk_altTolH;
+            pfk_magL = pfk_lowVal; if(pfk_magL<1) pfk_magL=1;
+            pfk_tolL = WPFK_BoxSizeScalar*1e-9;
+            pfk_altTolL = 1e-10*pfk_magL; if(pfk_altTolL<pfk_tolL) pfk_tolL=pfk_altTolL;
+
+            pfk_highBox = Floor((pfk_highVal-WPFK_GridOriginScalar+pfk_tolH)/WPFK_BoxSizeScalar);
+            pfk_lowBox = Ceil((pfk_lowVal-WPFK_GridOriginScalar-pfk_tolL)/WPFK_BoxSizeScalar);
+
+            if(NOT pfk_seeded AND pfk_closeValid)
+                WPFK_ProvisionalWouldSeedFlag[pfk_i] = 1;
+            else if(pfk_seeded AND NOT pfk_colExists)
+            {
+                pfk_upReach = pfk_highBox-pfk_seedBox; if(pfk_upReach<0) pfk_upReach=0;
+                pfk_downReach = pfk_seedBox-pfk_lowBox; if(pfk_downReach<0) pfk_downReach=0;
+                if((pfk_upReach>=1 OR pfk_downReach>=1) AND pfk_upReach!=pfk_downReach)
+                    WPFK_ProvisionalWouldInitializeFlag[pfk_i] = 1;
+            }
+            else if(pfk_colExists AND pfk_colDir==1)
+            {
+                if(pfk_highBox>=pfk_colTop+1)
+                    WPFK_ProvisionalWouldExtendFlag[pfk_i] = 1;
+                else if(pfk_lowVal<=WPFK_GridOriginScalar+(pfk_colTop-WPFK_ReversalBoxesScalar)*WPFK_BoxSizeScalar+pfk_tolL)
+                {
+                    if(WPFK_ReversalBoxesScalar!=1 OR (pfk_colTop-pfk_colBottom+1)>=2)
+                        WPFK_ProvisionalWouldReverseFlag[pfk_i] = 1;
+                }
+            }
+            else if(pfk_colExists AND pfk_colDir==2)
+            {
+                if(pfk_lowBox<=pfk_colBottom-1)
+                    WPFK_ProvisionalWouldExtendFlag[pfk_i] = 1;
+                else if(pfk_highVal>=WPFK_GridOriginScalar+(pfk_colBottom+WPFK_ReversalBoxesScalar)*WPFK_BoxSizeScalar-pfk_tolH)
+                {
+                    if(WPFK_ReversalBoxesScalar!=1 OR (pfk_colTop-pfk_colBottom+1)>=2)
+                        WPFK_ProvisionalWouldReverseFlag[pfk_i] = 1;
+                }
+            }
+        }
+    }
+    else if(NOT pfk_sourceValid)
+    {
+        pfk_gapEvent = 1;
+        pfk_gapCount = pfk_gapCount + 1;
+        if(pfk_colExists) pfk_colGapFlag = 1;
+    }
+    else
+    {
+        pfk_highVal = High[pfk_i];
+        pfk_lowVal = Low[pfk_i];
+        pfk_closeVal = Close[pfk_i];
+
+        pfk_magH = pfk_highVal; if(pfk_magH<1) pfk_magH=1;
+        pfk_tolH = WPFK_BoxSizeScalar*1e-9;
+        pfk_altTolH = 1e-10*pfk_magH; if(pfk_altTolH<pfk_tolH) pfk_tolH=pfk_altTolH;
+        pfk_magL = pfk_lowVal; if(pfk_magL<1) pfk_magL=1;
+        pfk_tolL = WPFK_BoxSizeScalar*1e-9;
+        pfk_altTolL = 1e-10*pfk_magL; if(pfk_altTolL<pfk_tolL) pfk_tolL=pfk_altTolL;
+
+        pfk_rawHighBox = Floor((pfk_highVal-WPFK_GridOriginScalar)/WPFK_BoxSizeScalar);
+        pfk_rawLowBox = Ceil((pfk_lowVal-WPFK_GridOriginScalar)/WPFK_BoxSizeScalar);
+        pfk_highBox = Floor((pfk_highVal-WPFK_GridOriginScalar+pfk_tolH)/WPFK_BoxSizeScalar);
+        pfk_lowBox = Ceil((pfk_lowVal-WPFK_GridOriginScalar-pfk_tolL)/WPFK_BoxSizeScalar);
+        pfk_tolUsed = (pfk_highBox!=pfk_rawHighBox) OR (pfk_lowBox!=pfk_rawLowBox);
+
+        if(NOT pfk_seeded)
+        {
+            if(pfk_closeValid)
+            {
+                pfk_magC = pfk_closeVal; if(pfk_magC<1) pfk_magC=1;
+                pfk_tolC = WPFK_BoxSizeScalar*1e-9;
+                pfk_altTolC = 1e-10*pfk_magC; if(pfk_altTolC<pfk_tolC) pfk_tolC=pfk_altTolC;
+                pfk_seedNow = Floor((pfk_closeVal-WPFK_GridOriginScalar+pfk_tolC)/WPFK_BoxSizeScalar);
+                pfk_seeded = 1;
+                pfk_seedBI = WPFK_BI[pfk_i]; pfk_seedDT = WPFK_DT[pfk_i];
+                pfk_seedPrice = pfk_closeVal; pfk_seedBox = pfk_seedNow;
+                pfk_update = 4;
+            }
+        }
+        else if(NOT pfk_colExists)
+        {
+            pfk_upReach = pfk_highBox-pfk_seedBox; if(pfk_upReach<0) pfk_upReach=0;
+            pfk_downReach = pfk_seedBox-pfk_lowBox; if(pfk_downReach<0) pfk_downReach=0;
+            pfk_firstDir = 0;
+            if(pfk_upReach>=1 AND pfk_downReach<1) pfk_firstDir=1;
+            else if(pfk_downReach>=1 AND pfk_upReach<1) pfk_firstDir=2;
+            else if(pfk_upReach>=1 AND pfk_downReach>=1)
+            {
+                if(pfk_upReach>pfk_downReach) pfk_firstDir=1;
+                else if(pfk_downReach>pfk_upReach) pfk_firstDir=2;
+                else { pfk_ambiguous=1; pfk_ambiguousCount=pfk_ambiguousCount+1; }
+            }
+
+            if(pfk_firstDir==1)
+            {
+                pfk_colExists=1; pfk_colIndex=0; pfk_colDir=1;
+                pfk_colStart=pfk_seedBox+1; pfk_colBottom=pfk_colStart; pfk_colTop=pfk_highBox;
+                pfk_colFirstBI=WPFK_BI[pfk_i]; pfk_colFirstDT=WPFK_DT[pfk_i];
+                pfk_colLastBI=WPFK_BI[pfk_i]; pfk_colLastDT=WPFK_DT[pfk_i];
+                pfk_colValidBars=1; pfk_colTolCount=pfk_tolUsed; pfk_colGapFlag=0;
+                pfk_firstColBI=WPFK_BI[pfk_i]; pfk_firstColDT=WPFK_DT[pfk_i];
+                pfk_added=pfk_colTop-pfk_colBottom+1; pfk_update=5; pfk_sameBarCreation=1;
+            }
+            else if(pfk_firstDir==2)
+            {
+                pfk_colExists=1; pfk_colIndex=0; pfk_colDir=2;
+                pfk_colStart=pfk_seedBox-1; pfk_colTop=pfk_colStart; pfk_colBottom=pfk_lowBox;
+                pfk_colFirstBI=WPFK_BI[pfk_i]; pfk_colFirstDT=WPFK_DT[pfk_i];
+                pfk_colLastBI=WPFK_BI[pfk_i]; pfk_colLastDT=WPFK_DT[pfk_i];
+                pfk_colValidBars=1; pfk_colTolCount=pfk_tolUsed; pfk_colGapFlag=0;
+                pfk_firstColBI=WPFK_BI[pfk_i]; pfk_firstColDT=WPFK_DT[pfk_i];
+                pfk_added=pfk_colTop-pfk_colBottom+1; pfk_update=5; pfk_sameBarCreation=1;
+            }
+            else pfk_update=1;
+        }
+        else
+        {
+            pfk_oldValidBars = pfk_colValidBars;
+            pfk_oldTolCount = pfk_colTolCount;
+            pfk_colValidBars = pfk_colValidBars + 1;
+            if(pfk_tolUsed) pfk_colTolCount = pfk_colTolCount + 1;
+
+            if(pfk_colDir==1)
+            {
+                if(pfk_highBox>=pfk_colTop+1)
+                {
+                    pfk_added=pfk_highBox-pfk_colTop;
+                    pfk_colTop=pfk_highBox;
+                    pfk_colLastBI=WPFK_BI[pfk_i]; pfk_colLastDT=WPFK_DT[pfk_i];
+                    pfk_update=2;
+                }
+                else
+                {
+                    pfk_revGrid=WPFK_GridOriginScalar+(pfk_colTop-WPFK_ReversalBoxesScalar)*WPFK_BoxSizeScalar;
+                    pfk_revHit=pfk_lowVal<=pfk_revGrid+pfk_tolL;
+                    if(pfk_revHit AND WPFK_ReversalBoxesScalar==1 AND (pfk_colTop-pfk_colBottom+1)<2)
+                    { pfk_blocked=1; pfk_update=1; }
+                    else if(pfk_revHit)
+                    {
+                        WPFK_ClosedColumnEventCode[pfk_i]=1;
+                        WPFK_ClosedColumnIndex[pfk_i]=pfk_colIndex;
+                        WPFK_ClosedColumnDirectionCode[pfk_i]=pfk_colDir;
+                        WPFK_ClosedColumnStartBoxIndex[pfk_i]=pfk_colStart;
+                        WPFK_ClosedColumnTopBoxIndex[pfk_i]=pfk_colTop;
+                        WPFK_ClosedColumnBottomBoxIndex[pfk_i]=pfk_colBottom;
+                        WPFK_ClosedColumnBoxCount[pfk_i]=pfk_colTop-pfk_colBottom+1;
+                        WPFK_ClosedColumnFirstKnownAtBarIndex[pfk_i]=pfk_colFirstBI;
+                        WPFK_ClosedColumnFirstKnownAtDateTime[pfk_i]=pfk_colFirstDT;
+                        WPFK_ClosedColumnLastExtendedAtBarIndex[pfk_i]=pfk_colLastBI;
+                        WPFK_ClosedColumnLastExtendedAtDateTime[pfk_i]=pfk_colLastDT;
+                        WPFK_ClosedColumnFinalizedAtBarIndex[pfk_i]=WPFK_BI[pfk_i];
+                        WPFK_ClosedColumnFinalizedAtDateTime[pfk_i]=WPFK_DT[pfk_i];
+                        WPFK_ClosedColumnSourceValidBarCount[pfk_i]=pfk_oldValidBars;
+                        WPFK_ClosedColumnBoundaryToleranceUseCount[pfk_i]=pfk_oldTolCount;
+                        WPFK_ClosedColumnDataGapObservedFlag[pfk_i]=pfk_colGapFlag;
+
+                        pfk_colIndex=pfk_colIndex+1; pfk_colDir=2;
+                        pfk_colStart=pfk_colTop-1; pfk_colTop=pfk_colStart; pfk_colBottom=pfk_lowBox;
+                        pfk_colFirstBI=WPFK_BI[pfk_i]; pfk_colFirstDT=WPFK_DT[pfk_i];
+                        pfk_colLastBI=WPFK_BI[pfk_i]; pfk_colLastDT=WPFK_DT[pfk_i];
+                        pfk_colValidBars=1; pfk_colTolCount=pfk_tolUsed; pfk_colGapFlag=0;
+                        pfk_added=pfk_colTop-pfk_colBottom+1; pfk_reversal=1; pfk_update=3; pfk_sameBarCreation=1;
+                        if(NOT pfk_mature)
+                        { pfk_mature=1; pfk_firstRevBI=WPFK_BI[pfk_i]; pfk_firstRevDT=WPFK_DT[pfk_i]; }
+                    }
+                    else pfk_update=1;
+                }
+            }
+            else if(pfk_colDir==2)
+            {
+                if(pfk_lowBox<=pfk_colBottom-1)
+                {
+                    pfk_added=pfk_colBottom-pfk_lowBox;
+                    pfk_colBottom=pfk_lowBox;
+                    pfk_colLastBI=WPFK_BI[pfk_i]; pfk_colLastDT=WPFK_DT[pfk_i];
+                    pfk_update=2;
+                }
+                else
+                {
+                    pfk_revGrid=WPFK_GridOriginScalar+(pfk_colBottom+WPFK_ReversalBoxesScalar)*WPFK_BoxSizeScalar;
+                    pfk_revHit=pfk_highVal>=pfk_revGrid-pfk_tolH;
+                    if(pfk_revHit AND WPFK_ReversalBoxesScalar==1 AND (pfk_colTop-pfk_colBottom+1)<2)
+                    { pfk_blocked=1; pfk_update=1; }
+                    else if(pfk_revHit)
+                    {
+                        WPFK_ClosedColumnEventCode[pfk_i]=1;
+                        WPFK_ClosedColumnIndex[pfk_i]=pfk_colIndex;
+                        WPFK_ClosedColumnDirectionCode[pfk_i]=pfk_colDir;
+                        WPFK_ClosedColumnStartBoxIndex[pfk_i]=pfk_colStart;
+                        WPFK_ClosedColumnTopBoxIndex[pfk_i]=pfk_colTop;
+                        WPFK_ClosedColumnBottomBoxIndex[pfk_i]=pfk_colBottom;
+                        WPFK_ClosedColumnBoxCount[pfk_i]=pfk_colTop-pfk_colBottom+1;
+                        WPFK_ClosedColumnFirstKnownAtBarIndex[pfk_i]=pfk_colFirstBI;
+                        WPFK_ClosedColumnFirstKnownAtDateTime[pfk_i]=pfk_colFirstDT;
+                        WPFK_ClosedColumnLastExtendedAtBarIndex[pfk_i]=pfk_colLastBI;
+                        WPFK_ClosedColumnLastExtendedAtDateTime[pfk_i]=pfk_colLastDT;
+                        WPFK_ClosedColumnFinalizedAtBarIndex[pfk_i]=WPFK_BI[pfk_i];
+                        WPFK_ClosedColumnFinalizedAtDateTime[pfk_i]=WPFK_DT[pfk_i];
+                        WPFK_ClosedColumnSourceValidBarCount[pfk_i]=pfk_oldValidBars;
+                        WPFK_ClosedColumnBoundaryToleranceUseCount[pfk_i]=pfk_oldTolCount;
+                        WPFK_ClosedColumnDataGapObservedFlag[pfk_i]=pfk_colGapFlag;
+
+                        pfk_colIndex=pfk_colIndex+1; pfk_colDir=1;
+                        pfk_colStart=pfk_colBottom+1; pfk_colBottom=pfk_colStart; pfk_colTop=pfk_highBox;
+                        pfk_colFirstBI=WPFK_BI[pfk_i]; pfk_colFirstDT=WPFK_DT[pfk_i];
+                        pfk_colLastBI=WPFK_BI[pfk_i]; pfk_colLastDT=WPFK_DT[pfk_i];
+                        pfk_colValidBars=1; pfk_colTolCount=pfk_tolUsed; pfk_colGapFlag=0;
+                        pfk_added=pfk_colTop-pfk_colBottom+1; pfk_reversal=1; pfk_update=3; pfk_sameBarCreation=1;
+                        if(NOT pfk_mature)
+                        { pfk_mature=1; pfk_firstRevBI=WPFK_BI[pfk_i]; pfk_firstRevDT=WPFK_DT[pfk_i]; }
+                    }
+                    else pfk_update=1;
+                }
+            }
+        }
+    }
+
+    WPFK_ChartUpdateCode[pfk_i]=pfk_update;
+    WPFK_BoxesAddedCount[pfk_i]=pfk_added;
+    WPFK_ReversalOccurredFlag[pfk_i]=pfk_reversal;
+    WPFK_OneBoxReversalBlockedFlag[pfk_i]=pfk_blocked;
+    WPFK_DataGapEventFlag[pfk_i]=pfk_gapEvent;
+    WPFK_BootstrapAmbiguousFlag[pfk_i]=pfk_ambiguous;
+    WPFK_BoundaryToleranceUsedFlag[pfk_i]=pfk_tolUsed;
+
+    WPFK_BootstrapSeedBarIndex[pfk_i]=pfk_seedBI;
+    WPFK_BootstrapSeedDateTime[pfk_i]=pfk_seedDT;
+    WPFK_BootstrapSeedPrice[pfk_i]=pfk_seedPrice;
+    WPFK_BootstrapSeedBoxIndex[pfk_i]=pfk_seedBox;
+    WPFK_FirstColumnKnownAtBarIndex[pfk_i]=pfk_firstColBI;
+    WPFK_FirstColumnKnownAtDateTime[pfk_i]=pfk_firstColDT;
+    WPFK_FirstReversalKnownAtBarIndex[pfk_i]=pfk_firstRevBI;
+    WPFK_FirstReversalKnownAtDateTime[pfk_i]=pfk_firstRevDT;
+    WPFK_ConstructionMatureFlag[pfk_i]=pfk_mature;
+    WPFK_BootstrapAmbiguousCount[pfk_i]=pfk_ambiguousCount;
+    WPFK_CumulativeDataGapCount[pfk_i]=pfk_gapCount;
+
+    if(pfk_colExists)
+    {
+        WPFK_CurrentColumnIndex[pfk_i]=pfk_colIndex;
+        WPFK_CurrentColumnDirectionCode[pfk_i]=pfk_colDir;
+        WPFK_CurrentColumnStartBoxIndex[pfk_i]=pfk_colStart;
+        WPFK_CurrentColumnTopBoxIndex[pfk_i]=pfk_colTop;
+        WPFK_CurrentColumnBottomBoxIndex[pfk_i]=pfk_colBottom;
+        WPFK_CurrentColumnBoxCount[pfk_i]=pfk_colTop-pfk_colBottom+1;
+        WPFK_CurrentColumnStartPrice[pfk_i]=WPFK_GridOriginScalar+pfk_colStart*WPFK_BoxSizeScalar;
+        WPFK_CurrentColumnTopPrice[pfk_i]=WPFK_GridOriginScalar+pfk_colTop*WPFK_BoxSizeScalar;
+        WPFK_CurrentColumnBottomPrice[pfk_i]=WPFK_GridOriginScalar+pfk_colBottom*WPFK_BoxSizeScalar;
+        WPFK_CurrentColumnFirstKnownAtBarIndex[pfk_i]=pfk_colFirstBI;
+        WPFK_CurrentColumnFirstKnownAtDateTime[pfk_i]=pfk_colFirstDT;
+        WPFK_CurrentColumnLastExtendedAtBarIndex[pfk_i]=pfk_colLastBI;
+        WPFK_CurrentColumnLastExtendedAtDateTime[pfk_i]=pfk_colLastDT;
+        WPFK_CurrentColumnSourceValidBarCount[pfk_i]=pfk_colValidBars;
+        WPFK_CurrentColumnBoundaryToleranceUseCount[pfk_i]=pfk_colTolCount;
+        WPFK_CurrentColumnDataGapObservedFlag[pfk_i]=pfk_colGapFlag;
+        WPFK_ColumnIndexKnownAtOrBeforeBar[pfk_i]=pfk_colIndex;
+        WPFK_ColumnDirectionKnownAtOrBeforeBar[pfk_i]=pfk_colDir;
+        WPFK_ColumnTopBoxKnownAtOrBeforeBar[pfk_i]=pfk_colTop;
+        WPFK_ColumnBottomBoxKnownAtOrBeforeBar[pfk_i]=pfk_colBottom;
+        WPFK_MappingStatusCode[pfk_i]=1;
+    }
+    else
+    {
+        WPFK_CurrentColumnDirectionCode[pfk_i]=0;
+        WPFK_CurrentColumnDataGapObservedFlag[pfk_i]=0;
+        WPFK_ColumnDirectionKnownAtOrBeforeBar[pfk_i]=0;
+        WPFK_MappingStatusCode[pfk_i]=0;
+    }
+    WPFK_SameBarColumnCreationFlag[pfk_i]=pfk_sameBarCreation;
+}
+
+WPFK_MatureForCauseMapping = WPFK_ConstructionMatureFlag AND WPFK_ProductionConstructionValid;
+WPFK_ConstructionAvailable = NOT IsNull(WPFK_CurrentColumnIndex);
+WPFK_TotalColumnsKnown = IIf(WPFK_ConstructionAvailable,WPFK_CurrentColumnIndex+1,0);
+WPFK_TotalReversalsKnown = IIf(WPFK_ConstructionAvailable,WPFK_CurrentColumnIndex,0);
+WPFK_TotalClosedColumnsKnown = WPFK_TotalReversalsKnown;
+_SECTION_END();

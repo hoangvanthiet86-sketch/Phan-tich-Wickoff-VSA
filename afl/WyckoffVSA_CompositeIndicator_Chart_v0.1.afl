@@ -1,0 +1,69 @@
+/*
+    Wyckoff VSA Composite Indicator v0.1 — minimal chart overlay
+
+    Approved specification: PR #26, merge dc5089a2502f28ecf9777874561e393de6b62b68
+
+    Presentation only. Raw candles are not recolored from Composite bias.
+    Confirmed/known-at event markers are plotted on the bar where upstream
+    knowledge becomes available; no confirmed marker is backfilled to origin.
+
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+*/
+#include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
+
+_SECTION_BEGIN("86. Composite minimal chart overlay");
+Plot(Close,"Price",colorDefault,styleCandle);
+
+// Preserve each active RangeContext. When two contexts coexist, both sets of
+// boundaries remain visible; no winner is chosen by recency or direction.
+Plot(IIf(WCI_L_ContextPresent==1,WCI_L_PrimaryRangeHigh,Null),"Lower-derived Range High",colorDefault,styleLine|styleNoRescale);
+Plot(IIf(WCI_L_ContextPresent==1,WCI_L_PrimaryRangeLow,Null),"Lower-derived Range Low",colorDefault,styleLine|styleNoRescale);
+Plot(IIf(WCI_U_ContextPresent==1,WCI_U_PrimaryRangeHigh,Null),"Upper-derived Range High",colorDefault,styleLine|styleNoRescale);
+Plot(IIf(WCI_U_ContextPresent==1,WCI_U_PrimaryRangeLow,Null),"Upper-derived Range Low",colorDefault,styleLine|styleNoRescale);
+
+// Marker stacking is layout only. It does not encode methodological priority.
+PlotShapes(IIf(WCI_CurrentSupplyTestEvent,shapeSmallUpTriangle,shapeNone),colorDefault,0,Low,-12);
+PlotShapes(IIf(WCI_CurrentSpringShakeoutEvent,shapeUpArrow,shapeNone),colorDefault,0,Low,-24);
+PlotShapes(IIf(WCI_CurrentSOSEvent,shapeSmallUpTriangle,shapeNone),colorDefault,0,Low,-36);
+PlotShapes(IIf(WCI_CurrentLPSEvent,shapeUpArrow,shapeNone),colorDefault,0,Low,-48);
+PlotShapes(IIf(WCI_CurrentBullishAbsorptionResponse,shapeHollowSmallCircle,shapeNone),colorDefault,0,Low,-60);
+
+PlotShapes(IIf(WCI_CurrentUpthrustEvent,shapeDownArrow,shapeNone),colorDefault,0,High,12);
+PlotShapes(IIf(WCI_CurrentSOWEvent,shapeSmallDownTriangle,shapeNone),colorDefault,0,High,24);
+PlotShapes(IIf(WCI_CurrentLPSYEvent,shapeDownArrow,shapeNone),colorDefault,0,High,36);
+PlotShapes(IIf(WCI_CurrentBearishAbsorptionResponse,shapeHollowSmallCircle,shapeNone),colorDefault,0,High,48);
+
+// No Demand / No Supply remain visible as VSA evidence but never change phase
+// or directional context inside this chart layer.
+PlotShapes(IIf(WCI_CurrentNoSupplyEvent,shapeHollowSmallCircle,shapeNone),colorDefault,0,Low,-72);
+PlotShapes(IIf(WCI_CurrentNoDemandEvent,shapeHollowSmallCircle,shapeNone),colorDefault,0,High,60);
+
+WCI_ChartMultiplicity = WriteIf(SelectedValue(WCI_ContextMultiplicityCode)==0,"NO RANGE",
+    WriteIf(SelectedValue(WCI_ContextMultiplicityCode)==1,"SINGLE RANGE","MULTIPLE RANGES"));
+WCI_ChartPhase = WriteIf(SelectedValue(WCI_PhaseStateCode)==1,"PHASE-A-LIKE",
+    WriteIf(SelectedValue(WCI_PhaseStateCode)==2,"PHASE-B-LIKE",
+    WriteIf(SelectedValue(WCI_PhaseStateCode)==3,"PHASE-C-CANDIDATE",
+    WriteIf(SelectedValue(WCI_PhaseStateCode)==4,"PHASE-C-LIKE",
+    WriteIf(SelectedValue(WCI_PhaseStateCode)==5,"PHASE-D-LIKE",
+    WriteIf(SelectedValue(WCI_PhaseStateCode)==6,"PHASE-E-LIKE",
+    WriteIf(SelectedValue(WCI_PhaseStateCode)==7,"TERMINAL / SUPERSEDED","INSUFFICIENT")))))));
+WCI_ChartFamily = WriteIf(SelectedValue(WCI_FamilyHypothesisCode)==1,"UNRESOLVED LOWER RANGE",
+    WriteIf(SelectedValue(WCI_FamilyHypothesisCode)==2,"UNRESOLVED UPPER RANGE",
+    WriteIf(SelectedValue(WCI_FamilyHypothesisCode)==3,"ACCUMULATION-HYPOTHESIS",
+    WriteIf(SelectedValue(WCI_FamilyHypothesisCode)==4,"REDISTRIBUTION-HYPOTHESIS",
+    WriteIf(SelectedValue(WCI_FamilyHypothesisCode)==5,"DISTRIBUTION-HYPOTHESIS",
+    WriteIf(SelectedValue(WCI_FamilyHypothesisCode)==6,"REACCUMULATION-HYPOTHESIS",
+    WriteIf(SelectedValue(WCI_FamilyHypothesisCode)==7,"MIXED / CONFLICTING","INSUFFICIENT")))))));
+WCI_ChartDirection = WriteIf(SelectedValue(WCI_DirectionalContextCode)==1,"UNRESOLVED",
+    WriteIf(SelectedValue(WCI_DirectionalContextCode)==2,"BULLISH HYPOTHESIS",
+    WriteIf(SelectedValue(WCI_DirectionalContextCode)==3,"BEARISH HYPOTHESIS",
+    WriteIf(SelectedValue(WCI_DirectionalContextCode)==4,"MIXED / CONFLICTING","INSUFFICIENT"))));
+WCI_ChartProvisional = WriteIf(SelectedValue(WCI_ProvisionalFlag)==1," | PROVISIONAL LAST BAR","");
+
+Title = Name()
+    + " | " + WCI_ChartMultiplicity
+    + " | " + WCI_ChartPhase
+    + " | " + WCI_ChartFamily
+    + " | " + WCI_ChartDirection
+    + WCI_ChartProvisional;
+_SECTION_END();

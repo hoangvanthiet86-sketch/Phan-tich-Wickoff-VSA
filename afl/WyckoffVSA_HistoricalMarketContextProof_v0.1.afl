@@ -1,0 +1,181 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H3 point-in-time Market context proof.
+
+    Chay tren co phieu Daily (control dau tien: SNZ).
+    Chi doc namespace lich su WVSA_HIST_MKT_v01_* do H3 publisher tao.
+    KHONG doc current production WVSA_SELCTX_v01_* lam nguon lich su.
+    KHONG tao Buy/Sell/Short/Cover.
+
+    UI dung tieng Viet khong dau theo HS14.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+_SECTION_BEGIN("01. CAU HINH H3");
+HMP_MarketSymbol = ParamStr("1.1 Ma thi truong doi chieu","VNINDEX");
+HMP_SimulateMissing = ParamToggle(
+    "1.2 Mo phong thieu du lieu thi truong",
+    "Khong|Co",0);
+HMP_ShowOnlyProblem = ParamToggle(
+    "1.3 Chi hien thi dong khong hop le",
+    "Khong|Co",0);
+_SECTION_END();
+
+_SECTION_BEGIN("02. DOC TIMELINE THI TRUONG LICH SU");
+HMP_IntervalValid = Interval()==inDaily;
+HMP_DT = DateTime();
+
+// Dung DateNum() goc lam khoa ngay de giu so nguyen chinh xac trong AFL float.
+// Khong chuyen sang YYYYMMDD ~20 trieu vi native AmiBroker 6.20.01 co the
+// lam mat bit don vi, dan den collision giua cac ngay khac nhau.
+HMP_DateKey = DateNum();
+
+HMP_Prefix = "WVSA_HIST_MKT_v01_" + HMP_MarketSymbol + "_";
+
+HMP_Ready = Nz(StaticVarGet(HMP_Prefix+"Ready"),0);
+HMP_Generation = Nz(StaticVarGet(HMP_Prefix+"CommittedGenerationID"),0);
+HMP_SourceSymbol = StaticVarGetText(HMP_Prefix+"Symbol");
+HMP_PublisherReady =
+    HMP_Ready==1 AND
+    HMP_Generation>0 AND
+    HMP_SourceSymbol==HMP_MarketSymbol;
+
+HMP_SourceDateKey = StaticVarGet(HMP_Prefix+"SourceBusinessDateKey");
+HMP_SourceDT = StaticVarGet(HMP_Prefix+"SourceBarDateTime");
+HMP_SourceValid = StaticVarGet(HMP_Prefix+"SourceValid");
+HMP_Mult = StaticVarGet(HMP_Prefix+"ContextMultiplicityCode");
+HMP_Dir = StaticVarGet(HMP_Prefix+"DirectionalContextCode");
+HMP_Evidence = StaticVarGet(HMP_Prefix+"EvidenceBalanceCode");
+HMP_HypAlign = StaticVarGet(HMP_Prefix+"HypothesisAlignmentCode");
+HMP_Phase = StaticVarGet(HMP_Prefix+"PhaseStateCode");
+HMP_StructuralDevelopment = StaticVarGet(HMP_Prefix+"StructuralDevelopmentCode");
+HMP_MTFDir = StaticVarGet(HMP_Prefix+"MTFDirectionalAlignmentCode");
+HMP_MTFEvidence = StaticVarGet(HMP_Prefix+"MTFEvidenceAlignmentCode");
+HMP_MTFPhase = StaticVarGet(HMP_Prefix+"MTFPhaseRelationshipCode");
+HMP_MTFConflict = StaticVarGet(HMP_Prefix+"MTFConflictReasonCode");
+
+// Exact-date guard bat buoc ca khoa ngay va DateTime trung nhau.
+HMP_ExactDateMatch =
+    NOT IsNull(HMP_SourceDateKey) AND
+    NOT IsNull(HMP_SourceDT) AND
+    HMP_SourceDateKey==HMP_DateKey AND
+    HMP_SourceDT==HMP_DT;
+HMP_NoFutureSource =
+    NOT IsNull(HMP_SourceDT) AND
+    HMP_SourceDT<=HMP_DT;
+HMP_CorePayloadPresent =
+    NOT IsNull(HMP_Mult) AND
+    NOT IsNull(HMP_Dir) AND
+    NOT IsNull(HMP_Evidence) AND
+    NOT IsNull(HMP_HypAlign) AND
+    NOT IsNull(HMP_Phase) AND
+    NOT IsNull(HMP_StructuralDevelopment) AND
+    NOT IsNull(HMP_MTFDir) AND
+    NOT IsNull(HMP_MTFEvidence) AND
+    NOT IsNull(HMP_MTFPhase) AND
+    NOT IsNull(HMP_MTFConflict);
+
+HMP_BaseValid =
+    HMP_IntervalValid AND
+    HMP_PublisherReady AND
+    HMP_SourceValid==1 AND
+    HMP_ExactDateMatch AND
+    HMP_NoFutureSource AND
+    HMP_CorePayloadPresent;
+
+// Native proof cho HS09: khi benchmark bi mo phong thieu, phai fail closed.
+HMP_EffectiveValid = HMP_BaseValid AND NOT HMP_SimulateMissing;
+_SECTION_END();
+
+_SECTION_BEGIN("03. TAI DUNG MARKET SELECTION CONTEXT");
+HMP_Mixed =
+    HMP_Mult==2 OR
+    HMP_Dir==4 OR
+    HMP_Evidence==3 OR
+    HMP_HypAlign==3 OR
+    HMP_MTFDir==4 OR
+    HMP_MTFDir==5 OR
+    HMP_MTFDir==6;
+HMP_Bullish =
+    HMP_Dir==2 AND
+    HMP_MTFDir==2 AND
+    HMP_Evidence!=2 AND
+    HMP_Evidence!=3 AND
+    HMP_HypAlign!=3;
+HMP_Bearish =
+    HMP_Dir==3 AND
+    HMP_MTFDir==3 AND
+    HMP_Evidence!=1 AND
+    HMP_Evidence!=3 AND
+    HMP_HypAlign!=3;
+
+// Exact WSCN_SelectionContext semantics: 0 insufficient, 1 neutral,
+// 2 bullish supportive, 3 bearish supportive, 4 mixed/conflicting.
+HMP_SelectionContext = IIf(
+    NOT HMP_EffectiveValid,0,
+    IIf(HMP_Mixed,4,
+    IIf(HMP_Bullish,2,
+    IIf(HMP_Bearish,3,1))));
+
+HMP_FailClosedPass = IIf(
+    HMP_SimulateMissing,
+    HMP_EffectiveValid==0 AND HMP_SelectionContext==0,
+    1);
+_SECTION_END();
+
+_SECTION_BEGIN("04. KET QUA KIEM TRA H3");
+// 0 sai khung; 1 publisher chua san sang; 2 khong co dung ngay benchmark;
+// 3 source benchmark khong hop le; 4 payload thieu; 5 co source tu tuong lai;
+// 6 mo phong thieu benchmark - fail closed; 7 hop le point-in-time.
+// Khi dang test mo phong thieu benchmark, status 6 co uu tien sau hai dieu kien
+// ha tang toi thieu (Daily + publisher san sang) de diagnostic phan anh dung
+// kich ban test tren ca cac dong source goc vốn da invalid.
+HMP_StatusCode = IIf(
+    NOT HMP_IntervalValid,0,
+    IIf(NOT HMP_PublisherReady,1,
+    IIf(HMP_SimulateMissing,6,
+    IIf(NOT HMP_ExactDateMatch,2,
+    IIf(HMP_SourceValid!=1,3,
+    IIf(NOT HMP_CorePayloadPresent,4,
+    IIf(NOT HMP_NoFutureSource,5,7)))))));
+
+HMP_StatusText =
+    "Sai khung thoi gian\n"
+    + "Publisher thi truong lich su chua san sang\n"
+    + "Khong co dung ngay benchmark\n"
+    + "Nguon benchmark khong hop le\n"
+    + "Payload benchmark chua day du\n"
+    + "Nguon benchmark den tu tuong lai\n"
+    + "Mo phong thieu benchmark - da fail closed\n"
+    + "Hop le point-in-time";
+HMP_YesNoText = "Khong\nCo";
+HMP_MultiplicityText = "Khong co vung\nMot vung\nNhieu vung";
+HMP_DirectionalText = "Khong du du lieu\nChua xac dinh\nTang\nGiam\nHon hop / xung dot";
+HMP_EvidenceText = "Khong du du lieu\nNghieng tang\nNghieng giam\nHon hop / xung dot";
+HMP_SelectionText =
+    "Khong du du lieu\nTrung tinh / chua ro\nHo tro tang\nHo tro giam\nHon hop / xung dot";
+HMP_Version = "HISTORICAL_MARKET_CONTEXT_PROOF_V01_20260914_D";
+
+Filter = HMP_IntervalValid AND IIf(HMP_ShowOnlyProblem,NOT HMP_EffectiveValid,1);
+
+AddColumn(HMP_DT,"Ngay co phieu",formatDateTime);
+AddColumn(HMP_SourceDT,"Ngay nguon thi truong",formatDateTime);
+AddColumn(HMP_DateKey,"Khoa ngay co phieu",1.0);
+AddColumn(HMP_SourceDateKey,"Khoa ngay thi truong",1.0);
+AddMultiTextColumn(HMP_PublisherReady,HMP_YesNoText,"Publisher thi truong san sang");
+AddMultiTextColumn(HMP_ExactDateMatch,HMP_YesNoText,"Khop dung ngay benchmark");
+AddMultiTextColumn(HMP_NoFutureSource,HMP_YesNoText,"Nguon khong den tu tuong lai");
+AddMultiTextColumn(HMP_SourceValid==1,HMP_YesNoText,"Nguon benchmark hop le");
+AddMultiTextColumn(HMP_CorePayloadPresent,HMP_YesNoText,"Payload benchmark day du");
+AddMultiTextColumn(HMP_EffectiveValid,HMP_YesNoText,"Boi canh thi truong hop le");
+AddMultiTextColumn(HMP_Mult,HMP_MultiplicityText,"Thi truong - so vung");
+AddMultiTextColumn(HMP_Dir,HMP_DirectionalText,"Thi truong - huong");
+AddMultiTextColumn(HMP_Evidence,HMP_EvidenceText,"Thi truong - bang chung");
+AddColumn(HMP_HypAlign,"Thi truong - ma dong thuan gia thuyet",1.0);
+AddColumn(HMP_MTFDir,"Thi truong - ma MTF huong",1.0);
+AddMultiTextColumn(HMP_SelectionContext,HMP_SelectionText,"Boi canh lua chon thi truong");
+AddMultiTextColumn(HMP_FailClosedPass,HMP_YesNoText,"Kiem tra fail closed dat");
+AddMultiTextColumn(HMP_StatusCode,HMP_StatusText,"Trang thai H3");
+AddTextColumn(HMP_Version,"Phien ban H3 proof");
+_SECTION_END();

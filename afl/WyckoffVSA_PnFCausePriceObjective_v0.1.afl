@@ -1,0 +1,930 @@
+/*
+    Wyckoff VSA P&F Cause / Price Objective Engine v0.1
+
+    Approved method contract: PFO01-PFO48 (PR #41).
+    Construction contract: PFK01-PFK44 (PR #42).
+
+    Projection layer only. It consumes canonical RangeContext/Event evidence and
+    the explicit P&F Construction Kernel. It does not recreate Phase/Event logic
+    and does not emit trading signals.
+
+    INTEGRATED DEVELOPMENT / NATIVE ACCEPTANCE PENDING.
+*/
+SetBarsRequired(sbrAll,sbrAll);
+#include_once <WyckoffVSA_PnFCauseInputFacade_v0.1.afl>
+#include_once <WyckoffVSA_PnFConstructionKernel_v0.1.afl>
+
+_SECTION_BEGIN("128. P&F Cause / Objective enums and outputs");
+WPF_BI = BarIndex();
+WPF_DT = DateTime();
+WPF_Zero = 0 * WPF_BI;
+WPF_Null = Null + WPF_Zero;
+
+WPF_SchemaMajor = WPF_Zero + 1;
+WPF_SchemaMinor = WPF_Zero;
+WPF_SourceDateTime = WPF_DT;
+WPF_SourceBarIndex = WPF_BI;
+WPF_PriceMethodCode = WPFK_PriceMethodCode;
+WPF_BoxSize = WPFK_BoxSize;
+WPF_GridOrigin = WPFK_GridOrigin;
+WPF_ReversalBoxes = WPFK_ReversalBoxes;
+WPF_AdjustmentBasisStatusCode = WPFK_AdjustmentBasisStatusCode;
+WPF_SourceRevisionCode = WPFK_SourceRevisionStatusCode;
+WPF_ProvisionalFlag = IIf(WPFK_ProvisionalFlag OR WCI_ProvisionalFlag,1,0);
+
+WPF_CountLifecycleText =
+    "INSUFFICIENT\nCAUSE BUILDING\nCOUNT SEGMENT MEASURABLE - PRELIMINARY\n"
+    "COUNT SEGMENT CONFIRMED / READY FOR PROJECTION\n"
+    "OBJECTIVE ACTIVE AFTER DIRECTIONAL RANGE EXIT\n"
+    "OBJECTIVE ZONE APPROACHED / REACHED\n"
+    "OBJECTIVE EXCEEDED - MONITOR CHARACTER\n"
+    "SOURCE RANGE SUPERSEDED / INVALIDATED";
+WPF_DirectionText = "UNRESOLVED / NO OFFICIAL OBJECTIVE\nBULLISH\nBEARISH";
+WPF_AnchorTypeText =
+    "NONE\nLPS\nSPRING\nSUPPLY TEST\nLPSY\nUPTHRUST";
+WPF_LeftBoundaryTypeText =
+    "NONE\nSPRING\nSUPPLY TEST\nUPTHRUST\nSTRUCTURAL RANGE ORIGIN";
+WPF_SegmentTypeText = "NONE\nCONSERVATIVE\nFULL RANGE";
+WPF_SteppingStoneText = "NONE\nOBJECTIVE ZONES OVERLAP\nOBJECTIVE ZONE NESTING";
+
+WPF_L_RangeContextID = WPF_Null;
+WPF_L_RangeSideCode = WPF_Zero;
+WPF_L_FamilyHypothesisCode = WPF_Zero;
+WPF_L_PhaseStateCode = WPF_Zero;
+WPF_L_ObjectiveDirectionCode = WPF_Zero;
+WPF_L_CountGenerationID = WPF_Zero;
+WPF_L_RightAnchorTypeCode = WPF_Zero;
+WPF_L_RightAnchorOriginBI = WPF_Null;
+WPF_L_RightAnchorKnownAtBI = WPF_Null;
+WPF_L_RightAnchorRawPrice = WPF_Null;
+WPF_L_RightAnchorColumnIndex = WPF_Null;
+WPF_L_CountLineBoxIndex = WPF_Null;
+WPF_L_CountLineBoxLevel = WPF_Null;
+WPF_L_CountLineMappingDelta = WPF_Null;
+WPF_L_AnchorMappingValid = WPF_Zero;
+WPF_L_SourceGapInCountSpan = WPF_Zero;
+WPF_L_ReasonMask = WPF_Zero;
+
+WPF_L_ConservativeSegmentValid = WPF_Zero;
+WPF_L_ConservativeLeftBoundaryTypeCode = WPF_Zero;
+WPF_L_ConservativeLeftBoundaryOriginBI = WPF_Null;
+WPF_L_ConservativeLeftBoundaryKnownAtBI = WPF_Null;
+WPF_L_ConservativeLeftColumnIndex = WPF_Null;
+WPF_L_ConservativeInclusiveColumnCount = WPF_Null;
+WPF_L_ConservativeProjectedMove = WPF_Null;
+WPF_L_ConservativeObjective = WPF_Null;
+WPF_L_ConservativeMidpointObjective = WPF_Null;
+WPF_L_ConservativeCountLineObjective = WPF_Null;
+WPF_L_ConservativeObjectiveZoneLow = WPF_Null;
+WPF_L_ConservativeObjectiveZoneHigh = WPF_Null;
+WPF_L_ConservativeObjectivePhysicalValidity = WPF_Zero;
+WPF_L_ConservativeObjectiveReachedFlag = WPF_Zero;
+WPF_L_ConservativeObjectiveExceededFlag = WPF_Zero;
+WPF_L_CountLifecycleCode = WPF_Zero;
+WPF_L_OfficialObjectiveAvailable = WPF_Zero;
+
+WPF_L_FullSegmentValid = WPF_Zero;
+WPF_L_FullLeftBoundaryTypeCode = WPF_Zero;
+WPF_L_FullLeftBoundaryOriginBI = WPF_Null;
+WPF_L_FullLeftBoundaryKnownAtBI = WPF_Null;
+WPF_L_FullLeftColumnIndex = WPF_Null;
+WPF_L_FullInclusiveColumnCount = WPF_Null;
+WPF_L_FullProjectedMove = WPF_Null;
+WPF_L_FullConservativeObjective = WPF_Null;
+WPF_L_FullMidpointObjective = WPF_Null;
+WPF_L_FullCountLineObjective = WPF_Null;
+WPF_L_FullObjectiveZoneLow = WPF_Null;
+WPF_L_FullObjectiveZoneHigh = WPF_Null;
+WPF_L_FullObjectivePhysicalValidity = WPF_Zero;
+WPF_L_FullObjectiveReachedFlag = WPF_Zero;
+WPF_L_FullObjectiveExceededFlag = WPF_Zero;
+WPF_L_FullLifecycleCode = WPF_Zero;
+
+WPF_U_RangeContextID = WPF_Null;
+WPF_U_RangeSideCode = WPF_Zero;
+WPF_U_FamilyHypothesisCode = WPF_Zero;
+WPF_U_PhaseStateCode = WPF_Zero;
+WPF_U_ObjectiveDirectionCode = WPF_Zero;
+WPF_U_CountGenerationID = WPF_Zero;
+WPF_U_RightAnchorTypeCode = WPF_Zero;
+WPF_U_RightAnchorOriginBI = WPF_Null;
+WPF_U_RightAnchorKnownAtBI = WPF_Null;
+WPF_U_RightAnchorRawPrice = WPF_Null;
+WPF_U_RightAnchorColumnIndex = WPF_Null;
+WPF_U_CountLineBoxIndex = WPF_Null;
+WPF_U_CountLineBoxLevel = WPF_Null;
+WPF_U_CountLineMappingDelta = WPF_Null;
+WPF_U_AnchorMappingValid = WPF_Zero;
+WPF_U_SourceGapInCountSpan = WPF_Zero;
+WPF_U_ReasonMask = WPF_Zero;
+
+WPF_U_ConservativeSegmentValid = WPF_Zero;
+WPF_U_ConservativeLeftBoundaryTypeCode = WPF_Zero;
+WPF_U_ConservativeLeftBoundaryOriginBI = WPF_Null;
+WPF_U_ConservativeLeftBoundaryKnownAtBI = WPF_Null;
+WPF_U_ConservativeLeftColumnIndex = WPF_Null;
+WPF_U_ConservativeInclusiveColumnCount = WPF_Null;
+WPF_U_ConservativeProjectedMove = WPF_Null;
+WPF_U_ConservativeObjective = WPF_Null;
+WPF_U_ConservativeMidpointObjective = WPF_Null;
+WPF_U_ConservativeCountLineObjective = WPF_Null;
+WPF_U_ConservativeObjectiveZoneLow = WPF_Null;
+WPF_U_ConservativeObjectiveZoneHigh = WPF_Null;
+WPF_U_ConservativeObjectivePhysicalValidity = WPF_Zero;
+WPF_U_ConservativeObjectiveReachedFlag = WPF_Zero;
+WPF_U_ConservativeObjectiveExceededFlag = WPF_Zero;
+WPF_U_CountLifecycleCode = WPF_Zero;
+WPF_U_OfficialObjectiveAvailable = WPF_Zero;
+
+WPF_U_FullSegmentValid = WPF_Zero;
+WPF_U_FullLeftBoundaryTypeCode = WPF_Zero;
+WPF_U_FullLeftBoundaryOriginBI = WPF_Null;
+WPF_U_FullLeftBoundaryKnownAtBI = WPF_Null;
+WPF_U_FullLeftColumnIndex = WPF_Null;
+WPF_U_FullInclusiveColumnCount = WPF_Null;
+WPF_U_FullProjectedMove = WPF_Null;
+WPF_U_FullConservativeObjective = WPF_Null;
+WPF_U_FullMidpointObjective = WPF_Null;
+WPF_U_FullCountLineObjective = WPF_Null;
+WPF_U_FullObjectiveZoneLow = WPF_Null;
+WPF_U_FullObjectiveZoneHigh = WPF_Null;
+WPF_U_FullObjectivePhysicalValidity = WPF_Zero;
+WPF_U_FullObjectiveReachedFlag = WPF_Zero;
+WPF_U_FullObjectiveExceededFlag = WPF_Zero;
+WPF_U_FullLifecycleCode = WPF_Zero;
+
+WPF_SteppingStoneRelationshipCode = WPF_Zero;
+_SECTION_END();
+
+_SECTION_BEGIN("129. P&F Cause / Objective causal state");
+
+// ---------- lower-channel scalar state ----------
+wpf_lRangeActive=0; wpf_lRangeID=0; wpf_lDirection=0; wpf_lGeneration=0;
+wpf_lFullLeftValid=0; wpf_lFullLeftOrigin=-1; wpf_lFullLeftKnown=-1;
+wpf_lSpringValid=0; wpf_lSpringOrigin=-1; wpf_lSpringKnown=-1; wpf_lSpringRaw=0;
+wpf_lTestValid=0; wpf_lTestOrigin=-1; wpf_lTestKnown=-1; wpf_lTestRaw=0;
+wpf_lUpthrustValid=0; wpf_lUpthrustOrigin=-1; wpf_lUpthrustKnown=-1; wpf_lUpthrustRaw=0;
+wpf_lLPSValid=0; wpf_lLPSOrigin=-1; wpf_lLPSKnown=-1; wpf_lLPSRaw=0;
+wpf_lLPSYValid=0; wpf_lLPSYOrigin=-1; wpf_lLPSYKnown=-1; wpf_lLPSYRaw=0;
+wpf_lAnchorType=0; wpf_lAnchorOrigin=-1; wpf_lAnchorKnown=-1; wpf_lAnchorRaw=0;
+wpf_lConLeftType=0; wpf_lConLeftOrigin=-1; wpf_lConLeftKnown=-1;
+wpf_lReached=0; wpf_lExceeded=0; wpf_lFullReached=0; wpf_lFullExceeded=0;
+
+// ---------- upper-channel scalar state ----------
+wpf_uRangeActive=0; wpf_uRangeID=0; wpf_uDirection=0; wpf_uGeneration=0;
+wpf_uFullLeftValid=0; wpf_uFullLeftOrigin=-1; wpf_uFullLeftKnown=-1;
+wpf_uSpringValid=0; wpf_uSpringOrigin=-1; wpf_uSpringKnown=-1; wpf_uSpringRaw=0;
+wpf_uTestValid=0; wpf_uTestOrigin=-1; wpf_uTestKnown=-1; wpf_uTestRaw=0;
+wpf_uUpthrustValid=0; wpf_uUpthrustOrigin=-1; wpf_uUpthrustKnown=-1; wpf_uUpthrustRaw=0;
+wpf_uLPSValid=0; wpf_uLPSOrigin=-1; wpf_uLPSKnown=-1; wpf_uLPSRaw=0;
+wpf_uLPSYValid=0; wpf_uLPSYOrigin=-1; wpf_uLPSYKnown=-1; wpf_uLPSYRaw=0;
+wpf_uAnchorType=0; wpf_uAnchorOrigin=-1; wpf_uAnchorKnown=-1; wpf_uAnchorRaw=0;
+wpf_uConLeftType=0; wpf_uConLeftOrigin=-1; wpf_uConLeftKnown=-1;
+wpf_uReached=0; wpf_uExceeded=0; wpf_uFullReached=0; wpf_uFullExceeded=0;
+
+for(wpf_i=0;wpf_i<BarCount;wpf_i++)
+{
+    wpf_currentBI = WPF_BI[wpf_i];
+    wpf_isProvisional = WPF_ProvisionalFlag[wpf_i];
+
+    // ==================== LOWER RANGE CHANNEL ====================
+    wpf_lPresent = WPFI_L_RangePresent[wpf_i]==1;
+    wpf_lCurrentID = WPFI_L_RangeContextID[wpf_i];
+    wpf_lCurrentDir = WPFI_L_ObjectiveDirectionCode[wpf_i];
+
+    if(wpf_lPresent)
+    {
+        wpf_lNewRange = (NOT wpf_lRangeActive) OR wpf_lCurrentID!=wpf_lRangeID;
+        if(wpf_lNewRange)
+        {
+            wpf_lRangeActive=1; wpf_lRangeID=wpf_lCurrentID; wpf_lDirection=0; wpf_lGeneration=0;
+            wpf_lFullLeftValid=0; wpf_lFullLeftOrigin=-1; wpf_lFullLeftKnown=-1;
+            wpf_lSpringValid=0; wpf_lTestValid=0; wpf_lUpthrustValid=0; wpf_lLPSValid=0; wpf_lLPSYValid=0;
+            wpf_lAnchorType=0; wpf_lAnchorOrigin=-1; wpf_lAnchorKnown=-1; wpf_lAnchorRaw=0;
+            wpf_lConLeftType=0; wpf_lConLeftOrigin=-1; wpf_lConLeftKnown=-1;
+            wpf_lReached=0; wpf_lExceeded=0; wpf_lFullReached=0; wpf_lFullExceeded=0;
+        }
+
+        if(WPFI_L_FullLeftBoundaryValid[wpf_i])
+        {
+            wpf_lFullLeftValid=1;
+            wpf_lFullLeftOrigin=WPFI_L_FullLeftOriginBI[wpf_i];
+            wpf_lFullLeftKnown=WPFI_L_FullLeftKnownAtBI[wpf_i];
+        }
+
+        if(NOT wpf_isProvisional)
+        {
+            if(WPFI_L_SpringLinked[wpf_i])
+            {
+                wpf_lSpringValid=1; wpf_lSpringOrigin=WPFI_L_SpringOriginBI[wpf_i];
+                wpf_lSpringKnown=WPFI_L_SpringKnownAtBI[wpf_i]; wpf_lSpringRaw=WPFI_L_SpringRawPrice[wpf_i];
+            }
+            if(WPFI_L_SupplyTestLinked[wpf_i])
+            {
+                wpf_lTestValid=1; wpf_lTestOrigin=WPFI_L_SupplyTestOriginBI[wpf_i];
+                wpf_lTestKnown=WPFI_L_SupplyTestKnownAtBI[wpf_i];
+                if(wpf_lTestOrigin>=0 AND wpf_lTestOrigin<BarCount) wpf_lTestRaw=Low[wpf_lTestOrigin];
+            }
+            if(WPFI_L_UpthrustLinked[wpf_i])
+            {
+                wpf_lUpthrustValid=1; wpf_lUpthrustOrigin=WPFI_L_UpthrustOriginBI[wpf_i];
+                wpf_lUpthrustKnown=WPFI_L_UpthrustKnownAtBI[wpf_i]; wpf_lUpthrustRaw=WPFI_L_UpthrustRawPrice[wpf_i];
+            }
+            if(WPFI_L_LPSLinked[wpf_i])
+            {
+                wpf_lLPSValid=1; wpf_lLPSOrigin=WPFI_L_LPSOriginBI[wpf_i];
+                wpf_lLPSKnown=WPFI_L_LPSKnownAtBI[wpf_i]; wpf_lLPSRaw=WPFI_L_LPSRawPrice[wpf_i];
+            }
+            if(WPFI_L_LPSYLinked[wpf_i])
+            {
+                wpf_lLPSYValid=1; wpf_lLPSYOrigin=WPFI_L_LPSYOriginBI[wpf_i];
+                wpf_lLPSYKnown=WPFI_L_LPSYKnownAtBI[wpf_i]; wpf_lLPSYRaw=WPFI_L_LPSYRawPrice[wpf_i];
+            }
+        }
+
+        wpf_lDesiredType=0; wpf_lDesiredOrigin=-1; wpf_lDesiredKnown=-1; wpf_lDesiredRaw=0;
+
+        if(wpf_lCurrentDir==1)
+        {
+            if(wpf_lLPSValid)
+            {
+                wpf_lDesiredType=1; wpf_lDesiredOrigin=wpf_lLPSOrigin; wpf_lDesiredKnown=wpf_lLPSKnown; wpf_lDesiredRaw=wpf_lLPSRaw;
+            }
+            else
+            {
+                if(wpf_lSpringValid)
+                { wpf_lDesiredType=2; wpf_lDesiredOrigin=wpf_lSpringOrigin; wpf_lDesiredKnown=wpf_lSpringKnown; wpf_lDesiredRaw=wpf_lSpringRaw; }
+                if(wpf_lTestValid AND (wpf_lDesiredType==0 OR wpf_lTestKnown>wpf_lDesiredKnown))
+                { wpf_lDesiredType=3; wpf_lDesiredOrigin=wpf_lTestOrigin; wpf_lDesiredKnown=wpf_lTestKnown; wpf_lDesiredRaw=wpf_lTestRaw; }
+            }
+        }
+        else if(wpf_lCurrentDir==2)
+        {
+            if(wpf_lLPSYValid)
+            {
+                wpf_lDesiredType=4; wpf_lDesiredOrigin=wpf_lLPSYOrigin; wpf_lDesiredKnown=wpf_lLPSYKnown; wpf_lDesiredRaw=wpf_lLPSYRaw;
+            }
+            else if(wpf_lUpthrustValid)
+            {
+                wpf_lDesiredType=5; wpf_lDesiredOrigin=wpf_lUpthrustOrigin; wpf_lDesiredKnown=wpf_lUpthrustKnown; wpf_lDesiredRaw=wpf_lUpthrustRaw;
+            }
+        }
+
+        wpf_lAnchorChanged = wpf_lDesiredType!=wpf_lAnchorType OR
+            (wpf_lDesiredType>0 AND wpf_lDesiredOrigin!=wpf_lAnchorOrigin) OR
+            (wpf_lCurrentDir!=wpf_lDirection);
+
+        if(NOT wpf_isProvisional AND wpf_lAnchorChanged)
+        {
+            wpf_lDirection=wpf_lCurrentDir;
+            wpf_lAnchorType=wpf_lDesiredType;
+            wpf_lAnchorOrigin=wpf_lDesiredOrigin;
+            wpf_lAnchorRaw=wpf_lDesiredRaw;
+            wpf_lAnchorKnown=wpf_lDesiredKnown;
+            if(wpf_lAnchorKnown<wpf_currentBI) wpf_lAnchorKnown=wpf_currentBI;
+            wpf_lGeneration=wpf_lGeneration+1;
+            wpf_lReached=0; wpf_lExceeded=0; wpf_lFullReached=0; wpf_lFullExceeded=0;
+
+            wpf_lConLeftType=0; wpf_lConLeftOrigin=-1; wpf_lConLeftKnown=-1;
+            if(wpf_lDirection==1 AND wpf_lAnchorType>0)
+            {
+                if(wpf_lSpringValid AND wpf_lSpringOrigin<wpf_lAnchorOrigin)
+                { wpf_lConLeftType=1; wpf_lConLeftOrigin=wpf_lSpringOrigin; wpf_lConLeftKnown=wpf_lSpringKnown; }
+                if(wpf_lTestValid AND wpf_lTestOrigin<wpf_lAnchorOrigin AND
+                   (wpf_lConLeftType==0 OR wpf_lTestKnown>wpf_lConLeftKnown))
+                { wpf_lConLeftType=2; wpf_lConLeftOrigin=wpf_lTestOrigin; wpf_lConLeftKnown=wpf_lTestKnown; }
+            }
+            else if(wpf_lDirection==2 AND wpf_lAnchorType>0)
+            {
+                if(wpf_lUpthrustValid AND wpf_lUpthrustOrigin<wpf_lAnchorOrigin)
+                { wpf_lConLeftType=3; wpf_lConLeftOrigin=wpf_lUpthrustOrigin; wpf_lConLeftKnown=wpf_lUpthrustKnown; }
+            }
+            if(wpf_lConLeftType==0 AND wpf_lFullLeftValid)
+            { wpf_lConLeftType=4; wpf_lConLeftOrigin=wpf_lFullLeftOrigin; wpf_lConLeftKnown=wpf_lFullLeftKnown; }
+        }
+
+        WPF_L_RangeContextID[wpf_i]=wpf_lRangeID;
+        WPF_L_RangeSideCode[wpf_i]=WPFI_L_RangeSideCode[wpf_i];
+        WPF_L_FamilyHypothesisCode[wpf_i]=WPFI_L_FamilyCode[wpf_i];
+        WPF_L_PhaseStateCode[wpf_i]=WPFI_L_PhaseStateCode[wpf_i];
+        WPF_L_ObjectiveDirectionCode[wpf_i]=wpf_lDirection;
+        WPF_L_CountGenerationID[wpf_i]=wpf_lGeneration;
+        WPF_L_RightAnchorTypeCode[wpf_i]=wpf_lAnchorType;
+        if(wpf_lAnchorType>0)
+        {
+            WPF_L_RightAnchorOriginBI[wpf_i]=wpf_lAnchorOrigin;
+            WPF_L_RightAnchorKnownAtBI[wpf_i]=wpf_lAnchorKnown;
+            WPF_L_RightAnchorRawPrice[wpf_i]=wpf_lAnchorRaw;
+        }
+
+        wpf_lReason=0;
+        if(wpf_lDirection==0) wpf_lReason=wpf_lReason+1;
+        if(wpf_lAnchorType==0) wpf_lReason=wpf_lReason+2;
+        if(NOT WPFK_ConfigValidScalar) wpf_lReason=wpf_lReason+4;
+        if(WPFK_AdjustmentBasisStatusScalar!=1) wpf_lReason=wpf_lReason+64;
+        if(wpf_isProvisional) wpf_lReason=wpf_lReason+512;
+
+        wpf_lRightMapValid=0; wpf_lRightCol=0; wpf_lCountBox=0; wpf_lCountLine=0; wpf_lMapDelta=0;
+        if(wpf_lAnchorType>0 AND wpf_lAnchorOrigin>=0 AND wpf_lAnchorOrigin<=wpf_i)
+        {
+            wpf_lRightOff=wpf_lAnchorOrigin;
+            if(WPFK_MappingStatusCode[wpf_lRightOff]==1 AND WPFK_ConstructionMatureFlag[wpf_lRightOff]==1)
+            {
+                wpf_lRightCol=WPFK_ColumnIndexKnownAtOrBeforeBar[wpf_lRightOff];
+                wpf_lRaw=wpf_lAnchorRaw;
+                wpf_lMag=wpf_lRaw; if(wpf_lMag<1) wpf_lMag=1;
+                wpf_lTol=WPFK_BoxSizeScalar*1e-9;
+                wpf_lAltTol=1e-10*wpf_lMag; if(wpf_lAltTol<wpf_lTol) wpf_lTol=wpf_lAltTol;
+                if(wpf_lDirection==1)
+                    wpf_lCountBox=Ceil((wpf_lRaw-WPFK_GridOriginScalar-wpf_lTol)/WPFK_BoxSizeScalar);
+                else if(wpf_lDirection==2)
+                    wpf_lCountBox=Floor((wpf_lRaw-WPFK_GridOriginScalar+wpf_lTol)/WPFK_BoxSizeScalar);
+                wpf_lTop=WPFK_ColumnTopBoxKnownAtOrBeforeBar[wpf_lRightOff];
+                wpf_lBottom=WPFK_ColumnBottomBoxKnownAtOrBeforeBar[wpf_lRightOff];
+                if(wpf_lCountBox>=wpf_lBottom AND wpf_lCountBox<=wpf_lTop)
+                {
+                    wpf_lRightMapValid=1;
+                    wpf_lCountLine=WPFK_GridOriginScalar+wpf_lCountBox*WPFK_BoxSizeScalar;
+                    wpf_lMapDelta=wpf_lRaw-wpf_lCountLine;
+                }
+            }
+        }
+        if(NOT wpf_lRightMapValid) wpf_lReason=wpf_lReason+16;
+        if(wpf_lAnchorType>0 AND wpf_lAnchorOrigin>=0 AND wpf_lAnchorOrigin<=wpf_i AND
+           WPFK_ConstructionMatureFlag[wpf_lAnchorOrigin]!=1) wpf_lReason=wpf_lReason+8;
+
+        if(wpf_lRightMapValid)
+        {
+            WPF_L_RightAnchorColumnIndex[wpf_i]=wpf_lRightCol;
+            WPF_L_CountLineBoxIndex[wpf_i]=wpf_lCountBox;
+            WPF_L_CountLineBoxLevel[wpf_i]=wpf_lCountLine;
+            WPF_L_CountLineMappingDelta[wpf_i]=wpf_lMapDelta;
+            WPF_L_AnchorMappingValid[wpf_i]=1;
+        }
+
+        // conservative segment
+        wpf_lConValid=0; wpf_lConCount=0; wpf_lConGap=0; wpf_lConPhysical=0;
+        if(wpf_lConLeftType>0 AND wpf_lConLeftOrigin>=0 AND wpf_lConLeftOrigin<=wpf_lAnchorOrigin AND wpf_lRightMapValid)
+        {
+            wpf_lConOff=wpf_lConLeftOrigin;
+            if(WPFK_MappingStatusCode[wpf_lConOff]==1 AND WPFK_ConstructionMatureFlag[wpf_lConOff]==1)
+            {
+                wpf_lConCol=WPFK_ColumnIndexKnownAtOrBeforeBar[wpf_lConOff];
+                if(wpf_lRightCol>=wpf_lConCol)
+                {
+                    wpf_lConGap=WPFK_CumulativeDataGapCount[wpf_lAnchorOrigin]-WPFK_CumulativeDataGapCount[wpf_lConOff];
+                    if(wpf_lConGap==0)
+                    {
+                        wpf_lConCount=wpf_lRightCol-wpf_lConCol+1;
+                        wpf_lConMove=wpf_lConCount*WPFK_BoxSizeScalar*WPFK_ReversalBoxesScalar;
+                        if(wpf_lDirection==1)
+                        {
+                            wpf_lConservativeObj=WPFI_L_RangeLow[wpf_i]+wpf_lConMove;
+                            wpf_lCountObj=wpf_lCountLine+wpf_lConMove;
+                            wpf_lMidObj=((WPFI_L_RangeLow[wpf_i]+wpf_lCountLine)/2)+wpf_lConMove;
+                        }
+                        else
+                        {
+                            wpf_lConservativeObj=WPFI_L_RangeHigh[wpf_i]-wpf_lConMove;
+                            wpf_lCountObj=wpf_lCountLine-wpf_lConMove;
+                            wpf_lMidObj=((WPFI_L_RangeHigh[wpf_i]+wpf_lCountLine)/2)-wpf_lConMove;
+                        }
+                        wpf_lZoneLow=wpf_lConservativeObj; wpf_lZoneHigh=wpf_lCountObj;
+                        if(wpf_lZoneLow>wpf_lZoneHigh)
+                        { wpf_lSwap=wpf_lZoneLow; wpf_lZoneLow=wpf_lZoneHigh; wpf_lZoneHigh=wpf_lSwap; }
+                        wpf_lConPhysical=(wpf_lDirection==1) OR (wpf_lDirection==2 AND wpf_lZoneLow>0 AND wpf_lZoneHigh>0);
+                        wpf_lConValid=wpf_lConPhysical AND WPFK_AdjustmentBasisStatusScalar==1 AND WPFK_ConfigValidScalar;
+                    }
+                }
+            }
+        }
+        if(wpf_lConLeftType==0) wpf_lReason=wpf_lReason+128;
+        if(wpf_lConGap>0) { wpf_lReason=wpf_lReason+32; WPF_L_SourceGapInCountSpan[wpf_i]=1; }
+        if(wpf_lConValid)
+        {
+            WPF_L_ConservativeSegmentValid[wpf_i]=1;
+            WPF_L_ConservativeLeftBoundaryTypeCode[wpf_i]=wpf_lConLeftType;
+            WPF_L_ConservativeLeftBoundaryOriginBI[wpf_i]=wpf_lConLeftOrigin;
+            WPF_L_ConservativeLeftBoundaryKnownAtBI[wpf_i]=wpf_lConLeftKnown;
+            WPF_L_ConservativeLeftColumnIndex[wpf_i]=wpf_lConCol;
+            WPF_L_ConservativeInclusiveColumnCount[wpf_i]=wpf_lConCount;
+            WPF_L_ConservativeProjectedMove[wpf_i]=wpf_lConMove;
+            WPF_L_ConservativeObjective[wpf_i]=wpf_lConservativeObj;
+            WPF_L_ConservativeMidpointObjective[wpf_i]=wpf_lMidObj;
+            WPF_L_ConservativeCountLineObjective[wpf_i]=wpf_lCountObj;
+            WPF_L_ConservativeObjectiveZoneLow[wpf_i]=wpf_lZoneLow;
+            WPF_L_ConservativeObjectiveZoneHigh[wpf_i]=wpf_lZoneHigh;
+            WPF_L_ConservativeObjectivePhysicalValidity[wpf_i]=wpf_lConPhysical;
+
+            wpf_lBaseLife=3;
+            if(wpf_lAnchorType==2 OR wpf_lAnchorType==3 OR wpf_lAnchorType==5) wpf_lBaseLife=2;
+            if(WPFI_L_PhaseStateCode[wpf_i]==6) wpf_lBaseLife=4;
+            if(wpf_lBaseLife>=4 AND NOT wpf_isProvisional AND WPFK_SourceBarValid[wpf_i])
+            {
+                if(wpf_lDirection==1)
+                {
+                    if(High[wpf_i]>=wpf_lZoneLow) wpf_lReached=1;
+                    if(High[wpf_i]>wpf_lZoneHigh) wpf_lExceeded=1;
+                }
+                else
+                {
+                    if(Low[wpf_i]<=wpf_lZoneHigh) wpf_lReached=1;
+                    if(Low[wpf_i]<wpf_lZoneLow) wpf_lExceeded=1;
+                }
+            }
+            wpf_lLife=wpf_lBaseLife;
+            if(wpf_lReached) wpf_lLife=5;
+            if(wpf_lExceeded) wpf_lLife=6;
+            WPF_L_ConservativeObjectiveReachedFlag[wpf_i]=wpf_lReached;
+            WPF_L_ConservativeObjectiveExceededFlag[wpf_i]=wpf_lExceeded;
+            WPF_L_CountLifecycleCode[wpf_i]=wpf_lLife;
+            WPF_L_OfficialObjectiveAvailable[wpf_i]=1;
+        }
+        else
+        {
+            if(wpf_lDirection>0 AND wpf_lAnchorType==0) WPF_L_CountLifecycleCode[wpf_i]=1;
+            else if(wpf_lDirection>0 AND wpf_lAnchorType>0) WPF_L_CountLifecycleCode[wpf_i]=1;
+        }
+
+        // full-range segment
+        wpf_lFullValid=0; wpf_lFullGap=0;
+        if(wpf_lFullLeftValid AND wpf_lFullLeftOrigin>=0 AND wpf_lFullLeftOrigin<=wpf_lAnchorOrigin AND wpf_lRightMapValid)
+        {
+            wpf_lFullOff=wpf_lFullLeftOrigin;
+            if(WPFK_MappingStatusCode[wpf_lFullOff]==1 AND WPFK_ConstructionMatureFlag[wpf_lFullOff]==1)
+            {
+                wpf_lFullCol=WPFK_ColumnIndexKnownAtOrBeforeBar[wpf_lFullOff];
+                if(wpf_lRightCol>=wpf_lFullCol)
+                {
+                    wpf_lFullGap=WPFK_CumulativeDataGapCount[wpf_lAnchorOrigin]-WPFK_CumulativeDataGapCount[wpf_lFullOff];
+                    if(wpf_lFullGap==0)
+                    {
+                        wpf_lFullCount=wpf_lRightCol-wpf_lFullCol+1;
+                        wpf_lFullMove=wpf_lFullCount*WPFK_BoxSizeScalar*WPFK_ReversalBoxesScalar;
+                        if(wpf_lDirection==1)
+                        {
+                            wpf_lFullConObj=WPFI_L_RangeLow[wpf_i]+wpf_lFullMove;
+                            wpf_lFullCountObj=wpf_lCountLine+wpf_lFullMove;
+                            wpf_lFullMid=((WPFI_L_RangeLow[wpf_i]+wpf_lCountLine)/2)+wpf_lFullMove;
+                        }
+                        else
+                        {
+                            wpf_lFullConObj=WPFI_L_RangeHigh[wpf_i]-wpf_lFullMove;
+                            wpf_lFullCountObj=wpf_lCountLine-wpf_lFullMove;
+                            wpf_lFullMid=((WPFI_L_RangeHigh[wpf_i]+wpf_lCountLine)/2)-wpf_lFullMove;
+                        }
+                        wpf_lFullZoneLow=wpf_lFullConObj; wpf_lFullZoneHigh=wpf_lFullCountObj;
+                        if(wpf_lFullZoneLow>wpf_lFullZoneHigh)
+                        { wpf_lSwap=wpf_lFullZoneLow; wpf_lFullZoneLow=wpf_lFullZoneHigh; wpf_lFullZoneHigh=wpf_lSwap; }
+                        wpf_lFullPhysical=(wpf_lDirection==1) OR (wpf_lDirection==2 AND wpf_lFullZoneLow>0 AND wpf_lFullZoneHigh>0);
+                        wpf_lFullValid=wpf_lFullPhysical AND WPFK_AdjustmentBasisStatusScalar==1 AND WPFK_ConfigValidScalar;
+                    }
+                }
+            }
+        }
+        if(wpf_lFullValid)
+        {
+            WPF_L_FullSegmentValid[wpf_i]=1;
+            WPF_L_FullLeftBoundaryTypeCode[wpf_i]=4;
+            WPF_L_FullLeftBoundaryOriginBI[wpf_i]=wpf_lFullLeftOrigin;
+            WPF_L_FullLeftBoundaryKnownAtBI[wpf_i]=wpf_lFullLeftKnown;
+            WPF_L_FullLeftColumnIndex[wpf_i]=wpf_lFullCol;
+            WPF_L_FullInclusiveColumnCount[wpf_i]=wpf_lFullCount;
+            WPF_L_FullProjectedMove[wpf_i]=wpf_lFullMove;
+            WPF_L_FullConservativeObjective[wpf_i]=wpf_lFullConObj;
+            WPF_L_FullMidpointObjective[wpf_i]=wpf_lFullMid;
+            WPF_L_FullCountLineObjective[wpf_i]=wpf_lFullCountObj;
+            WPF_L_FullObjectiveZoneLow[wpf_i]=wpf_lFullZoneLow;
+            WPF_L_FullObjectiveZoneHigh[wpf_i]=wpf_lFullZoneHigh;
+            WPF_L_FullObjectivePhysicalValidity[wpf_i]=wpf_lFullPhysical;
+            wpf_lFullBase=3;
+            if(wpf_lAnchorType==2 OR wpf_lAnchorType==3 OR wpf_lAnchorType==5) wpf_lFullBase=2;
+            if(WPFI_L_PhaseStateCode[wpf_i]==6) wpf_lFullBase=4;
+            if(wpf_lFullBase>=4 AND NOT wpf_isProvisional AND WPFK_SourceBarValid[wpf_i])
+            {
+                if(wpf_lDirection==1)
+                {
+                    if(High[wpf_i]>=wpf_lFullZoneLow) wpf_lFullReached=1;
+                    if(High[wpf_i]>wpf_lFullZoneHigh) wpf_lFullExceeded=1;
+                }
+                else
+                {
+                    if(Low[wpf_i]<=wpf_lFullZoneHigh) wpf_lFullReached=1;
+                    if(Low[wpf_i]<wpf_lFullZoneLow) wpf_lFullExceeded=1;
+                }
+            }
+            wpf_lFullLife=wpf_lFullBase;
+            if(wpf_lFullReached) wpf_lFullLife=5;
+            if(wpf_lFullExceeded) wpf_lFullLife=6;
+            WPF_L_FullObjectiveReachedFlag[wpf_i]=wpf_lFullReached;
+            WPF_L_FullObjectiveExceededFlag[wpf_i]=wpf_lFullExceeded;
+            WPF_L_FullLifecycleCode[wpf_i]=wpf_lFullLife;
+        }
+
+        if(wpf_lDirection==2 AND wpf_lConValid AND NOT wpf_lConPhysical) wpf_lReason=wpf_lReason+256;
+        WPF_L_ReasonMask[wpf_i]=wpf_lReason;
+    }
+    else
+    {
+        if(wpf_lRangeActive)
+        {
+            wpf_lRangeActive=0;
+            wpf_lAnchorType=0;
+            wpf_lDirection=0;
+            wpf_lReached=0; wpf_lExceeded=0; wpf_lFullReached=0; wpf_lFullExceeded=0;
+        }
+    }
+
+    // ==================== UPPER RANGE CHANNEL ====================
+    wpf_uPresent = WPFI_U_RangePresent[wpf_i]==1;
+    wpf_uCurrentID = WPFI_U_RangeContextID[wpf_i];
+    wpf_uCurrentDir = WPFI_U_ObjectiveDirectionCode[wpf_i];
+
+    if(wpf_uPresent)
+    {
+        wpf_uNewRange = (NOT wpf_uRangeActive) OR wpf_uCurrentID!=wpf_uRangeID;
+        if(wpf_uNewRange)
+        {
+            wpf_uRangeActive=1; wpf_uRangeID=wpf_uCurrentID; wpf_uDirection=0; wpf_uGeneration=0;
+            wpf_uFullLeftValid=0; wpf_uFullLeftOrigin=-1; wpf_uFullLeftKnown=-1;
+            wpf_uSpringValid=0; wpf_uTestValid=0; wpf_uUpthrustValid=0; wpf_uLPSValid=0; wpf_uLPSYValid=0;
+            wpf_uAnchorType=0; wpf_uAnchorOrigin=-1; wpf_uAnchorKnown=-1; wpf_uAnchorRaw=0;
+            wpf_uConLeftType=0; wpf_uConLeftOrigin=-1; wpf_uConLeftKnown=-1;
+            wpf_uReached=0; wpf_uExceeded=0; wpf_uFullReached=0; wpf_uFullExceeded=0;
+        }
+
+        if(WPFI_U_FullLeftBoundaryValid[wpf_i])
+        {
+            wpf_uFullLeftValid=1;
+            wpf_uFullLeftOrigin=WPFI_U_FullLeftOriginBI[wpf_i];
+            wpf_uFullLeftKnown=WPFI_U_FullLeftKnownAtBI[wpf_i];
+        }
+
+        if(NOT wpf_isProvisional)
+        {
+            if(WPFI_U_SpringLinked[wpf_i])
+            {
+                wpf_uSpringValid=1; wpf_uSpringOrigin=WPFI_U_SpringOriginBI[wpf_i];
+                wpf_uSpringKnown=WPFI_U_SpringKnownAtBI[wpf_i]; wpf_uSpringRaw=WPFI_U_SpringRawPrice[wpf_i];
+            }
+            if(WPFI_U_SupplyTestLinked[wpf_i])
+            {
+                wpf_uTestValid=1; wpf_uTestOrigin=WPFI_U_SupplyTestOriginBI[wpf_i];
+                wpf_uTestKnown=WPFI_U_SupplyTestKnownAtBI[wpf_i];
+                if(wpf_uTestOrigin>=0 AND wpf_uTestOrigin<BarCount) wpf_uTestRaw=Low[wpf_uTestOrigin];
+            }
+            if(WPFI_U_UpthrustLinked[wpf_i])
+            {
+                wpf_uUpthrustValid=1; wpf_uUpthrustOrigin=WPFI_U_UpthrustOriginBI[wpf_i];
+                wpf_uUpthrustKnown=WPFI_U_UpthrustKnownAtBI[wpf_i]; wpf_uUpthrustRaw=WPFI_U_UpthrustRawPrice[wpf_i];
+            }
+            if(WPFI_U_LPSLinked[wpf_i])
+            {
+                wpf_uLPSValid=1; wpf_uLPSOrigin=WPFI_U_LPSOriginBI[wpf_i];
+                wpf_uLPSKnown=WPFI_U_LPSKnownAtBI[wpf_i]; wpf_uLPSRaw=WPFI_U_LPSRawPrice[wpf_i];
+            }
+            if(WPFI_U_LPSYLinked[wpf_i])
+            {
+                wpf_uLPSYValid=1; wpf_uLPSYOrigin=WPFI_U_LPSYOriginBI[wpf_i];
+                wpf_uLPSYKnown=WPFI_U_LPSYKnownAtBI[wpf_i]; wpf_uLPSYRaw=WPFI_U_LPSYRawPrice[wpf_i];
+            }
+        }
+
+        wpf_uDesiredType=0; wpf_uDesiredOrigin=-1; wpf_uDesiredKnown=-1; wpf_uDesiredRaw=0;
+        if(wpf_uCurrentDir==1)
+        {
+            if(wpf_uLPSValid)
+            {
+                wpf_uDesiredType=1; wpf_uDesiredOrigin=wpf_uLPSOrigin; wpf_uDesiredKnown=wpf_uLPSKnown; wpf_uDesiredRaw=wpf_uLPSRaw;
+            }
+            else
+            {
+                if(wpf_uSpringValid)
+                { wpf_uDesiredType=2; wpf_uDesiredOrigin=wpf_uSpringOrigin; wpf_uDesiredKnown=wpf_uSpringKnown; wpf_uDesiredRaw=wpf_uSpringRaw; }
+                if(wpf_uTestValid AND (wpf_uDesiredType==0 OR wpf_uTestKnown>wpf_uDesiredKnown))
+                { wpf_uDesiredType=3; wpf_uDesiredOrigin=wpf_uTestOrigin; wpf_uDesiredKnown=wpf_uTestKnown; wpf_uDesiredRaw=wpf_uTestRaw; }
+            }
+        }
+        else if(wpf_uCurrentDir==2)
+        {
+            if(wpf_uLPSYValid)
+            {
+                wpf_uDesiredType=4; wpf_uDesiredOrigin=wpf_uLPSYOrigin; wpf_uDesiredKnown=wpf_uLPSYKnown; wpf_uDesiredRaw=wpf_uLPSYRaw;
+            }
+            else if(wpf_uUpthrustValid)
+            {
+                wpf_uDesiredType=5; wpf_uDesiredOrigin=wpf_uUpthrustOrigin; wpf_uDesiredKnown=wpf_uUpthrustKnown; wpf_uDesiredRaw=wpf_uUpthrustRaw;
+            }
+        }
+
+        wpf_uAnchorChanged = wpf_uDesiredType!=wpf_uAnchorType OR
+            (wpf_uDesiredType>0 AND wpf_uDesiredOrigin!=wpf_uAnchorOrigin) OR
+            (wpf_uCurrentDir!=wpf_uDirection);
+
+        if(NOT wpf_isProvisional AND wpf_uAnchorChanged)
+        {
+            wpf_uDirection=wpf_uCurrentDir;
+            wpf_uAnchorType=wpf_uDesiredType;
+            wpf_uAnchorOrigin=wpf_uDesiredOrigin;
+            wpf_uAnchorRaw=wpf_uDesiredRaw;
+            wpf_uAnchorKnown=wpf_uDesiredKnown;
+            if(wpf_uAnchorKnown<wpf_currentBI) wpf_uAnchorKnown=wpf_currentBI;
+            wpf_uGeneration=wpf_uGeneration+1;
+            wpf_uReached=0; wpf_uExceeded=0; wpf_uFullReached=0; wpf_uFullExceeded=0;
+
+            wpf_uConLeftType=0; wpf_uConLeftOrigin=-1; wpf_uConLeftKnown=-1;
+            if(wpf_uDirection==1 AND wpf_uAnchorType>0)
+            {
+                if(wpf_uSpringValid AND wpf_uSpringOrigin<wpf_uAnchorOrigin)
+                { wpf_uConLeftType=1; wpf_uConLeftOrigin=wpf_uSpringOrigin; wpf_uConLeftKnown=wpf_uSpringKnown; }
+                if(wpf_uTestValid AND wpf_uTestOrigin<wpf_uAnchorOrigin AND
+                   (wpf_uConLeftType==0 OR wpf_uTestKnown>wpf_uConLeftKnown))
+                { wpf_uConLeftType=2; wpf_uConLeftOrigin=wpf_uTestOrigin; wpf_uConLeftKnown=wpf_uTestKnown; }
+            }
+            else if(wpf_uDirection==2 AND wpf_uAnchorType>0)
+            {
+                if(wpf_uUpthrustValid AND wpf_uUpthrustOrigin<wpf_uAnchorOrigin)
+                { wpf_uConLeftType=3; wpf_uConLeftOrigin=wpf_uUpthrustOrigin; wpf_uConLeftKnown=wpf_uUpthrustKnown; }
+            }
+            if(wpf_uConLeftType==0 AND wpf_uFullLeftValid)
+            { wpf_uConLeftType=4; wpf_uConLeftOrigin=wpf_uFullLeftOrigin; wpf_uConLeftKnown=wpf_uFullLeftKnown; }
+        }
+
+        WPF_U_RangeContextID[wpf_i]=wpf_uRangeID;
+        WPF_U_RangeSideCode[wpf_i]=WPFI_U_RangeSideCode[wpf_i];
+        WPF_U_FamilyHypothesisCode[wpf_i]=WPFI_U_FamilyCode[wpf_i];
+        WPF_U_PhaseStateCode[wpf_i]=WPFI_U_PhaseStateCode[wpf_i];
+        WPF_U_ObjectiveDirectionCode[wpf_i]=wpf_uDirection;
+        WPF_U_CountGenerationID[wpf_i]=wpf_uGeneration;
+        WPF_U_RightAnchorTypeCode[wpf_i]=wpf_uAnchorType;
+        if(wpf_uAnchorType>0)
+        {
+            WPF_U_RightAnchorOriginBI[wpf_i]=wpf_uAnchorOrigin;
+            WPF_U_RightAnchorKnownAtBI[wpf_i]=wpf_uAnchorKnown;
+            WPF_U_RightAnchorRawPrice[wpf_i]=wpf_uAnchorRaw;
+        }
+
+        wpf_uReason=0;
+        if(wpf_uDirection==0) wpf_uReason=wpf_uReason+1;
+        if(wpf_uAnchorType==0) wpf_uReason=wpf_uReason+2;
+        if(NOT WPFK_ConfigValidScalar) wpf_uReason=wpf_uReason+4;
+        if(WPFK_AdjustmentBasisStatusScalar!=1) wpf_uReason=wpf_uReason+64;
+        if(wpf_isProvisional) wpf_uReason=wpf_uReason+512;
+
+        wpf_uRightMapValid=0; wpf_uRightCol=0; wpf_uCountBox=0; wpf_uCountLine=0; wpf_uMapDelta=0;
+        if(wpf_uAnchorType>0 AND wpf_uAnchorOrigin>=0 AND wpf_uAnchorOrigin<=wpf_i)
+        {
+            wpf_uRightOff=wpf_uAnchorOrigin;
+            if(WPFK_MappingStatusCode[wpf_uRightOff]==1 AND WPFK_ConstructionMatureFlag[wpf_uRightOff]==1)
+            {
+                wpf_uRightCol=WPFK_ColumnIndexKnownAtOrBeforeBar[wpf_uRightOff];
+                wpf_uRaw=wpf_uAnchorRaw;
+                wpf_uMag=wpf_uRaw; if(wpf_uMag<1) wpf_uMag=1;
+                wpf_uTol=WPFK_BoxSizeScalar*1e-9;
+                wpf_uAltTol=1e-10*wpf_uMag; if(wpf_uAltTol<wpf_uTol) wpf_uTol=wpf_uAltTol;
+                if(wpf_uDirection==1)
+                    wpf_uCountBox=Ceil((wpf_uRaw-WPFK_GridOriginScalar-wpf_uTol)/WPFK_BoxSizeScalar);
+                else if(wpf_uDirection==2)
+                    wpf_uCountBox=Floor((wpf_uRaw-WPFK_GridOriginScalar+wpf_uTol)/WPFK_BoxSizeScalar);
+                wpf_uTop=WPFK_ColumnTopBoxKnownAtOrBeforeBar[wpf_uRightOff];
+                wpf_uBottom=WPFK_ColumnBottomBoxKnownAtOrBeforeBar[wpf_uRightOff];
+                if(wpf_uCountBox>=wpf_uBottom AND wpf_uCountBox<=wpf_uTop)
+                {
+                    wpf_uRightMapValid=1;
+                    wpf_uCountLine=WPFK_GridOriginScalar+wpf_uCountBox*WPFK_BoxSizeScalar;
+                    wpf_uMapDelta=wpf_uRaw-wpf_uCountLine;
+                }
+            }
+        }
+        if(NOT wpf_uRightMapValid) wpf_uReason=wpf_uReason+16;
+        if(wpf_uAnchorType>0 AND wpf_uAnchorOrigin>=0 AND wpf_uAnchorOrigin<=wpf_i AND
+           WPFK_ConstructionMatureFlag[wpf_uAnchorOrigin]!=1) wpf_uReason=wpf_uReason+8;
+
+        if(wpf_uRightMapValid)
+        {
+            WPF_U_RightAnchorColumnIndex[wpf_i]=wpf_uRightCol;
+            WPF_U_CountLineBoxIndex[wpf_i]=wpf_uCountBox;
+            WPF_U_CountLineBoxLevel[wpf_i]=wpf_uCountLine;
+            WPF_U_CountLineMappingDelta[wpf_i]=wpf_uMapDelta;
+            WPF_U_AnchorMappingValid[wpf_i]=1;
+        }
+
+        wpf_uConValid=0; wpf_uConCount=0; wpf_uConGap=0; wpf_uConPhysical=0;
+        if(wpf_uConLeftType>0 AND wpf_uConLeftOrigin>=0 AND wpf_uConLeftOrigin<=wpf_uAnchorOrigin AND wpf_uRightMapValid)
+        {
+            wpf_uConOff=wpf_uConLeftOrigin;
+            if(WPFK_MappingStatusCode[wpf_uConOff]==1 AND WPFK_ConstructionMatureFlag[wpf_uConOff]==1)
+            {
+                wpf_uConCol=WPFK_ColumnIndexKnownAtOrBeforeBar[wpf_uConOff];
+                if(wpf_uRightCol>=wpf_uConCol)
+                {
+                    wpf_uConGap=WPFK_CumulativeDataGapCount[wpf_uAnchorOrigin]-WPFK_CumulativeDataGapCount[wpf_uConOff];
+                    if(wpf_uConGap==0)
+                    {
+                        wpf_uConCount=wpf_uRightCol-wpf_uConCol+1;
+                        wpf_uConMove=wpf_uConCount*WPFK_BoxSizeScalar*WPFK_ReversalBoxesScalar;
+                        if(wpf_uDirection==1)
+                        {
+                            wpf_uConservativeObj=WPFI_U_RangeLow[wpf_i]+wpf_uConMove;
+                            wpf_uCountObj=wpf_uCountLine+wpf_uConMove;
+                            wpf_uMidObj=((WPFI_U_RangeLow[wpf_i]+wpf_uCountLine)/2)+wpf_uConMove;
+                        }
+                        else
+                        {
+                            wpf_uConservativeObj=WPFI_U_RangeHigh[wpf_i]-wpf_uConMove;
+                            wpf_uCountObj=wpf_uCountLine-wpf_uConMove;
+                            wpf_uMidObj=((WPFI_U_RangeHigh[wpf_i]+wpf_uCountLine)/2)-wpf_uConMove;
+                        }
+                        wpf_uZoneLow=wpf_uConservativeObj; wpf_uZoneHigh=wpf_uCountObj;
+                        if(wpf_uZoneLow>wpf_uZoneHigh)
+                        { wpf_uSwap=wpf_uZoneLow; wpf_uZoneLow=wpf_uZoneHigh; wpf_uZoneHigh=wpf_uSwap; }
+                        wpf_uConPhysical=(wpf_uDirection==1) OR (wpf_uDirection==2 AND wpf_uZoneLow>0 AND wpf_uZoneHigh>0);
+                        wpf_uConValid=wpf_uConPhysical AND WPFK_AdjustmentBasisStatusScalar==1 AND WPFK_ConfigValidScalar;
+                    }
+                }
+            }
+        }
+        if(wpf_uConLeftType==0) wpf_uReason=wpf_uReason+128;
+        if(wpf_uConGap>0) { wpf_uReason=wpf_uReason+32; WPF_U_SourceGapInCountSpan[wpf_i]=1; }
+        if(wpf_uConValid)
+        {
+            WPF_U_ConservativeSegmentValid[wpf_i]=1;
+            WPF_U_ConservativeLeftBoundaryTypeCode[wpf_i]=wpf_uConLeftType;
+            WPF_U_ConservativeLeftBoundaryOriginBI[wpf_i]=wpf_uConLeftOrigin;
+            WPF_U_ConservativeLeftBoundaryKnownAtBI[wpf_i]=wpf_uConLeftKnown;
+            WPF_U_ConservativeLeftColumnIndex[wpf_i]=wpf_uConCol;
+            WPF_U_ConservativeInclusiveColumnCount[wpf_i]=wpf_uConCount;
+            WPF_U_ConservativeProjectedMove[wpf_i]=wpf_uConMove;
+            WPF_U_ConservativeObjective[wpf_i]=wpf_uConservativeObj;
+            WPF_U_ConservativeMidpointObjective[wpf_i]=wpf_uMidObj;
+            WPF_U_ConservativeCountLineObjective[wpf_i]=wpf_uCountObj;
+            WPF_U_ConservativeObjectiveZoneLow[wpf_i]=wpf_uZoneLow;
+            WPF_U_ConservativeObjectiveZoneHigh[wpf_i]=wpf_uZoneHigh;
+            WPF_U_ConservativeObjectivePhysicalValidity[wpf_i]=wpf_uConPhysical;
+            wpf_uBaseLife=3;
+            if(wpf_uAnchorType==2 OR wpf_uAnchorType==3 OR wpf_uAnchorType==5) wpf_uBaseLife=2;
+            if(WPFI_U_PhaseStateCode[wpf_i]==6) wpf_uBaseLife=4;
+            if(wpf_uBaseLife>=4 AND NOT wpf_isProvisional AND WPFK_SourceBarValid[wpf_i])
+            {
+                if(wpf_uDirection==1)
+                {
+                    if(High[wpf_i]>=wpf_uZoneLow) wpf_uReached=1;
+                    if(High[wpf_i]>wpf_uZoneHigh) wpf_uExceeded=1;
+                }
+                else
+                {
+                    if(Low[wpf_i]<=wpf_uZoneHigh) wpf_uReached=1;
+                    if(Low[wpf_i]<wpf_uZoneLow) wpf_uExceeded=1;
+                }
+            }
+            wpf_uLife=wpf_uBaseLife;
+            if(wpf_uReached) wpf_uLife=5;
+            if(wpf_uExceeded) wpf_uLife=6;
+            WPF_U_ConservativeObjectiveReachedFlag[wpf_i]=wpf_uReached;
+            WPF_U_ConservativeObjectiveExceededFlag[wpf_i]=wpf_uExceeded;
+            WPF_U_CountLifecycleCode[wpf_i]=wpf_uLife;
+            WPF_U_OfficialObjectiveAvailable[wpf_i]=1;
+        }
+        else
+        {
+            if(wpf_uDirection>0) WPF_U_CountLifecycleCode[wpf_i]=1;
+        }
+
+        wpf_uFullValid=0; wpf_uFullGap=0;
+        if(wpf_uFullLeftValid AND wpf_uFullLeftOrigin>=0 AND wpf_uFullLeftOrigin<=wpf_uAnchorOrigin AND wpf_uRightMapValid)
+        {
+            wpf_uFullOff=wpf_uFullLeftOrigin;
+            if(WPFK_MappingStatusCode[wpf_uFullOff]==1 AND WPFK_ConstructionMatureFlag[wpf_uFullOff]==1)
+            {
+                wpf_uFullCol=WPFK_ColumnIndexKnownAtOrBeforeBar[wpf_uFullOff];
+                if(wpf_uRightCol>=wpf_uFullCol)
+                {
+                    wpf_uFullGap=WPFK_CumulativeDataGapCount[wpf_uAnchorOrigin]-WPFK_CumulativeDataGapCount[wpf_uFullOff];
+                    if(wpf_uFullGap==0)
+                    {
+                        wpf_uFullCount=wpf_uRightCol-wpf_uFullCol+1;
+                        wpf_uFullMove=wpf_uFullCount*WPFK_BoxSizeScalar*WPFK_ReversalBoxesScalar;
+                        if(wpf_uDirection==1)
+                        {
+                            wpf_uFullConObj=WPFI_U_RangeLow[wpf_i]+wpf_uFullMove;
+                            wpf_uFullCountObj=wpf_uCountLine+wpf_uFullMove;
+                            wpf_uFullMid=((WPFI_U_RangeLow[wpf_i]+wpf_uCountLine)/2)+wpf_uFullMove;
+                        }
+                        else
+                        {
+                            wpf_uFullConObj=WPFI_U_RangeHigh[wpf_i]-wpf_uFullMove;
+                            wpf_uFullCountObj=wpf_uCountLine-wpf_uFullMove;
+                            wpf_uFullMid=((WPFI_U_RangeHigh[wpf_i]+wpf_uCountLine)/2)-wpf_uFullMove;
+                        }
+                        wpf_uFullZoneLow=wpf_uFullConObj; wpf_uFullZoneHigh=wpf_uFullCountObj;
+                        if(wpf_uFullZoneLow>wpf_uFullZoneHigh)
+                        { wpf_uSwap=wpf_uFullZoneLow; wpf_uFullZoneLow=wpf_uFullZoneHigh; wpf_uFullZoneHigh=wpf_uSwap; }
+                        wpf_uFullPhysical=(wpf_uDirection==1) OR (wpf_uDirection==2 AND wpf_uFullZoneLow>0 AND wpf_uFullZoneHigh>0);
+                        wpf_uFullValid=wpf_uFullPhysical AND WPFK_AdjustmentBasisStatusScalar==1 AND WPFK_ConfigValidScalar;
+                    }
+                }
+            }
+        }
+        if(wpf_uFullValid)
+        {
+            WPF_U_FullSegmentValid[wpf_i]=1;
+            WPF_U_FullLeftBoundaryTypeCode[wpf_i]=4;
+            WPF_U_FullLeftBoundaryOriginBI[wpf_i]=wpf_uFullLeftOrigin;
+            WPF_U_FullLeftBoundaryKnownAtBI[wpf_i]=wpf_uFullLeftKnown;
+            WPF_U_FullLeftColumnIndex[wpf_i]=wpf_uFullCol;
+            WPF_U_FullInclusiveColumnCount[wpf_i]=wpf_uFullCount;
+            WPF_U_FullProjectedMove[wpf_i]=wpf_uFullMove;
+            WPF_U_FullConservativeObjective[wpf_i]=wpf_uFullConObj;
+            WPF_U_FullMidpointObjective[wpf_i]=wpf_uFullMid;
+            WPF_U_FullCountLineObjective[wpf_i]=wpf_uFullCountObj;
+            WPF_U_FullObjectiveZoneLow[wpf_i]=wpf_uFullZoneLow;
+            WPF_U_FullObjectiveZoneHigh[wpf_i]=wpf_uFullZoneHigh;
+            WPF_U_FullObjectivePhysicalValidity[wpf_i]=wpf_uFullPhysical;
+            wpf_uFullBase=3;
+            if(wpf_uAnchorType==2 OR wpf_uAnchorType==3 OR wpf_uAnchorType==5) wpf_uFullBase=2;
+            if(WPFI_U_PhaseStateCode[wpf_i]==6) wpf_uFullBase=4;
+            if(wpf_uFullBase>=4 AND NOT wpf_isProvisional AND WPFK_SourceBarValid[wpf_i])
+            {
+                if(wpf_uDirection==1)
+                {
+                    if(High[wpf_i]>=wpf_uFullZoneLow) wpf_uFullReached=1;
+                    if(High[wpf_i]>wpf_uFullZoneHigh) wpf_uFullExceeded=1;
+                }
+                else
+                {
+                    if(Low[wpf_i]<=wpf_uFullZoneHigh) wpf_uFullReached=1;
+                    if(Low[wpf_i]<wpf_uFullZoneLow) wpf_uFullExceeded=1;
+                }
+            }
+            wpf_uFullLife=wpf_uFullBase;
+            if(wpf_uFullReached) wpf_uFullLife=5;
+            if(wpf_uFullExceeded) wpf_uFullLife=6;
+            WPF_U_FullObjectiveReachedFlag[wpf_i]=wpf_uFullReached;
+            WPF_U_FullObjectiveExceededFlag[wpf_i]=wpf_uFullExceeded;
+            WPF_U_FullLifecycleCode[wpf_i]=wpf_uFullLife;
+        }
+        if(wpf_uDirection==2 AND wpf_uConValid AND NOT wpf_uConPhysical) wpf_uReason=wpf_uReason+256;
+        WPF_U_ReasonMask[wpf_i]=wpf_uReason;
+    }
+    else
+    {
+        if(wpf_uRangeActive)
+        {
+            wpf_uRangeActive=0;
+            wpf_uAnchorType=0;
+            wpf_uDirection=0;
+            wpf_uReached=0; wpf_uExceeded=0; wpf_uFullReached=0; wpf_uFullExceeded=0;
+        }
+    }
+
+    // Stepping-stone relationship is diagnostic only and never changes counts.
+    if(WPF_L_OfficialObjectiveAvailable[wpf_i] AND WPF_U_OfficialObjectiveAvailable[wpf_i] AND
+       WPF_L_ObjectiveDirectionCode[wpf_i]==WPF_U_ObjectiveDirectionCode[wpf_i] AND
+       WPF_L_RangeContextID[wpf_i]!=WPF_U_RangeContextID[wpf_i])
+    {
+        wpf_overlap = WPF_L_ConservativeObjectiveZoneLow[wpf_i]<=WPF_U_ConservativeObjectiveZoneHigh[wpf_i]
+                   AND WPF_U_ConservativeObjectiveZoneLow[wpf_i]<=WPF_L_ConservativeObjectiveZoneHigh[wpf_i];
+        if(wpf_overlap)
+        {
+            wpf_nested =
+                (WPF_L_ConservativeObjectiveZoneLow[wpf_i]<=WPF_U_ConservativeObjectiveZoneLow[wpf_i] AND
+                 WPF_L_ConservativeObjectiveZoneHigh[wpf_i]>=WPF_U_ConservativeObjectiveZoneHigh[wpf_i])
+                OR
+                (WPF_U_ConservativeObjectiveZoneLow[wpf_i]<=WPF_L_ConservativeObjectiveZoneLow[wpf_i] AND
+                 WPF_U_ConservativeObjectiveZoneHigh[wpf_i]>=WPF_L_ConservativeObjectiveZoneHigh[wpf_i]);
+            if(wpf_nested) WPF_SteppingStoneRelationshipCode[wpf_i]=2;
+            else WPF_SteppingStoneRelationshipCode[wpf_i]=1;
+        }
+    }
+}
+_SECTION_END();
+
+_SECTION_BEGIN("130. Current P&F selection facade");
+// Conservative-first singleton is available only when exactly one RangeContext
+// has an official objective. Multiple active objectives remain explicit.
+WPF_CurrentObjectiveCount = WPF_L_OfficialObjectiveAvailable + WPF_U_OfficialObjectiveAvailable;
+WPF_CurrentObjectiveAmbiguous = IIf(WPF_CurrentObjectiveCount>1,1,0);
+WPF_CurrentOfficialObjectiveAvailable = IIf(WPF_CurrentObjectiveCount==1,1,0);
+WPF_CurrentRangeContextID = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_RangeContextID,WPF_U_RangeContextID),Null);
+WPF_CurrentObjectiveDirectionCode = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ObjectiveDirectionCode,WPF_U_ObjectiveDirectionCode),0);
+WPF_CurrentCountLifecycleCode = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_CountLifecycleCode,WPF_U_CountLifecycleCode),0);
+WPF_CurrentCountGenerationID = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_CountGenerationID,WPF_U_CountGenerationID),Null);
+WPF_CurrentProjectedMove = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ConservativeProjectedMove,WPF_U_ConservativeProjectedMove),Null);
+WPF_CurrentConservativeObjective = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ConservativeObjective,WPF_U_ConservativeObjective),Null);
+WPF_CurrentCountLineObjective = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ConservativeCountLineObjective,WPF_U_ConservativeCountLineObjective),Null);
+WPF_CurrentObjectiveZoneLow = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ConservativeObjectiveZoneLow,WPF_U_ConservativeObjectiveZoneLow),Null);
+WPF_CurrentObjectiveZoneHigh = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ConservativeObjectiveZoneHigh,WPF_U_ConservativeObjectiveZoneHigh),Null);
+WPF_CurrentObjectiveReachedFlag = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ConservativeObjectiveReachedFlag,WPF_U_ConservativeObjectiveReachedFlag),0);
+WPF_CurrentObjectiveExceededFlag = IIf(WPF_CurrentObjectiveCount==1,
+    IIf(WPF_L_OfficialObjectiveAvailable,WPF_L_ConservativeObjectiveExceededFlag,WPF_U_ConservativeObjectiveExceededFlag),0);
+_SECTION_END();

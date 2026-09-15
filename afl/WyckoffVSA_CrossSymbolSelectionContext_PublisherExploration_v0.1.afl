@@ -1,0 +1,21 @@
+/* Cross-Symbol Selection Context Publisher Exploration v0.1 */
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Publisher_v0.1.afl>
+
+_SECTION_BEGIN("111. Cross-Symbol Publisher Exploration");
+Filter = Status("lastbarinrange");
+AddTextColumn(Name(),"WXS_SourceSymbol");
+AddColumn(Interval(),"WXS_NativeInterval",1.0);
+AddColumn(WXS_PublisherSourceBusinessDateKey,"WXS_SourceBusinessDateKey",1.0);
+AddColumn(DateTime(),"WXS_CurrentBarDateTime",formatDateTime);
+AddColumn(WXS_PublisherCurrentCalendarBusinessDateKey,"WXS_CurrentCalendarBusinessDateKey",1.0);
+AddColumn(WXS_PublisherCompletionDeclarationCode,"WXS_CompletionDeclarationCode",1.0);
+AddColumn(WXS_PublisherCompletionBasisCode,"WXS_CompletionBasisCode",1.0);
+AddColumn(WXS_PublisherCompositePayloadValid,"WXS_CompositePayloadValid",1.0);
+AddColumn(WXS_PublisherMTFPayloadValid,"WXS_MTFPayloadValid",1.0);
+AddColumn(WXS_PublisherPreviousGeneration,"WXS_PreviousGeneration",1.0);
+AddColumn(WXS_PublisherNewGeneration,"WXS_NewGeneration",1.0);
+AddColumn(WXS_PublisherWriterLockAcquired,"WXS_WriterLockAcquired",1.0);
+AddColumn(0*BarIndex()+StaticVarGet(WXS_Prefix+"Ready"),"WXS_Ready",1.0);
+AddColumn(WXS_PublisherStatus,"WXS_PublisherStatusCode",1.0);
+AddMultiTextColumn(WXS_PublisherStatus,WXS_PublisherStatusText,"WXS_PublisherStatus");
+_SECTION_END();

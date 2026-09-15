@@ -1,0 +1,351 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H4 single-symbol historical decision adapter + Exploration.
+
+    Historical sources ONLY:
+      WVSA_HIST_STOCK_v01_<SYMBOL>_*
+      WVSA_HIST_MKT_v01_<MARKET>_*
+
+    KHONG doc Daily Snapshot production.
+    KHONG doc WVSA_SELCTX_v01_* current snapshot.
+    KHONG doc WVSA_MTF_v01_* current snapshot.
+    KHONG tao Buy/Sell/Short/Cover/PositionScore/P&L.
+
+    Profile v0.1: Market-only, Full Top-Down Group deferred.
+    UI dung tieng Viet ASCII khong dau theo HS14.
+
+    2026-09-16 B — presentation only:
+    - bo cot mac dinh va tu xuat Ma co phieu / Ngay gio;
+    - chuyen nhan hien thi nguoi dung sang tieng Viet ASCII;
+    - RangePosition chi hien khi RangePositionValid = 1;
+    - khong thay methodology/threshold/enum/decision semantics.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+SetOption("NoDefaultColumns",True);
+
+#include_once <WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl>
+
+function H4_Finite(x)
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+function H4_SelectionContext(valid,multiplicity,directional,evidence,hypAlign,mtfAlign)
+{
+    local mixed, bullish, bearish;
+    mixed = multiplicity==2 OR directional==4 OR evidence==3 OR hypAlign==3 OR
+            mtfAlign==4 OR mtfAlign==5 OR mtfAlign==6;
+    bullish = directional==2 AND mtfAlign==2 AND evidence!=2 AND evidence!=3 AND hypAlign!=3;
+    bearish = directional==3 AND mtfAlign==3 AND evidence!=1 AND evidence!=3 AND hypAlign!=3;
+    return IIf(NOT valid,0,IIf(mixed,4,IIf(bullish,2,IIf(bearish,3,1))));
+}
+
+function H4_StageFromPhase(phaseCode)
+{
+    return IIf(phaseCode==1 OR phaseCode==2,1,
+           IIf(phaseCode==3 OR phaseCode==4,2,
+           IIf(phaseCode==5,3,
+           IIf(phaseCode==6,4,
+           IIf(phaseCode==7,5,0)))));
+}
+
+_SECTION_BEGIN("01. CAU HINH H4");
+H4_FilterMode = ParamList(
+    "1.1 Che do loc lich su",
+    "Tat ca du lieu hop le|Theo doi tro len|Can xem xet|Toan bo kiem tra",0);
+_SECTION_END();
+
+_SECTION_BEGIN("02. DOC DONG THOI GIAN CO PHIEU LICH SU");
+H4_Symbol = Name();
+H4_DT = DateTime();
+H4_DateKey = DateNum();
+H4_IntervalValid = Interval()==inDaily;
+H4_StockPrefix = "WVSA_HIST_STOCK_v01_" + H4_Symbol + "_";
+
+H4_StockReady =
+    Nz(StaticVarGet(H4_StockPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(H4_StockPrefix+"CommittedGenerationID"),0)>0 AND
+    StaticVarGetText(H4_StockPrefix+"Symbol")==H4_Symbol;
+H4_StockSourceKey = StaticVarGet(H4_StockPrefix+"SourceBusinessDateKey");
+H4_StockSourceDT = StaticVarGet(H4_StockPrefix+"SourceBarDateTime");
+H4_StockSourceValid = StaticVarGet(H4_StockPrefix+"SourceValid");
+H4_StockSchemaValid = StaticVarGet(H4_StockPrefix+"StockSchemaValid");
+H4_StockProvisional = StaticVarGet(H4_StockPrefix+"ProvisionalFlag");
+H4_StockClose = StaticVarGet(H4_StockPrefix+"Close");
+H4_StockRSMarketSymbol = StaticVarGetText(H4_StockPrefix+"RSMarketSymbol");
+
+H4_StockMult = StaticVarGet(H4_StockPrefix+"ContextMultiplicityCode");
+H4_StockDir = StaticVarGet(H4_StockPrefix+"DirectionalContextCode");
+H4_StockPhase = StaticVarGet(H4_StockPrefix+"PhaseStateCode");
+H4_StockFamily = StaticVarGet(H4_StockPrefix+"FamilyHypothesisCode");
+H4_StockEvidence = StaticVarGet(H4_StockPrefix+"EvidenceBalanceCode");
+H4_StockHypAlign = StaticVarGet(H4_StockPrefix+"HypothesisAlignmentCode");
+H4_StockEventMask = StaticVarGet(H4_StockPrefix+"CurrentEventMask");
+
+H4_RangeStatus = StaticVarGet(H4_StockPrefix+"RangeStatusCode");
+H4_RangePosition = StaticVarGet(H4_StockPrefix+"RangePosition");
+H4_RangePositionValid = StaticVarGet(H4_StockPrefix+"RangePositionValid");
+H4_RangeUsableActive = StaticVarGet(H4_StockPrefix+"RangeUsableActive");
+H4_RangeLocationCoherent = StaticVarGet(H4_StockPrefix+"RangeLocationCoherent");
+H4_RangeLocationConflict = StaticVarGet(H4_StockPrefix+"RangeLocationConflict");
+
+H4_MTFValid = StaticVarGet(H4_StockPrefix+"MTFContractValid");
+H4_MTFDir = StaticVarGet(H4_StockPrefix+"MTFDirectionalAlignmentCode");
+H4_MTFEvidence = StaticVarGet(H4_StockPrefix+"MTFEvidenceAlignmentCode");
+H4_MTFPhase = StaticVarGet(H4_StockPrefix+"MTFPhaseRelationshipCode");
+H4_MTFConflict = StaticVarGet(H4_StockPrefix+"MTFConflictReasonCode");
+
+H4_RSContextValid = StaticVarGet(H4_StockPrefix+"RSContextValid");
+H4_RSContextStatus = StaticVarGet(H4_StockPrefix+"RSContextStatusCode");
+H4_RSMarketStatus = StaticVarGet(H4_StockPrefix+"RSMarketBenchmarkStatusCode");
+H4_RSStructure = StaticVarGet(H4_StockPrefix+"RSStockVsMarketStructureCode");
+H4_PriceRSRelationship = StaticVarGet(H4_StockPrefix+"RSPriceRelationshipCode");
+
+H4_StockExactDate =
+    NOT IsNull(H4_StockSourceKey) AND
+    NOT IsNull(H4_StockSourceDT) AND
+    H4_StockSourceKey==H4_DateKey AND
+    H4_StockSourceDT==H4_DT;
+H4_StockNoFuture = NOT IsNull(H4_StockSourceDT) AND H4_StockSourceDT<=H4_DT;
+H4_HistoricalStockSourceOK =
+    H4_StockReady AND H4_StockExactDate AND H4_StockNoFuture AND H4_StockSourceValid==1;
+_SECTION_END();
+
+_SECTION_BEGIN("03. DOC BOI CANH THI TRUONG LICH SU");
+H4_MarketSymbol = WVRC_SelectionMarketSymbol;
+H4_MarketPrefix = "WVSA_HIST_MKT_v01_" + H4_MarketSymbol + "_";
+H4_MarketReady =
+    Nz(StaticVarGet(H4_MarketPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(H4_MarketPrefix+"CommittedGenerationID"),0)>0 AND
+    StaticVarGetText(H4_MarketPrefix+"Symbol")==H4_MarketSymbol;
+H4_MarketSourceKey = StaticVarGet(H4_MarketPrefix+"SourceBusinessDateKey");
+H4_MarketSourceDT = StaticVarGet(H4_MarketPrefix+"SourceBarDateTime");
+H4_MarketSourceValid = StaticVarGet(H4_MarketPrefix+"SourceValid");
+H4_MarketMult = StaticVarGet(H4_MarketPrefix+"ContextMultiplicityCode");
+H4_MarketDir = StaticVarGet(H4_MarketPrefix+"DirectionalContextCode");
+H4_MarketEvidence = StaticVarGet(H4_MarketPrefix+"EvidenceBalanceCode");
+H4_MarketHypAlign = StaticVarGet(H4_MarketPrefix+"HypothesisAlignmentCode");
+H4_MarketPhase = StaticVarGet(H4_MarketPrefix+"PhaseStateCode");
+H4_MarketStructural = StaticVarGet(H4_MarketPrefix+"StructuralDevelopmentCode");
+H4_MarketMTFDir = StaticVarGet(H4_MarketPrefix+"MTFDirectionalAlignmentCode");
+H4_MarketMTFEvidence = StaticVarGet(H4_MarketPrefix+"MTFEvidenceAlignmentCode");
+H4_MarketMTFPhase = StaticVarGet(H4_MarketPrefix+"MTFPhaseRelationshipCode");
+H4_MarketMTFConflict = StaticVarGet(H4_MarketPrefix+"MTFConflictReasonCode");
+
+H4_MarketExactDate =
+    NOT IsNull(H4_MarketSourceKey) AND
+    NOT IsNull(H4_MarketSourceDT) AND
+    H4_MarketSourceKey==H4_DateKey AND
+    H4_MarketSourceDT==H4_DT;
+H4_MarketNoFuture = NOT IsNull(H4_MarketSourceDT) AND H4_MarketSourceDT<=H4_DT;
+H4_MarketPayloadPresent =
+    NOT IsNull(H4_MarketMult) AND
+    NOT IsNull(H4_MarketDir) AND
+    NOT IsNull(H4_MarketEvidence) AND
+    NOT IsNull(H4_MarketHypAlign) AND
+    NOT IsNull(H4_MarketPhase) AND
+    NOT IsNull(H4_MarketStructural) AND
+    NOT IsNull(H4_MarketMTFDir) AND
+    NOT IsNull(H4_MarketMTFEvidence) AND
+    NOT IsNull(H4_MarketMTFPhase) AND
+    NOT IsNull(H4_MarketMTFConflict);
+H4_MarketEffectiveValid =
+    H4_MarketReady AND H4_MarketExactDate AND H4_MarketNoFuture AND
+    H4_MarketSourceValid==1 AND H4_MarketPayloadPresent;
+
+H4_MarketSelection = H4_SelectionContext(
+    H4_MarketEffectiveValid,H4_MarketMult,H4_MarketDir,
+    H4_MarketEvidence,H4_MarketHypAlign,H4_MarketMTFDir);
+_SECTION_END();
+
+_SECTION_BEGIN("04. DIEU KIEN DU LIEU LICH SU");
+H4_Stage = H4_StageFromPhase(H4_StockPhase);
+H4_MarketConfigMatch =
+    StrLen(WVRC_RSMarketSymbol)>0 AND
+    WVRC_RSMarketSymbol==WVRC_SelectionMarketSymbol AND
+    H4_StockRSMarketSymbol==WVRC_RSMarketSymbol;
+H4_RoleConfigConflict = NOT WVRC_RoleIdentityValid;
+H4_MarketRSReady = H4_RSMarketStatus==3 AND H4_RSContextValid==1;
+
+H4_StockRequiredFinite =
+    H4_Finite(H4_StockClose) AND H4_StockClose>0 AND
+    H4_Finite(H4_StockSourceDT) AND
+    H4_Finite(H4_StockMult) AND
+    H4_Finite(H4_StockDir) AND
+    H4_Finite(H4_StockPhase) AND
+    H4_Finite(H4_StockEvidence) AND
+    H4_Finite(H4_StockHypAlign) AND
+    H4_Finite(H4_MTFDir) AND
+    H4_Finite(H4_RSStructure);
+
+// Giu nguyen bit meaning production. Historical source alignment la mot gate
+// rieng, khong tao bit exclusion production moi.
+H4_ExclusionMask =
+      IIf(H4_StockProvisional==1,1,0)
+    + IIf(H4_StockSchemaValid!=1,2,0)
+    + IIf(NOT H4_MarketRSReady,4,0)
+    + IIf(WVRC_RSAdjustmentBasisStatus!=1,8,0)
+    + IIf(H4_MTFValid!=1,16,0)
+    + IIf(NOT H4_MarketEffectiveValid,32,0)
+    + 0
+    + IIf(NOT H4_StockRequiredFinite,128,0)
+    + IIf(NOT H4_IntervalValid,256,0)
+    + IIf(NOT H4_MarketConfigMatch,512,0)
+    + IIf(H4_RoleConfigConflict,1024,0);
+
+H4_DataEligible = H4_HistoricalStockSourceOK AND H4_ExclusionMask==0;
+_SECTION_END();
+
+_SECTION_BEGIN("05. XEM XET VA MA CHAN PHUONG PHAP");
+H4_PriceRSNonConfirmation = H4_PriceRSRelationship==2 OR H4_PriceRSRelationship==3;
+H4_StockVSAMixedOrConflict = H4_StockEvidence==3 OR H4_StockHypAlign==3;
+H4_StockMTFConflict = H4_MTFDir==4 OR H4_MTFDir==5 OR H4_MTFDir==6;
+H4_RSMixed = H4_RSStructure==3;
+H4_MultipleRanges = H4_StockMult==2;
+H4_MarketStockDirectionalConflict =
+    (H4_MarketSelection==2 AND H4_StockDir==3) OR
+    (H4_MarketSelection==3 AND H4_StockDir==2);
+
+H4_Review = H4_DataEligible AND (
+    H4_MultipleRanges OR H4_PriceRSNonConfirmation OR
+    H4_StockVSAMixedOrConflict OR H4_StockMTFConflict OR H4_RSMixed OR
+    H4_MarketStockDirectionalConflict OR H4_RoleConfigConflict OR
+    H4_RangeLocationConflict==1);
+
+H4_PhaseTooEarly = H4_Stage==0 OR H4_Stage==1;
+H4_StockDirectionalUnresolved = H4_StockDir!=2 AND H4_StockDir!=3;
+H4_MTFMethodConflict = H4_MTFDir==4 OR H4_MTFDir==5 OR H4_MTFDir==6;
+H4_RSMethodConflict = H4_RSStructure==0 OR H4_RSStructure==3;
+
+H4_MethodBlockMask =
+      IIf(H4_MarketSelection==0 OR H4_MarketSelection==1 OR H4_MarketSelection==4,1,0)
+    + IIf(H4_PhaseTooEarly,2,0)
+    + IIf(H4_StockDirectionalUnresolved,4,0)
+    + IIf(H4_MTFMethodConflict,8,0)
+    + IIf(H4_RSMethodConflict,16,0)
+    + IIf(H4_StockVSAMixedOrConflict,32,0)
+    + IIf(H4_PriceRSNonConfirmation,64,0)
+    + 0
+    + IIf(H4_MultipleRanges,256,0)
+    + IIf(H4_RoleConfigConflict OR NOT H4_MarketConfigMatch,512,0)
+    + IIf(H4_RangeLocationConflict==1,1024,0);
+_SECTION_END();
+
+_SECTION_BEGIN("06. PHAN LOAI UNG VIEN LICH SU");
+H4_BullishEvidenceAcceptable = H4_StockEvidence!=2 AND H4_StockEvidence!=3 AND H4_StockHypAlign!=3;
+H4_BearishEvidenceAcceptable = H4_StockEvidence!=1 AND H4_StockEvidence!=3 AND H4_StockHypAlign!=3;
+
+H4_BullishQualifiedMarket = H4_DataEligible AND NOT H4_Review AND
+    H4_MarketSelection==2 AND H4_StockDir==2 AND
+    (H4_Stage==3 OR H4_Stage==4) AND
+    H4_MTFDir==2 AND H4_RSStructure==1 AND
+    H4_BullishEvidenceAcceptable AND NOT H4_PriceRSNonConfirmation AND
+    H4_StockMult==1;
+
+H4_BearishQualifiedMarket = H4_DataEligible AND NOT H4_Review AND
+    H4_MarketSelection==3 AND H4_StockDir==3 AND
+    (H4_Stage==3 OR H4_Stage==4) AND
+    H4_MTFDir==3 AND H4_RSStructure==2 AND
+    H4_BearishEvidenceAcceptable AND NOT H4_PriceRSNonConfirmation AND
+    H4_StockMult==1;
+
+H4_BullishDeveloping = H4_DataEligible AND NOT H4_Review AND
+    H4_Stage==2 AND H4_MarketSelection==2 AND H4_StockDir==2 AND
+    H4_RSStructure==1 AND H4_BullishEvidenceAcceptable AND
+    (H4_MTFDir==1 OR H4_MTFDir==2);
+H4_BearishDeveloping = H4_DataEligible AND NOT H4_Review AND
+    H4_Stage==2 AND H4_MarketSelection==3 AND H4_StockDir==3 AND
+    H4_RSStructure==2 AND H4_BearishEvidenceAcceptable AND
+    (H4_MTFDir==1 OR H4_MTFDir==3);
+
+H4_Watch = H4_DataEligible AND NOT H4_Review AND
+    H4_Stage==1 AND H4_RangeLocationCoherent==1 AND
+    (H4_RSStructure==1 OR H4_RSStructure==2);
+
+// Full Top-Down Group deferred trong profile Historical v0.1.
+H4_CandidateClass = IIf(NOT H4_DataEligible,0,
+    IIf(H4_Review,9,
+    IIf(H4_BullishQualifiedMarket,4,
+    IIf(H4_BearishQualifiedMarket,7,
+    IIf(H4_BullishDeveloping,3,
+    IIf(H4_BearishDeveloping,6,
+    IIf(H4_Watch,2,1)))))));
+
+H4_CandidateSide = IIf(H4_CandidateClass==3 OR H4_CandidateClass==4,1,
+    IIf(H4_CandidateClass==6 OR H4_CandidateClass==7,2,
+    IIf(H4_CandidateClass==2 AND H4_StockDir==2 AND H4_RSStructure==1,1,
+    IIf(H4_CandidateClass==2 AND H4_StockDir==3 AND H4_RSStructure==2,2,0))));
+
+H4_WatchPlus = H4_CandidateClass>=2 AND H4_CandidateClass<=8;
+_SECTION_END();
+
+_SECTION_BEGIN("07. TRANG THAI VA KET QUA H4");
+// 0 sai khung; 1 bo ghi chua san sang; 2 stock khong khop ngay;
+// 3 stock payload khong hop le; 4 market chua san sang/khong khop ngay;
+// 5 data gated; 6 da phan loai point-in-time.
+H4_StatusCode = IIf(
+    NOT H4_IntervalValid,0,
+    IIf(NOT H4_StockReady,1,
+    IIf(NOT H4_StockExactDate OR NOT H4_StockNoFuture,2,
+    IIf(H4_StockSourceValid!=1,3,
+    IIf(NOT H4_MarketEffectiveValid,4,
+    IIf(NOT H4_DataEligible,5,6))))));
+
+H4_StatusText =
+    "Sai khung thoi gian\n"
+    + "Bo ghi lich su co phieu chua san sang\n"
+    + "Nguon co phieu khong khop dung ngay\n"
+    + "Du lieu co phieu khong hop le\n"
+    + "Boi canh thi truong khong hop le / khong khop ngay\n"
+    + "Du lieu bi chan theo quy tac van hanh\n"
+    + "Da phan loai dung thoi diem";
+H4_YesNoText = "Khong\nCo";
+H4_ClassText =
+    "Khong du du lieu / du lieu bi chan\n"
+    + "Khong phai ung vien hien tai\n"
+    + "Theo doi\n"
+    + "Dang phat trien tang\n"
+    + "Dat chuan tang - dong thuan thi truong\n"
+    + "Dat chuan tang - dong thuan day du\n"
+    + "Dang phat trien giam\n"
+    + "Dat chuan giam - dong thuan thi truong\n"
+    + "Dat chuan giam - dong thuan day du\n"
+    + "Can xem xet - xung dot / mo ho";
+H4_SideText = "Chua xac dinh\nTang\nGiam";
+H4_StageText =
+    "Khong du du lieu\nTheo doi - hinh thanh / phat trien vung\nDang phat trien - kiem tra cuoi\nPhat trien co huong\nMo rong xu huong\nKet thuc / bi thay the";
+H4_PhaseText =
+    "Khong du du lieu\nPha A\nPha B\nPha C ung vien\nPha C\nPha D\nPha E\nDa het hieu luc";
+H4_FamilyText =
+    "Khong du du lieu\nVung duoi chua xac nhan\nVung tren chua xac nhan\nGia thuyet tich luy\nGia thuyet tai phan phoi\nGia thuyet phan phoi\nGia thuyet tai tich luy\nBang chung hon hop / xung dot";
+H4_MTFText =
+    "Khong du du lieu MTF\nChua xac dinh / phi dinh huong\nDong thuan tang\nDong thuan giam\nKhung Ngay nguoc khung lon\nKhung Tuan va Thang xung dot\nMTF hon hop / phuc tap";
+H4_RSText = "Khong du du lieu\nRS tang\nRS giam\nRS hon hop";
+H4_MarketText =
+    "Khong du du lieu\nTrung tinh / chua ro\nHo tro tang\nHo tro giam\nHon hop / xung dot";
+H4_RangeDisplay = IIf(H4_RangePositionValid==1,H4_RangePosition,Null);
+H4_Version = "HISTORICAL_SCANNER_V01_H4_20260916_B";
+
+Filter = IIf(H4_FilterMode=="Tat ca du lieu hop le",H4_DataEligible,
+         IIf(H4_FilterMode=="Theo doi tro len",H4_WatchPlus,
+         IIf(H4_FilterMode=="Can xem xet",H4_CandidateClass==9,1)));
+
+AddTextColumn(H4_Symbol,"Ma co phieu");
+AddColumn(H4_DT,"Ngay gio",formatDateTime);
+AddMultiTextColumn(H4_DataEligible,H4_YesNoText,"Du lieu hop le");
+AddMultiTextColumn(H4_CandidateClass,H4_ClassText,"Lop ung vien");
+AddMultiTextColumn(H4_CandidateSide,H4_SideText,"Huong");
+AddMultiTextColumn(H4_Stage,H4_StageText,"Giai doan");
+AddMultiTextColumn(H4_StockPhase,H4_PhaseText,"Pha");
+AddMultiTextColumn(H4_StockFamily,H4_FamilyText,"Gia thuyet");
+AddColumn(100*H4_RangeDisplay,"Vi tri trong vung (%)",1.2);
+AddMultiTextColumn(H4_MTFDir,H4_MTFText,"MTF");
+AddMultiTextColumn(H4_RSStructure,H4_RSText,"RS voi thi truong");
+AddMultiTextColumn(H4_Review,H4_YesNoText,"Can xem xet");
+AddColumn(H4_MethodBlockMask,"Ma chan phuong phap",1.0);
+AddMultiTextColumn(H4_MarketSelection,H4_MarketText,"Boi canh thi truong");
+AddColumn(H4_ExclusionMask,"Ma loai du lieu",1.0);
+AddMultiTextColumn(H4_StatusCode,H4_StatusText,"Trang thai lich su");
+AddTextColumn(H4_Version,"Phien ban");
+_SECTION_END();

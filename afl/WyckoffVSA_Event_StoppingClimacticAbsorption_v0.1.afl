@@ -1,0 +1,527 @@
+/*
+    Wyckoff VSA Stopping Volume / Climactic Effort / Absorption Event v0.1
+    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    Approved specification: PR #18, merge commit e9c1d1078a24474da1fa674810775389161ef631
+
+    Event layer only:
+    - CLIMACTIC-EFFORT-LIKE
+    - ABSORPTION-LIKE OBSERVATION
+    - STOPPING-VOLUME-LIKE
+
+    No SC/BC/PS/PSY conclusion. No trading signal.
+*/
+#include_once <WyckoffVSA_Confirmation_v1.0.afl>
+
+_SECTION_BEGIN("44. Effort Result Event constants and input contracts");
+WE_ER_ElevatedRSpreadMin = 1.20;
+WE_ER_ElevatedRVOLMin = 1.25;
+WE_ER_ClimacticRSpreadMin = 1.60;
+WE_ER_ClimacticRVOLMin = 1.80;
+WE_ER_UltraRVOLMin = 2.50;
+WE_ER_AbsorptionRVOLMin = 1.80;
+WE_ER_AbsorptionMaxDirectionalProgress = 0.35;
+WE_ER_StoppingRVOLMin = 1.80;
+WE_ER_StoppingMinClosePosition = 0.50;
+WE_ER_StoppingUpperCloseMin = 0.60;
+WE_ER_StoppingStrongRecoveryMin = 0.75;
+
+function WE_ER_Finite( x )
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+WE_ER_SourceBarIndex = BarIndex();
+WE_ER_SourceDateTime = DateTime();
+
+WE_ER_PriceValid = IIf(
+    PriceInputValid==1
+    AND WE_ER_Finite(High)
+    AND WE_ER_Finite(Low)
+    AND WE_ER_Finite(Close)
+    AND High>0
+    AND Low>0
+    AND Close>0
+    AND High>=Low
+    AND Close>=Low
+    AND Close<=High,1,0);
+
+WE_ER_OpenDescriptorValid = IIf(
+    WE_ER_Finite(Open)
+    AND Open>0,1,0);
+
+WE_ER_RVOLDataValid = IIf(
+    RVOLValid==1
+    AND WE_ER_Finite(RVOL),1,0);
+
+WE_ER_RSpreadDataValid = IIf(
+    RSpreadValid==1
+    AND WE_ER_Finite(RSpread),1,0);
+
+WE_ER_ClosePositionDataValid = IIf(
+    ClosePositionValid==1
+    AND WE_ER_Finite(ClosePosition),1,0);
+
+WE_ER_DirectionalDataValid = IIf(
+    DirectionalProgressValid==1
+    AND WE_ER_Finite(DirectionalProgress)
+    AND WE_ER_Finite(AbsDirectionalProgress),1,0);
+
+WE_ER_PriorATRDescriptorValid = IIf(
+    PriorATRValid==1
+    AND WE_ER_Finite(PriorATR)
+    AND PriorATR>0,1,0);
+
+WE_ER_PreviousCloseDescriptorValid = IIf(
+    PreviousCloseValid==1
+    AND WE_ER_Finite(PreviousClose)
+    AND PreviousClose>0,1,0);
+
+WE_ER_PriorHigh = Ref(High,-1);
+WE_ER_PriorLow = Ref(Low,-1);
+WE_ER_PriorPriceInputValidRaw = Ref(PriceInputValid,-1);
+WE_ER_PriorPriceValid = IIf(
+    Nz(WE_ER_PriorPriceInputValidRaw,0)==1
+    AND WE_ER_Finite(WE_ER_PriorHigh)
+    AND WE_ER_Finite(WE_ER_PriorLow)
+    AND WE_ER_PreviousCloseDescriptorValid
+    AND WE_ER_PriorHigh>0
+    AND WE_ER_PriorLow>0
+    AND WE_ER_PriorHigh>=WE_ER_PriorLow,1,0);
+
+WE_ER_PressureDescriptorValid = IIf(
+    WE_ER_PriceValid
+    AND WE_ER_PriorPriceValid,1,0);
+
+WE_ER_DownsidePressureObserved = IIf(
+    WE_ER_PressureDescriptorValid,
+    IIf(Low<WE_ER_PriorLow OR Close<PreviousClose,1,0),Null);
+
+WE_ER_UpsidePressureObserved = IIf(
+    WE_ER_PressureDescriptorValid,
+    IIf(High>WE_ER_PriorHigh OR Close>PreviousClose,1,0),Null);
+
+WE_ER_ClimacticStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nCLIMACTIC-EFFORT-LIKE";
+WE_ER_ClimacticDirectionText = "INSUFFICIENT DATA\nDOWNWARD CLOSE PROGRESS\nUPWARD CLOSE PROGRESS\nFLAT / NEUTRAL CLOSE PROGRESS";
+WE_ER_AbsorptionStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nABSORPTION-LIKE OBSERVATION";
+WE_ER_StoppingStatusText = "INSUFFICIENT DATA\nNOT PRESENT\nSTOPPING-VOLUME-LIKE";
+WE_ER_StoppingResponseStatusText = "INSUFFICIENT DATA\nNO PRIOR STOPPING-VOLUME-LIKE\nIMMEDIATE RESPONSE NOT CONFIRMED\nIMMEDIATE RESPONSE CONFIRMED";
+_SECTION_END();
+
+_SECTION_BEGIN("45. Elevated expansion and Climactic Effort");
+WE_ER_ElevatedExpansionValid = IIf(
+    WE_ER_PriceValid
+    AND WE_ER_RSpreadDataValid
+    AND WE_ER_RVOLDataValid,1,0);
+
+WE_ER_ElevatedExpansionObservation = IIf(
+    WE_ER_ElevatedExpansionValid
+    AND RSpread>=WE_ER_ElevatedRSpreadMin
+    AND RVOL>=WE_ER_ElevatedRVOLMin,1,0);
+
+WE_ER_UltraEffortFlag = IIf(
+    WE_ER_RVOLDataValid,
+    IIf(RVOL>=WE_ER_UltraRVOLMin,1,0),Null);
+
+WE_ER_ClimacticEffortCode = IIf(
+    NOT WE_ER_PriceValid,0,
+    IIf(NOT WE_ER_RSpreadDataValid,0,
+    IIf(NOT WE_ER_RVOLDataValid,0,
+    IIf(RSpread>=WE_ER_ClimacticRSpreadMin
+        AND RVOL>=WE_ER_ClimacticRVOLMin,2,1))));
+
+WE_ER_ClimacticEffortValid = IIf(WE_ER_ClimacticEffortCode>0,1,0);
+WE_ER_ClimacticEffortReasonCode = IIf(
+    NOT WE_ER_PriceValid,2,
+    IIf(NOT WE_ER_RSpreadDataValid,3,
+    IIf(NOT WE_ER_RVOLDataValid,4,
+    IIf(RSpread<WE_ER_ClimacticRSpreadMin,5,
+    IIf(RVOL<WE_ER_ClimacticRVOLMin,6,0)))));
+
+WE_ER_ClimacticDirectionValid = IIf(
+    WE_ER_ClimacticEffortCode==2
+    AND WE_ER_PreviousCloseDescriptorValid,1,0);
+
+WE_ER_ClimacticDirectionCode = IIf(
+    NOT WE_ER_ClimacticDirectionValid,0,
+    IIf(Close<PreviousClose,1,
+    IIf(Close>PreviousClose,2,3)));
+
+WE_ER_ClimacticStrongCloseFlag = IIf(
+    WE_ER_ClimacticEffortCode==2,
+    IIf(WE_ER_ClosePositionDataValid AND ClosePosition>0.75,1,0),Null);
+
+WE_ER_ClimacticWeakCloseFlag = IIf(
+    WE_ER_ClimacticEffortCode==2,
+    IIf(WE_ER_ClosePositionDataValid AND ClosePosition<0.25,1,0),Null);
+
+WE_ER_ClimacticEventBarIndex = IIf(WE_ER_ClimacticEffortCode==2,WE_ER_SourceBarIndex,Null);
+WE_ER_ClimacticEventDateTime = IIf(WE_ER_ClimacticEffortCode==2,WE_ER_SourceDateTime,Null);
+WE_ER_ClimacticHigh = IIf(WE_ER_ClimacticEffortCode==2,High,Null);
+WE_ER_ClimacticLow = IIf(WE_ER_ClimacticEffortCode==2,Low,Null);
+WE_ER_ClimacticClose = IIf(WE_ER_ClimacticEffortCode==2,Close,Null);
+WE_ER_ClimacticRVOL = IIf(WE_ER_ClimacticEffortCode==2,RVOL,Null);
+WE_ER_ClimacticRSpread = IIf(WE_ER_ClimacticEffortCode==2,RSpread,Null);
+WE_ER_ClimacticClosePosition = IIf(WE_ER_ClimacticEffortCode==2 AND WE_ER_ClosePositionDataValid,ClosePosition,Null);
+WE_ER_ClimacticClosePositionValid = IIf(WE_ER_ClimacticEffortCode==2,WE_ER_ClosePositionDataValid,Null);
+WE_ER_ClimacticDirectionalProgress = IIf(WE_ER_ClimacticEffortCode==2 AND WE_ER_DirectionalDataValid,DirectionalProgress,Null);
+WE_ER_ClimacticDirectionalProgressValid = IIf(WE_ER_ClimacticEffortCode==2,WE_ER_DirectionalDataValid,Null);
+WE_ER_ClimacticPriorATR = IIf(WE_ER_ClimacticEffortCode==2 AND WE_ER_PriorATRDescriptorValid,PriorATR,Null);
+WE_ER_ClimacticPriorATRValid = IIf(WE_ER_ClimacticEffortCode==2,WE_ER_PriorATRDescriptorValid,Null);
+
+WE_ER_ClimacticContextSReferenceStatusCode = IIf(WE_ER_ClimacticEffortCode==2,SL_S_ReferenceStatusCode,Null);
+WE_ER_ClimacticContextSPositionStateCode = IIf(WE_ER_ClimacticEffortCode==2,SL_S_PositionStateCode,Null);
+WE_ER_ClimacticContextSLocationValid = IIf(WE_ER_ClimacticEffortCode==2,SL_S_LocationValid,Null);
+WE_ER_ClimacticContextSLocation = IIf(WE_ER_ClimacticEffortCode==2 AND SL_S_LocationValid==1,SL_S_Location,Null);
+WE_ER_ClimacticContextMReferenceStatusCode = IIf(WE_ER_ClimacticEffortCode==2,SL_M_ReferenceStatusCode,Null);
+WE_ER_ClimacticContextMPositionStateCode = IIf(WE_ER_ClimacticEffortCode==2,SL_M_PositionStateCode,Null);
+WE_ER_ClimacticContextMLocationValid = IIf(WE_ER_ClimacticEffortCode==2,SL_M_LocationValid,Null);
+WE_ER_ClimacticContextMLocation = IIf(WE_ER_ClimacticEffortCode==2 AND SL_M_LocationValid==1,SL_M_Location,Null);
+WE_ER_ClimacticContextLReferenceStatusCode = IIf(WE_ER_ClimacticEffortCode==2,SL_L_ReferenceStatusCode,Null);
+WE_ER_ClimacticContextLPositionStateCode = IIf(WE_ER_ClimacticEffortCode==2,SL_L_PositionStateCode,Null);
+WE_ER_ClimacticContextLLocationValid = IIf(WE_ER_ClimacticEffortCode==2,SL_L_LocationValid,Null);
+WE_ER_ClimacticContextLLocation = IIf(WE_ER_ClimacticEffortCode==2 AND SL_L_LocationValid==1,SL_L_Location,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("46. Absorption-like observation");
+WE_ER_AbsorptionDependenciesValid = IIf(
+    WE_ER_PriceValid
+    AND WE_ER_RVOLDataValid
+    AND WE_ER_DirectionalDataValid,1,0);
+
+WE_ER_AbsorptionCode = IIf(
+    NOT WE_ER_PriceValid,0,
+    IIf(NOT WE_ER_RVOLDataValid,0,
+    IIf(NOT WE_ER_DirectionalDataValid,0,
+    IIf(RVOL>=WE_ER_AbsorptionRVOLMin
+        AND AbsDirectionalProgress<=WE_ER_AbsorptionMaxDirectionalProgress,2,1))));
+
+WE_ER_AbsorptionValid = IIf(WE_ER_AbsorptionCode>0,1,0);
+WE_ER_AbsorptionReasonCode = IIf(
+    NOT WE_ER_PriceValid,2,
+    IIf(NOT WE_ER_RVOLDataValid,3,
+    IIf(NOT WE_ER_DirectionalDataValid,4,
+    IIf(RVOL<WE_ER_AbsorptionRVOLMin,5,
+    IIf(AbsDirectionalProgress>WE_ER_AbsorptionMaxDirectionalProgress,6,0)))));
+
+WE_ER_AbsorptionEventBarIndex = IIf(WE_ER_AbsorptionCode==2,WE_ER_SourceBarIndex,Null);
+WE_ER_AbsorptionEventDateTime = IIf(WE_ER_AbsorptionCode==2,WE_ER_SourceDateTime,Null);
+WE_ER_AbsorptionRVOL = IIf(WE_ER_AbsorptionCode==2,RVOL,Null);
+WE_ER_AbsorptionDirectionalProgress = IIf(WE_ER_AbsorptionCode==2,DirectionalProgress,Null);
+WE_ER_AbsorptionAbsDirectionalProgress = IIf(WE_ER_AbsorptionCode==2,AbsDirectionalProgress,Null);
+WE_ER_AbsorptionPressureValid = IIf(WE_ER_AbsorptionCode==2,WE_ER_PressureDescriptorValid,Null);
+WE_ER_AbsorptionDownsidePressureObserved = IIf(WE_ER_AbsorptionCode==2,WE_ER_DownsidePressureObserved,Null);
+WE_ER_AbsorptionUpsidePressureObserved = IIf(WE_ER_AbsorptionCode==2,WE_ER_UpsidePressureObserved,Null);
+WE_ER_AbsorptionRSpread = IIf(WE_ER_AbsorptionCode==2 AND WE_ER_RSpreadDataValid,RSpread,Null);
+WE_ER_AbsorptionRSpreadValid = IIf(WE_ER_AbsorptionCode==2,WE_ER_RSpreadDataValid,Null);
+WE_ER_AbsorptionClosePosition = IIf(WE_ER_AbsorptionCode==2 AND WE_ER_ClosePositionDataValid,ClosePosition,Null);
+WE_ER_AbsorptionClosePositionValid = IIf(WE_ER_AbsorptionCode==2,WE_ER_ClosePositionDataValid,Null);
+
+WE_ER_AbsorptionContextSReferenceStatusCode = IIf(WE_ER_AbsorptionCode==2,SL_S_ReferenceStatusCode,Null);
+WE_ER_AbsorptionContextSPositionStateCode = IIf(WE_ER_AbsorptionCode==2,SL_S_PositionStateCode,Null);
+WE_ER_AbsorptionContextSLocationValid = IIf(WE_ER_AbsorptionCode==2,SL_S_LocationValid,Null);
+WE_ER_AbsorptionContextSLocation = IIf(WE_ER_AbsorptionCode==2 AND SL_S_LocationValid==1,SL_S_Location,Null);
+WE_ER_AbsorptionContextMReferenceStatusCode = IIf(WE_ER_AbsorptionCode==2,SL_M_ReferenceStatusCode,Null);
+WE_ER_AbsorptionContextMPositionStateCode = IIf(WE_ER_AbsorptionCode==2,SL_M_PositionStateCode,Null);
+WE_ER_AbsorptionContextMLocationValid = IIf(WE_ER_AbsorptionCode==2,SL_M_LocationValid,Null);
+WE_ER_AbsorptionContextMLocation = IIf(WE_ER_AbsorptionCode==2 AND SL_M_LocationValid==1,SL_M_Location,Null);
+WE_ER_AbsorptionContextLReferenceStatusCode = IIf(WE_ER_AbsorptionCode==2,SL_L_ReferenceStatusCode,Null);
+WE_ER_AbsorptionContextLPositionStateCode = IIf(WE_ER_AbsorptionCode==2,SL_L_PositionStateCode,Null);
+WE_ER_AbsorptionContextLLocationValid = IIf(WE_ER_AbsorptionCode==2,SL_L_LocationValid,Null);
+WE_ER_AbsorptionContextLLocation = IIf(WE_ER_AbsorptionCode==2 AND SL_L_LocationValid==1,SL_L_Location,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("47. Stopping Volume-like origin");
+WE_ER_StoppingDependenciesValid = IIf(
+    WE_ER_PriceValid
+    AND WE_ER_PriorPriceValid
+    AND WE_ER_RVOLDataValid
+    AND WE_ER_ClosePositionDataValid,1,0);
+
+WE_ER_StoppingVolumeCode = IIf(
+    NOT WE_ER_PriceValid,0,
+    IIf(NOT WE_ER_PriorPriceValid,0,
+    IIf(NOT WE_ER_RVOLDataValid,0,
+    IIf(NOT WE_ER_ClosePositionDataValid,0,
+    IIf(RVOL<WE_ER_StoppingRVOLMin,1,
+    IIf(WE_ER_DownsidePressureObserved!=1,1,
+    IIf(ClosePosition<WE_ER_StoppingMinClosePosition,1,2)))))));
+
+WE_ER_StoppingVolumeValid = IIf(WE_ER_StoppingVolumeCode>0,1,0);
+WE_ER_StoppingVolumeReasonCode = IIf(
+    NOT WE_ER_PriceValid,2,
+    IIf(NOT WE_ER_PriorPriceValid,3,
+    IIf(NOT WE_ER_RVOLDataValid,4,
+    IIf(NOT WE_ER_ClosePositionDataValid,5,
+    IIf(RVOL<WE_ER_StoppingRVOLMin,6,
+    IIf(WE_ER_DownsidePressureObserved!=1,7,
+    IIf(ClosePosition<WE_ER_StoppingMinClosePosition,8,0)))))));
+
+WE_ER_StoppingUpperCloseFlag = IIf(
+    WE_ER_StoppingVolumeCode==2,
+    IIf(ClosePosition>WE_ER_StoppingUpperCloseMin,1,0),Null);
+WE_ER_StoppingStrongRecoveryCloseFlag = IIf(
+    WE_ER_StoppingVolumeCode==2,
+    IIf(ClosePosition>WE_ER_StoppingStrongRecoveryMin,1,0),Null);
+
+WE_ER_StoppingEventBarIndex = IIf(WE_ER_StoppingVolumeCode==2,WE_ER_SourceBarIndex,Null);
+WE_ER_StoppingEventDateTime = IIf(WE_ER_StoppingVolumeCode==2,WE_ER_SourceDateTime,Null);
+WE_ER_StoppingOpen = IIf(WE_ER_StoppingVolumeCode==2 AND WE_ER_OpenDescriptorValid,Open,Null);
+WE_ER_StoppingOpenValid = IIf(WE_ER_StoppingVolumeCode==2,WE_ER_OpenDescriptorValid,Null);
+WE_ER_StoppingHigh = IIf(WE_ER_StoppingVolumeCode==2,High,Null);
+WE_ER_StoppingLow = IIf(WE_ER_StoppingVolumeCode==2,Low,Null);
+WE_ER_StoppingClose = IIf(WE_ER_StoppingVolumeCode==2,Close,Null);
+WE_ER_StoppingPriorLow = IIf(WE_ER_StoppingVolumeCode==2,WE_ER_PriorLow,Null);
+WE_ER_StoppingPreviousClose = IIf(WE_ER_StoppingVolumeCode==2,PreviousClose,Null);
+WE_ER_StoppingRVOL = IIf(WE_ER_StoppingVolumeCode==2,RVOL,Null);
+WE_ER_StoppingRSpread = IIf(WE_ER_StoppingVolumeCode==2 AND WE_ER_RSpreadDataValid,RSpread,Null);
+WE_ER_StoppingRSpreadValid = IIf(WE_ER_StoppingVolumeCode==2,WE_ER_RSpreadDataValid,Null);
+WE_ER_StoppingClosePosition = IIf(WE_ER_StoppingVolumeCode==2,ClosePosition,Null);
+WE_ER_StoppingDownsidePressureObserved = IIf(WE_ER_StoppingVolumeCode==2,WE_ER_DownsidePressureObserved,Null);
+WE_ER_StoppingDirectionalProgress = IIf(WE_ER_StoppingVolumeCode==2 AND WE_ER_DirectionalDataValid,DirectionalProgress,Null);
+WE_ER_StoppingDirectionalProgressValid = IIf(WE_ER_StoppingVolumeCode==2,WE_ER_DirectionalDataValid,Null);
+
+WE_ER_StoppingContextSReferenceStatusCode = IIf(WE_ER_StoppingVolumeCode==2,SL_S_ReferenceStatusCode,Null);
+WE_ER_StoppingContextSPositionStateCode = IIf(WE_ER_StoppingVolumeCode==2,SL_S_PositionStateCode,Null);
+WE_ER_StoppingContextSDistanceValid = IIf(WE_ER_StoppingVolumeCode==2,SL_S_DistanceValid,Null);
+WE_ER_StoppingContextSCloseDistanceLower = IIf(WE_ER_StoppingVolumeCode==2 AND SL_S_DistanceValid==1,SL_S_CloseDistanceLower,Null);
+WE_ER_StoppingContextSLocationValid = IIf(WE_ER_StoppingVolumeCode==2,SL_S_LocationValid,Null);
+WE_ER_StoppingContextSLocation = IIf(WE_ER_StoppingVolumeCode==2 AND SL_S_LocationValid==1,SL_S_Location,Null);
+WE_ER_StoppingContextMReferenceStatusCode = IIf(WE_ER_StoppingVolumeCode==2,SL_M_ReferenceStatusCode,Null);
+WE_ER_StoppingContextMPositionStateCode = IIf(WE_ER_StoppingVolumeCode==2,SL_M_PositionStateCode,Null);
+WE_ER_StoppingContextMDistanceValid = IIf(WE_ER_StoppingVolumeCode==2,SL_M_DistanceValid,Null);
+WE_ER_StoppingContextMCloseDistanceLower = IIf(WE_ER_StoppingVolumeCode==2 AND SL_M_DistanceValid==1,SL_M_CloseDistanceLower,Null);
+WE_ER_StoppingContextMLocationValid = IIf(WE_ER_StoppingVolumeCode==2,SL_M_LocationValid,Null);
+WE_ER_StoppingContextMLocation = IIf(WE_ER_StoppingVolumeCode==2 AND SL_M_LocationValid==1,SL_M_Location,Null);
+WE_ER_StoppingContextLReferenceStatusCode = IIf(WE_ER_StoppingVolumeCode==2,SL_L_ReferenceStatusCode,Null);
+WE_ER_StoppingContextLPositionStateCode = IIf(WE_ER_StoppingVolumeCode==2,SL_L_PositionStateCode,Null);
+WE_ER_StoppingContextLDistanceValid = IIf(WE_ER_StoppingVolumeCode==2,SL_L_DistanceValid,Null);
+WE_ER_StoppingContextLCloseDistanceLower = IIf(WE_ER_StoppingVolumeCode==2 AND SL_L_DistanceValid==1,SL_L_CloseDistanceLower,Null);
+WE_ER_StoppingContextLLocationValid = IIf(WE_ER_StoppingVolumeCode==2,SL_L_LocationValid,Null);
+WE_ER_StoppingContextLLocation = IIf(WE_ER_StoppingVolumeCode==2 AND SL_L_LocationValid==1,SL_L_Location,Null);
+
+WE_ER_StoppingPriorPivotLowValid = IIf(WE_ER_StoppingVolumeCode==2,SL_PivotLowLatestPriorValid,Null);
+WE_ER_StoppingPriorPivotLowPrice = IIf(WE_ER_StoppingVolumeCode==2 AND SL_PivotLowLatestPriorValid==1,SL_PivotLowLatestPriorPrice,Null);
+WE_ER_StoppingPriorPivotLowExtremeBarIndex = IIf(WE_ER_StoppingVolumeCode==2 AND SL_PivotLowLatestPriorValid==1,SL_PivotLowLatestPriorExtremeBarIndex,Null);
+WE_ER_StoppingPriorPivotLowExtremeDateTime = IIf(WE_ER_StoppingVolumeCode==2 AND SL_PivotLowLatestPriorValid==1,SL_PivotLowLatestPriorExtremeDateTime,Null);
+WE_ER_StoppingPriorPivotLowConfirmBarIndex = IIf(WE_ER_StoppingVolumeCode==2 AND SL_PivotLowLatestPriorValid==1,SL_PivotLowLatestPriorConfirmBarIndex,Null);
+WE_ER_StoppingPriorPivotLowConfirmDateTime = IIf(WE_ER_StoppingVolumeCode==2 AND SL_PivotLowLatestPriorValid==1,SL_PivotLowLatestPriorConfirmDateTime,Null);
+WE_ER_StoppingPriorPivotLowAge = IIf(WE_ER_StoppingVolumeCode==2 AND SL_PivotLowLatestPriorValid==1,SL_PivotLowLatestPriorAge,Null);
+WE_ER_StoppingPriorPivotLowBarsSinceConfirmation = IIf(WE_ER_StoppingVolumeCode==2 AND SL_PivotLowLatestPriorValid==1,SL_PivotLowLatestPriorBarsSinceConfirmation,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("48. Stopping Volume next-bar immediate response");
+WE_ER_PriorStoppingPresent = IIf(Nz(Ref(WE_ER_StoppingVolumeCode,-1),-1)==2,1,0);
+WE_ER_PriorStoppingEventBarIndex = Ref(WE_ER_StoppingEventBarIndex,-1);
+WE_ER_PriorStoppingEventDateTime = Ref(WE_ER_StoppingEventDateTime,-1);
+WE_ER_PriorStoppingOpen = Ref(WE_ER_StoppingOpen,-1);
+WE_ER_PriorStoppingOpenValid = Ref(WE_ER_StoppingOpenValid,-1);
+WE_ER_PriorStoppingHigh = Ref(WE_ER_StoppingHigh,-1);
+WE_ER_PriorStoppingLow = Ref(WE_ER_StoppingLow,-1);
+WE_ER_PriorStoppingClose = Ref(WE_ER_StoppingClose,-1);
+WE_ER_PriorStoppingRVOL = Ref(WE_ER_StoppingRVOL,-1);
+WE_ER_PriorStoppingRSpread = Ref(WE_ER_StoppingRSpread,-1);
+WE_ER_PriorStoppingRSpreadValid = Ref(WE_ER_StoppingRSpreadValid,-1);
+WE_ER_PriorStoppingClosePosition = Ref(WE_ER_StoppingClosePosition,-1);
+WE_ER_PriorStoppingSPositionStateCode = Ref(WE_ER_StoppingContextSPositionStateCode,-1);
+WE_ER_PriorStoppingSLocation = Ref(WE_ER_StoppingContextSLocation,-1);
+WE_ER_PriorStoppingSLocationValid = Ref(WE_ER_StoppingContextSLocationValid,-1);
+WE_ER_PriorStoppingMPositionStateCode = Ref(WE_ER_StoppingContextMPositionStateCode,-1);
+WE_ER_PriorStoppingMLocation = Ref(WE_ER_StoppingContextMLocation,-1);
+WE_ER_PriorStoppingMLocationValid = Ref(WE_ER_StoppingContextMLocationValid,-1);
+WE_ER_PriorStoppingLPositionStateCode = Ref(WE_ER_StoppingContextLPositionStateCode,-1);
+WE_ER_PriorStoppingLLocation = Ref(WE_ER_StoppingContextLLocation,-1);
+WE_ER_PriorStoppingLLocationValid = Ref(WE_ER_StoppingContextLLocationValid,-1);
+WE_ER_PriorStoppingPivotLowValid = Ref(WE_ER_StoppingPriorPivotLowValid,-1);
+WE_ER_PriorStoppingPivotLowPrice = Ref(WE_ER_StoppingPriorPivotLowPrice,-1);
+WE_ER_PriorStoppingPivotLowConfirmBarIndex = Ref(WE_ER_StoppingPriorPivotLowConfirmBarIndex,-1);
+WE_ER_PriorStoppingPivotLowConfirmDateTime = Ref(WE_ER_StoppingPriorPivotLowConfirmDateTime,-1);
+
+WE_ER_StoppingEvaluationPriceValid = IIf(
+    WE_ER_PriceValid
+    AND WE_ER_Finite(Low)
+    AND WE_ER_Finite(Close),1,0);
+
+WE_ER_StoppingResponseLowHeld = IIf(
+    WE_ER_PriorStoppingPresent
+    AND WE_ER_StoppingEvaluationPriceValid
+    AND WE_ER_Finite(WE_ER_PriorStoppingLow)
+    AND Low>=WE_ER_PriorStoppingLow,1,0);
+
+WE_ER_StoppingResponseCloseImproved = IIf(
+    WE_ER_PriorStoppingPresent
+    AND WE_ER_StoppingEvaluationPriceValid
+    AND WE_ER_Finite(WE_ER_PriorStoppingClose)
+    AND Close>WE_ER_PriorStoppingClose,1,0);
+
+WE_ER_StoppingResponseCode = IIf(
+    NOT WE_ER_PriorStoppingPresent,1,
+    IIf(NOT WE_ER_StoppingEvaluationPriceValid,0,
+    IIf(NOT WE_ER_Finite(WE_ER_PriorStoppingLow)
+        OR NOT WE_ER_Finite(WE_ER_PriorStoppingClose),0,
+    IIf(WE_ER_StoppingResponseLowHeld
+        AND WE_ER_StoppingResponseCloseImproved,3,2))));
+
+WE_ER_StoppingResponseValid = IIf(WE_ER_StoppingResponseCode>0,1,0);
+WE_ER_StoppingResponseConfirmed = IIf(WE_ER_StoppingResponseCode==3,1,0);
+WE_ER_StoppingResponseReasonCode = IIf(
+    NOT WE_ER_PriorStoppingPresent,0,
+    IIf(NOT WE_ER_StoppingEvaluationPriceValid,1,
+    IIf(NOT WE_ER_Finite(WE_ER_PriorStoppingLow)
+        OR NOT WE_ER_Finite(WE_ER_PriorStoppingClose),5,
+    IIf(NOT WE_ER_StoppingResponseLowHeld
+        AND NOT WE_ER_StoppingResponseCloseImproved,4,
+    IIf(NOT WE_ER_StoppingResponseLowHeld,2,
+    IIf(NOT WE_ER_StoppingResponseCloseImproved,3,0))))));
+
+WE_ER_StoppingResponseOriginBarIndex = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingEventBarIndex,Null);
+WE_ER_StoppingResponseOriginDateTime = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingEventDateTime,Null);
+WE_ER_StoppingResponseOriginOpen = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingOpen,Null);
+WE_ER_StoppingResponseOriginOpenValid = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingOpenValid,Null);
+WE_ER_StoppingResponseOriginHigh = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingHigh,Null);
+WE_ER_StoppingResponseOriginLow = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingLow,Null);
+WE_ER_StoppingResponseOriginClose = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingClose,Null);
+WE_ER_StoppingResponseOriginRVOL = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingRVOL,Null);
+WE_ER_StoppingResponseOriginRSpread = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingRSpread,Null);
+WE_ER_StoppingResponseOriginRSpreadValid = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingRSpreadValid,Null);
+WE_ER_StoppingResponseOriginClosePosition = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingClosePosition,Null);
+WE_ER_StoppingResponseOriginSPositionStateCode = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingSPositionStateCode,Null);
+WE_ER_StoppingResponseOriginSLocation = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingSLocation,Null);
+WE_ER_StoppingResponseOriginSLocationValid = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingSLocationValid,Null);
+WE_ER_StoppingResponseOriginMPositionStateCode = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingMPositionStateCode,Null);
+WE_ER_StoppingResponseOriginMLocation = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingMLocation,Null);
+WE_ER_StoppingResponseOriginMLocationValid = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingMLocationValid,Null);
+WE_ER_StoppingResponseOriginLPositionStateCode = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingLPositionStateCode,Null);
+WE_ER_StoppingResponseOriginLLocation = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingLLocation,Null);
+WE_ER_StoppingResponseOriginLLocationValid = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingLLocationValid,Null);
+WE_ER_StoppingResponseOriginPivotLowValid = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingPivotLowValid,Null);
+WE_ER_StoppingResponseOriginPivotLowPrice = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingPivotLowPrice,Null);
+WE_ER_StoppingResponseOriginPivotLowConfirmBarIndex = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingPivotLowConfirmBarIndex,Null);
+WE_ER_StoppingResponseOriginPivotLowConfirmDateTime = IIf(WE_ER_PriorStoppingPresent,WE_ER_PriorStoppingPivotLowConfirmDateTime,Null);
+WE_ER_StoppingResponseEvaluationBarIndex = IIf(WE_ER_PriorStoppingPresent,WE_ER_SourceBarIndex,Null);
+WE_ER_StoppingResponseEvaluationDateTime = IIf(WE_ER_PriorStoppingPresent,WE_ER_SourceDateTime,Null);
+WE_ER_StoppingResponseEvaluationLow = IIf(WE_ER_PriorStoppingPresent AND WE_ER_StoppingEvaluationPriceValid,Low,Null);
+WE_ER_StoppingResponseEvaluationClose = IIf(WE_ER_PriorStoppingPresent AND WE_ER_StoppingEvaluationPriceValid,Close,Null);
+_SECTION_END();
+
+_SECTION_BEGIN("49. Effort Result Event exploration");
+// Development evidence output only. Upstream Filter is not changed.
+AddColumn(WE_ER_SourceBarIndex,"WE_ER_SourceBarIndex",1.0);
+AddColumn(WE_ER_SourceDateTime,"WE_ER_SourceDateTime",formatDateTime);
+AddColumn(WE_ER_ElevatedExpansionValid,"WE_ER_ElevatedExpansionValid",1.0);
+AddColumn(WE_ER_ElevatedExpansionObservation,"WE_ER_ElevatedExpansionObservation",1.0);
+AddColumn(WE_ER_UltraEffortFlag,"WE_ER_UltraEffortFlag",1.0);
+
+AddColumn(WE_ER_ClimacticEffortCode,"WE_ER_ClimacticEffortCode",1.0);
+AddColumn(WE_ER_ClimacticEffortValid,"WE_ER_ClimacticEffortValid",1.0);
+AddColumn(WE_ER_ClimacticEffortReasonCode,"WE_ER_ClimacticEffortReasonCode",1.0);
+AddMultiTextColumn(WE_ER_ClimacticEffortCode,WE_ER_ClimacticStatusText,"WE_ER_ClimacticEffortStatus");
+AddColumn(WE_ER_ClimacticDirectionCode,"WE_ER_ClimacticDirectionCode",1.0);
+AddColumn(WE_ER_ClimacticDirectionValid,"WE_ER_ClimacticDirectionValid",1.0);
+AddMultiTextColumn(WE_ER_ClimacticDirectionCode,WE_ER_ClimacticDirectionText,"WE_ER_ClimacticDirection");
+AddColumn(WE_ER_ClimacticEventBarIndex,"WE_ER_ClimacticEventBarIndex",1.0);
+AddColumn(WE_ER_ClimacticEventDateTime,"WE_ER_ClimacticEventDateTime",formatDateTime);
+AddColumn(WE_ER_ClimacticRVOL,"WE_ER_ClimacticRVOL",1.12);
+AddColumn(WE_ER_ClimacticRSpread,"WE_ER_ClimacticRSpread",1.12);
+AddColumn(WE_ER_ClimacticClosePosition,"WE_ER_ClimacticClosePosition",1.12);
+AddColumn(WE_ER_ClimacticClosePositionValid,"WE_ER_ClimacticClosePositionValid",1.0);
+AddColumn(WE_ER_ClimacticStrongCloseFlag,"WE_ER_ClimacticStrongCloseFlag",1.0);
+AddColumn(WE_ER_ClimacticWeakCloseFlag,"WE_ER_ClimacticWeakCloseFlag",1.0);
+AddColumn(WE_ER_ClimacticDirectionalProgress,"WE_ER_ClimacticDirectionalProgress",1.12);
+AddColumn(WE_ER_ClimacticDirectionalProgressValid,"WE_ER_ClimacticDirectionalProgressValid",1.0);
+AddColumn(WE_ER_ClimacticPriorATR,"WE_ER_ClimacticPriorATR",1.12);
+AddColumn(WE_ER_ClimacticPriorATRValid,"WE_ER_ClimacticPriorATRValid",1.0);
+AddColumn(WE_ER_ClimacticContextSPositionStateCode,"WE_ER_ClimacticContextSPositionStateCode",1.0);
+AddColumn(WE_ER_ClimacticContextSLocation,"WE_ER_ClimacticContextSLocation",1.12);
+AddColumn(WE_ER_ClimacticContextMPositionStateCode,"WE_ER_ClimacticContextMPositionStateCode",1.0);
+AddColumn(WE_ER_ClimacticContextMLocation,"WE_ER_ClimacticContextMLocation",1.12);
+AddColumn(WE_ER_ClimacticContextLPositionStateCode,"WE_ER_ClimacticContextLPositionStateCode",1.0);
+AddColumn(WE_ER_ClimacticContextLLocation,"WE_ER_ClimacticContextLLocation",1.12);
+
+AddColumn(WE_ER_AbsorptionCode,"WE_ER_AbsorptionCode",1.0);
+AddColumn(WE_ER_AbsorptionValid,"WE_ER_AbsorptionValid",1.0);
+AddColumn(WE_ER_AbsorptionReasonCode,"WE_ER_AbsorptionReasonCode",1.0);
+AddMultiTextColumn(WE_ER_AbsorptionCode,WE_ER_AbsorptionStatusText,"WE_ER_AbsorptionStatus");
+AddColumn(WE_ER_AbsorptionEventBarIndex,"WE_ER_AbsorptionEventBarIndex",1.0);
+AddColumn(WE_ER_AbsorptionEventDateTime,"WE_ER_AbsorptionEventDateTime",formatDateTime);
+AddColumn(WE_ER_AbsorptionRVOL,"WE_ER_AbsorptionRVOL",1.12);
+AddColumn(WE_ER_AbsorptionDirectionalProgress,"WE_ER_AbsorptionDirectionalProgress",1.12);
+AddColumn(WE_ER_AbsorptionAbsDirectionalProgress,"WE_ER_AbsorptionAbsDirectionalProgress",1.12);
+AddColumn(WE_ER_AbsorptionPressureValid,"WE_ER_AbsorptionPressureValid",1.0);
+AddColumn(WE_ER_AbsorptionDownsidePressureObserved,"WE_ER_AbsorptionDownsidePressureObserved",1.0);
+AddColumn(WE_ER_AbsorptionUpsidePressureObserved,"WE_ER_AbsorptionUpsidePressureObserved",1.0);
+AddColumn(WE_ER_AbsorptionRSpread,"WE_ER_AbsorptionRSpread",1.12);
+AddColumn(WE_ER_AbsorptionRSpreadValid,"WE_ER_AbsorptionRSpreadValid",1.0);
+AddColumn(WE_ER_AbsorptionClosePosition,"WE_ER_AbsorptionClosePosition",1.12);
+AddColumn(WE_ER_AbsorptionClosePositionValid,"WE_ER_AbsorptionClosePositionValid",1.0);
+AddColumn(WE_ER_AbsorptionContextSPositionStateCode,"WE_ER_AbsorptionContextSPositionStateCode",1.0);
+AddColumn(WE_ER_AbsorptionContextSLocation,"WE_ER_AbsorptionContextSLocation",1.12);
+AddColumn(WE_ER_AbsorptionContextMPositionStateCode,"WE_ER_AbsorptionContextMPositionStateCode",1.0);
+AddColumn(WE_ER_AbsorptionContextMLocation,"WE_ER_AbsorptionContextMLocation",1.12);
+AddColumn(WE_ER_AbsorptionContextLPositionStateCode,"WE_ER_AbsorptionContextLPositionStateCode",1.0);
+AddColumn(WE_ER_AbsorptionContextLLocation,"WE_ER_AbsorptionContextLLocation",1.12);
+
+AddColumn(WE_ER_StoppingVolumeCode,"WE_ER_StoppingVolumeCode",1.0);
+AddColumn(WE_ER_StoppingVolumeValid,"WE_ER_StoppingVolumeValid",1.0);
+AddColumn(WE_ER_StoppingVolumeReasonCode,"WE_ER_StoppingVolumeReasonCode",1.0);
+AddMultiTextColumn(WE_ER_StoppingVolumeCode,WE_ER_StoppingStatusText,"WE_ER_StoppingVolumeStatus");
+AddColumn(WE_ER_StoppingEventBarIndex,"WE_ER_StoppingEventBarIndex",1.0);
+AddColumn(WE_ER_StoppingEventDateTime,"WE_ER_StoppingEventDateTime",formatDateTime);
+AddColumn(WE_ER_StoppingOpen,"WE_ER_StoppingOpen",1.12);
+AddColumn(WE_ER_StoppingOpenValid,"WE_ER_StoppingOpenValid",1.0);
+AddColumn(WE_ER_StoppingHigh,"WE_ER_StoppingHigh",1.12);
+AddColumn(WE_ER_StoppingLow,"WE_ER_StoppingLow",1.12);
+AddColumn(WE_ER_StoppingClose,"WE_ER_StoppingClose",1.12);
+AddColumn(WE_ER_StoppingPriorLow,"WE_ER_StoppingPriorLow",1.12);
+AddColumn(WE_ER_StoppingPreviousClose,"WE_ER_StoppingPreviousClose",1.12);
+AddColumn(WE_ER_StoppingRVOL,"WE_ER_StoppingRVOL",1.12);
+AddColumn(WE_ER_StoppingRSpread,"WE_ER_StoppingRSpread",1.12);
+AddColumn(WE_ER_StoppingRSpreadValid,"WE_ER_StoppingRSpreadValid",1.0);
+AddColumn(WE_ER_StoppingClosePosition,"WE_ER_StoppingClosePosition",1.12);
+AddColumn(WE_ER_StoppingDownsidePressureObserved,"WE_ER_StoppingDownsidePressureObserved",1.0);
+AddColumn(WE_ER_StoppingUpperCloseFlag,"WE_ER_StoppingUpperCloseFlag",1.0);
+AddColumn(WE_ER_StoppingStrongRecoveryCloseFlag,"WE_ER_StoppingStrongRecoveryCloseFlag",1.0);
+AddColumn(WE_ER_StoppingContextSPositionStateCode,"WE_ER_StoppingContextSPositionStateCode",1.0);
+AddColumn(WE_ER_StoppingContextSCloseDistanceLower,"WE_ER_StoppingContextSCloseDistanceLower",1.12);
+AddColumn(WE_ER_StoppingContextSLocation,"WE_ER_StoppingContextSLocation",1.12);
+AddColumn(WE_ER_StoppingContextMPositionStateCode,"WE_ER_StoppingContextMPositionStateCode",1.0);
+AddColumn(WE_ER_StoppingContextMCloseDistanceLower,"WE_ER_StoppingContextMCloseDistanceLower",1.12);
+AddColumn(WE_ER_StoppingContextMLocation,"WE_ER_StoppingContextMLocation",1.12);
+AddColumn(WE_ER_StoppingContextLPositionStateCode,"WE_ER_StoppingContextLPositionStateCode",1.0);
+AddColumn(WE_ER_StoppingContextLCloseDistanceLower,"WE_ER_StoppingContextLCloseDistanceLower",1.12);
+AddColumn(WE_ER_StoppingContextLLocation,"WE_ER_StoppingContextLLocation",1.12);
+AddColumn(WE_ER_StoppingPriorPivotLowValid,"WE_ER_StoppingPriorPivotLowValid",1.0);
+AddColumn(WE_ER_StoppingPriorPivotLowPrice,"WE_ER_StoppingPriorPivotLowPrice",1.12);
+AddColumn(WE_ER_StoppingPriorPivotLowConfirmBarIndex,"WE_ER_StoppingPriorPivotLowConfirmBarIndex",1.0);
+AddColumn(WE_ER_StoppingPriorPivotLowConfirmDateTime,"WE_ER_StoppingPriorPivotLowConfirmDateTime",formatDateTime);
+AddColumn(WE_ER_StoppingPriorPivotLowAge,"WE_ER_StoppingPriorPivotLowAge",1.0);
+AddColumn(WE_ER_StoppingPriorPivotLowBarsSinceConfirmation,"WE_ER_StoppingPriorPivotLowBarsSinceConfirmation",1.0);
+
+AddColumn(WE_ER_StoppingResponseCode,"WE_ER_StoppingResponseCode",1.0);
+AddColumn(WE_ER_StoppingResponseValid,"WE_ER_StoppingResponseValid",1.0);
+AddColumn(WE_ER_StoppingResponseConfirmed,"WE_ER_StoppingResponseConfirmed",1.0);
+AddColumn(WE_ER_StoppingResponseReasonCode,"WE_ER_StoppingResponseReasonCode",1.0);
+AddMultiTextColumn(WE_ER_StoppingResponseCode,WE_ER_StoppingResponseStatusText,"WE_ER_StoppingResponseStatus");
+AddColumn(WE_ER_StoppingResponseOriginBarIndex,"WE_ER_StoppingResponseOriginBarIndex",1.0);
+AddColumn(WE_ER_StoppingResponseOriginDateTime,"WE_ER_StoppingResponseOriginDateTime",formatDateTime);
+AddColumn(WE_ER_StoppingResponseOriginLow,"WE_ER_StoppingResponseOriginLow",1.12);
+AddColumn(WE_ER_StoppingResponseOriginClose,"WE_ER_StoppingResponseOriginClose",1.12);
+AddColumn(WE_ER_StoppingResponseOriginRVOL,"WE_ER_StoppingResponseOriginRVOL",1.12);
+AddColumn(WE_ER_StoppingResponseOriginRSpread,"WE_ER_StoppingResponseOriginRSpread",1.12);
+AddColumn(WE_ER_StoppingResponseOriginClosePosition,"WE_ER_StoppingResponseOriginClosePosition",1.12);
+AddColumn(WE_ER_StoppingResponseOriginSPositionStateCode,"WE_ER_StoppingResponseOriginSPositionStateCode",1.0);
+AddColumn(WE_ER_StoppingResponseOriginSLocation,"WE_ER_StoppingResponseOriginSLocation",1.12);
+AddColumn(WE_ER_StoppingResponseOriginMPositionStateCode,"WE_ER_StoppingResponseOriginMPositionStateCode",1.0);
+AddColumn(WE_ER_StoppingResponseOriginMLocation,"WE_ER_StoppingResponseOriginMLocation",1.12);
+AddColumn(WE_ER_StoppingResponseOriginLPositionStateCode,"WE_ER_StoppingResponseOriginLPositionStateCode",1.0);
+AddColumn(WE_ER_StoppingResponseOriginLLocation,"WE_ER_StoppingResponseOriginLLocation",1.12);
+AddColumn(WE_ER_StoppingResponseOriginPivotLowValid,"WE_ER_StoppingResponseOriginPivotLowValid",1.0);
+AddColumn(WE_ER_StoppingResponseOriginPivotLowPrice,"WE_ER_StoppingResponseOriginPivotLowPrice",1.12);
+AddColumn(WE_ER_StoppingResponseOriginPivotLowConfirmBarIndex,"WE_ER_StoppingResponseOriginPivotLowConfirmBarIndex",1.0);
+AddColumn(WE_ER_StoppingResponseOriginPivotLowConfirmDateTime,"WE_ER_StoppingResponseOriginPivotLowConfirmDateTime",formatDateTime);
+AddColumn(WE_ER_StoppingResponseEvaluationBarIndex,"WE_ER_StoppingResponseEvaluationBarIndex",1.0);
+AddColumn(WE_ER_StoppingResponseEvaluationDateTime,"WE_ER_StoppingResponseEvaluationDateTime",formatDateTime);
+AddColumn(WE_ER_StoppingResponseEvaluationLow,"WE_ER_StoppingResponseEvaluationLow",1.12);
+AddColumn(WE_ER_StoppingResponseEvaluationClose,"WE_ER_StoppingResponseEvaluationClose",1.12);
+AddColumn(WE_ER_StoppingResponseLowHeld,"WE_ER_StoppingResponseLowHeld",1.0);
+AddColumn(WE_ER_StoppingResponseCloseImproved,"WE_ER_StoppingResponseCloseImproved",1.0);
+_SECTION_END();

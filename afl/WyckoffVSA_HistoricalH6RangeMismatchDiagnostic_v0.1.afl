@@ -1,0 +1,116 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H6 range mismatch diagnostic cho DMC / SBM / TV3.
+
+    Doc-only diagnostic. Khong ghi StaticVar, khong thay methodology/threshold/
+    enum/decision surface, khong tao trading signal.
+
+    Muc tieu:
+    - doi chieu RangePosition historical H4 voi production Daily Snapshot;
+    - doi chieu truc tiep stock range state tai moc 11/09/2026 tu causal arrays;
+    - xac dinh mismatch nam o lower/upper range selection hay payload da luu.
+
+    UI tieng Viet ASCII khong dau cho AmiBroker 6.20.01.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+SetOption("NoDefaultColumns",True);
+
+#include_once <WyckoffVSA_HistoricalMTFPayloadProof_v0.1.afl>
+
+function H6R_Finite(x)
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+H6R_Version = "HISTORICAL_H6_RANGE_MISMATCH_DIAGNOSTIC_V01_20260915_A";
+H6R_TargetDateNum = 1260911;
+H6R_Symbol = Name();
+H6R_TargetSymbol = H6R_Symbol=="DMC" OR H6R_Symbol=="SBM" OR H6R_Symbol=="TV3";
+H6R_TargetRow = DateNum()==H6R_TargetDateNum;
+H6R_YesNo = "Khong\nCo";
+
+// Direct causal range state tai target row, cung quy tac Market Scanner MS41/H4.
+H6R_DirectMult = WCI_ContextMultiplicityCode;
+H6R_LPresent = WPC_L_ContextPresent;
+H6R_UPresent = WPC_U_ContextPresent;
+H6R_SingleLower = H6R_DirectMult==1 AND H6R_LPresent==1 AND H6R_UPresent!=1;
+H6R_SingleUpper = H6R_DirectMult==1 AND H6R_UPresent==1 AND H6R_LPresent!=1;
+H6R_DirectStatus = IIf(H6R_SingleLower,WPCP_L_RangeStatusCode,
+    IIf(H6R_SingleUpper,WPCP_U_RangeStatusCode,0));
+H6R_DirectValid = IIf(H6R_SingleLower,WPC_L_RangePositionValid,
+    IIf(H6R_SingleUpper,WPC_U_RangePositionValid,0));
+H6R_DirectPos = IIf(H6R_SingleLower,WPC_L_RangePosition,
+    IIf(H6R_SingleUpper,WPC_U_RangePosition,Null));
+
+// H4 historical stored timeline.
+H6R_H4Prefix = "WVSA_HIST_STOCK_v01_" + H6R_Symbol + "_";
+H6R_H4Ready = Nz(StaticVarGet(H6R_H4Prefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(H6R_H4Prefix+"CommittedGenerationID"),0)>0;
+H6R_H4Key = StaticVarGet(H6R_H4Prefix+"SourceBusinessDateKey");
+H6R_H4Mult = StaticVarGet(H6R_H4Prefix+"ContextMultiplicityCode");
+H6R_H4Status = StaticVarGet(H6R_H4Prefix+"RangeStatusCode");
+H6R_H4Valid = StaticVarGet(H6R_H4Prefix+"RangePositionValid");
+H6R_H4Pos = StaticVarGet(H6R_H4Prefix+"RangePosition");
+
+// Production Daily Snapshot stored scalar oracle.
+H6R_ProdPrefix = "WVSA_DAILY_v02_" + H6R_Symbol + "_";
+H6R_ProdReady = Nz(StaticVarGet(H6R_ProdPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(H6R_ProdPrefix+"WriteComplete"),0)==1 AND
+    Nz(StaticVarGet(H6R_ProdPrefix+"CommittedGenerationID"),0)>0;
+H6R_ProdKey = Nz(StaticVarGet(H6R_ProdPrefix+"BusinessDateKey"),0);
+H6R_ProdMult = StaticVarGet(H6R_ProdPrefix+"ContextMultiplicity");
+H6R_ProdRangeContextID = StaticVarGet(H6R_ProdPrefix+"CurrentRangeContextID");
+H6R_ProdStatus = StaticVarGet(H6R_ProdPrefix+"RangeStatus");
+H6R_ProdValid = StaticVarGet(H6R_ProdPrefix+"RangePositionValid");
+H6R_ProdPos = StaticVarGet(H6R_ProdPrefix+"RangePosition");
+
+H6R_DirectH4ValidMatch = H6R_DirectValid==H6R_H4Valid;
+H6R_DirectH4PosMatch = H6R_DirectH4ValidMatch AND (
+    H6R_DirectValid==0 OR
+    (H6R_DirectValid==1 AND H6R_Finite(H6R_DirectPos) AND H6R_Finite(H6R_H4Pos) AND
+     abs(H6R_DirectPos-H6R_H4Pos)<=0.0001));
+H6R_DirectProdValidMatch = H6R_DirectValid==H6R_ProdValid;
+H6R_DirectProdPosMatch = H6R_DirectProdValidMatch AND (
+    H6R_DirectValid==0 OR
+    (H6R_DirectValid==1 AND H6R_Finite(H6R_DirectPos) AND H6R_Finite(H6R_ProdPos) AND
+     abs(H6R_DirectPos-H6R_ProdPos)<=0.0001));
+H6R_H4ProdPosMatch = H6R_H4Valid==H6R_ProdValid AND (
+    H6R_H4Valid==0 OR
+    (H6R_H4Valid==1 AND H6R_Finite(H6R_H4Pos) AND H6R_Finite(H6R_ProdPos) AND
+     abs(H6R_H4Pos-H6R_ProdPos)<=0.0001));
+
+Filter = H6R_TargetSymbol AND H6R_TargetRow;
+
+AddTextColumn(H6R_Symbol,"Ma co phieu");
+AddMultiTextColumn(H6R_H4Ready,H6R_YesNo,"H4 ready");
+AddMultiTextColumn(H6R_ProdReady,H6R_YesNo,"Production ready");
+AddColumn(H6R_H4Key,"H4 date key",1.0);
+AddColumn(0*BarIndex()+H6R_ProdKey,"Production date key",1.0);
+
+AddColumn(H6R_DirectMult,"Direct multiplicity",1.0);
+AddColumn(H6R_LPresent,"Lower context present",1.0);
+AddColumn(H6R_UPresent,"Upper context present",1.0);
+AddColumn(H6R_SingleLower,"Direct single lower",1.0);
+AddColumn(H6R_SingleUpper,"Direct single upper",1.0);
+AddColumn(H6R_DirectStatus,"Direct range status",1.0);
+AddColumn(H6R_DirectValid,"Direct range valid",1.0);
+AddColumn(IIf(H6R_DirectValid==1 AND H6R_Finite(H6R_DirectPos),H6R_DirectPos,Null),"Direct range position",1.4);
+
+AddColumn(H6R_H4Mult,"H4 multiplicity",1.0);
+AddColumn(H6R_H4Status,"H4 range status",1.0);
+AddColumn(H6R_H4Valid,"H4 range valid",1.0);
+AddColumn(IIf(H6R_H4Valid==1 AND H6R_Finite(H6R_H4Pos),H6R_H4Pos,Null),"H4 range position",1.4);
+
+AddColumn(0*BarIndex()+H6R_ProdMult,"Production multiplicity",1.0);
+AddColumn(0*BarIndex()+H6R_ProdRangeContextID,"Production range context ID",1.0);
+AddColumn(0*BarIndex()+H6R_ProdStatus,"Production range status",1.0);
+AddColumn(0*BarIndex()+H6R_ProdValid,"Production range valid",1.0);
+AddColumn(IIf(H6R_ProdValid==1 AND H6R_Finite(H6R_ProdPos),0*BarIndex()+H6R_ProdPos,Null),"Production range position",1.4);
+
+AddMultiTextColumn(H6R_DirectH4ValidMatch,H6R_YesNo,"Direct/H4 khop validity");
+AddMultiTextColumn(H6R_DirectH4PosMatch,H6R_YesNo,"Direct/H4 khop position");
+AddMultiTextColumn(H6R_DirectProdValidMatch,H6R_YesNo,"Direct/Production khop validity");
+AddMultiTextColumn(H6R_DirectProdPosMatch,H6R_YesNo,"Direct/Production khop position");
+AddMultiTextColumn(H6R_H4ProdPosMatch,H6R_YesNo,"H4/Production khop position");
+AddTextColumn(H6R_Version,"Phien ban diagnostic");
