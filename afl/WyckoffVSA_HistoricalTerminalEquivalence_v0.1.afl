@@ -11,6 +11,12 @@
 
     Khong Buy/Sell/Short/Cover/PositionScore/P&L.
     UI moi: tieng Viet ASCII khong dau, khong cot dau thua.
+
+    2026-09-15 B:
+    - sua production Market business-date key ve AmiBroker DateNum 1260911;
+    - so sanh RangePosition theo RangePositionValid, tranh coi gia tri placeholder
+      production la mismatch khi ca hai phia deu khong co vi tri vung hop le.
+    Khong doi methodology/threshold/decision semantics.
 */
 #pragma nocache
 SetBarsRequired(sbrAll,sbrAll);
@@ -43,13 +49,13 @@ function H6_StageFromPhase(phaseCode)
 }
 
 H6_TargetDateNum = 1260911;      // AmiBroker DateNum cho 11/09/2026
-H6_TargetYYYYMMDD = 20260911;    // provenance cua WVSA_SELCTX_v01
+H6_TargetMarketDateKey = H6_TargetDateNum;
 H6_Symbol = Name();
 H6_DT = DateTime();
 H6_DN = DateNum();
 H6_TargetRow = H6_DN==H6_TargetDateNum;
 H6_YesNo = "Khong\nCo";
-H6_Version = "HISTORICAL_TERMINAL_EQUIVALENCE_V01_20260914_A";
+H6_Version = "HISTORICAL_TERMINAL_EQUIVALENCE_V01_20260915_B";
 H6_FloatTolerance = 0.0001;
 
 // ---------------------------------------------------------------------------
@@ -240,6 +246,7 @@ H6_ProdSide = StaticVarGet(H6_ProdPrefix+"Side");
 H6_ProdStage = StaticVarGet(H6_ProdPrefix+"Stage");
 H6_ProdPhase = StaticVarGet(H6_ProdPrefix+"PhaseState");
 H6_ProdFamily = StaticVarGet(H6_ProdPrefix+"FamilyHypothesis");
+H6_ProdRangePositionValid = StaticVarGet(H6_ProdPrefix+"RangePositionValid");
 H6_ProdRangePosition = StaticVarGet(H6_ProdPrefix+"RangePosition");
 H6_ProdMTF = StaticVarGet(H6_ProdPrefix+"MTFDirectionalAlignment");
 H6_ProdRS = StaticVarGet(H6_ProdPrefix+"RSStockVsMarketStructure");
@@ -254,11 +261,12 @@ H6_ProdPayloadOK = H6_ProdSnapshotOK AND
     NOT IsNull(H6_ProdReview) AND NOT IsNull(H6_ProdMethodMask);
 
 // Production Market selection oracle — chi dung de doi chieu, khong cap nguon cho historical decision.
+// WVSA_SELCTX_v01 SourceBusinessDateKey dung cung DateNum-compatible key 1260911.
 H6_ProdMarketPrefix = "WVSA_SELCTX_v01_" + WVRC_SelectionMarketSymbol + "_";
 H6_ProdMarketReady = Nz(StaticVarGet(H6_ProdMarketPrefix+"Ready"),0)==1 AND
     Nz(StaticVarGet(H6_ProdMarketPrefix+"CommittedGenerationID"),0)>0 AND
     StaticVarGetText(H6_ProdMarketPrefix+"SourceSymbol")==WVRC_SelectionMarketSymbol AND
-    Nz(StaticVarGet(H6_ProdMarketPrefix+"SourceBusinessDateKey"),0)==H6_TargetYYYYMMDD;
+    Nz(StaticVarGet(H6_ProdMarketPrefix+"SourceBusinessDateKey"),0)==H6_TargetMarketDateKey;
 H6_ProdMarketMult = StaticVarGet(H6_ProdMarketPrefix+"ContextMultiplicityCode");
 H6_ProdMarketDir = StaticVarGet(H6_ProdMarketPrefix+"DirectionalContextCode");
 H6_ProdMarketEvidence = StaticVarGet(H6_ProdMarketPrefix+"EvidenceBalanceCode");
@@ -281,10 +289,17 @@ H6_MatchSide = H6_ProdPayloadOK AND H6_HistSide==H6_ProdSide;
 H6_MatchStage = H6_ProdPayloadOK AND H6_HistStage==H6_ProdStage;
 H6_MatchPhase = H6_ProdPayloadOK AND H6_StockPhase==H6_ProdPhase;
 H6_MatchFamily = H6_ProdPayloadOK AND H6_StockFamily==H6_ProdFamily;
-H6_MatchRange = H6_ProdPayloadOK AND (
-    (IsNull(H6_HistRangePosition) AND IsNull(H6_ProdRangePosition)) OR
-    (H6_Finite(H6_HistRangePosition) AND H6_Finite(H6_ProdRangePosition) AND
+
+H6_MatchRangeValidity = H6_ProdPayloadOK AND
+    NOT IsNull(H6_RangePositionValid) AND NOT IsNull(H6_ProdRangePositionValid) AND
+    H6_RangePositionValid==H6_ProdRangePositionValid;
+
+H6_MatchRange = H6_MatchRangeValidity AND (
+    H6_RangePositionValid==0 OR
+    (H6_RangePositionValid==1 AND
+     H6_Finite(H6_HistRangePosition) AND H6_Finite(H6_ProdRangePosition) AND
      abs(H6_HistRangePosition-H6_ProdRangePosition)<=H6_FloatTolerance));
+
 H6_MatchMTF = H6_ProdPayloadOK AND H6_HistMTF==H6_ProdMTF;
 H6_MatchRS = H6_ProdPayloadOK AND H6_HistRS==H6_ProdRS;
 H6_MatchReview = H6_ProdPayloadOK AND H6_HistReview==H6_ProdReview;
@@ -354,6 +369,7 @@ AddMultiTextColumn(H6_MatchSide,H6_YesNo,"Khop huong");
 AddMultiTextColumn(H6_MatchStage,H6_YesNo,"Khop giai doan");
 AddMultiTextColumn(H6_MatchPhase,H6_YesNo,"Khop pha");
 AddMultiTextColumn(H6_MatchFamily,H6_YesNo,"Khop gia thuyet");
+AddMultiTextColumn(H6_MatchRangeValidity,H6_YesNo,"Khop co vi tri vung");
 AddMultiTextColumn(H6_MatchRange,H6_YesNo,"Khop vi tri vung");
 AddMultiTextColumn(H6_MatchMTF,H6_YesNo,"Khop MTF");
 AddMultiTextColumn(H6_MatchRS,H6_YesNo,"Khop RS");
@@ -368,8 +384,12 @@ AddColumn(H6_ProdReview,"Review production",1.0);
 AddColumn(H6_HistReview,"Review historical",1.0);
 AddColumn(H6_ProdMethodMask,"Ma chan production",1.0);
 AddColumn(H6_HistMethodMask,"Ma chan historical",1.0);
-AddColumn(IIf(H6_Finite(H6_ProdRangePosition),H6_ProdRangePosition,Null),"Vi tri vung production",1.4);
-AddColumn(IIf(H6_Finite(H6_HistRangePosition),H6_HistRangePosition,Null),"Vi tri vung historical",1.4);
+AddColumn(H6_ProdRangePositionValid,"Co vi tri production",1.0);
+AddColumn(H6_RangePositionValid,"Co vi tri historical",1.0);
+AddColumn(IIf(H6_ProdRangePositionValid==1 AND H6_Finite(H6_ProdRangePosition),
+              H6_ProdRangePosition,Null),"Vi tri vung production",1.4);
+AddColumn(IIf(H6_RangePositionValid==1 AND H6_Finite(H6_HistRangePosition),
+              H6_HistRangePosition,Null),"Vi tri vung historical",1.4);
 AddColumn(H6_ProdMarketSelection,"Boi canh thi truong production",1.0);
 AddColumn(H6_HistMarketSelection,"Boi canh thi truong historical",1.0);
 AddMultiTextColumn(H6_ControlStatus,H6_ControlText,"Kiem soat SNZ DTP FRT");
