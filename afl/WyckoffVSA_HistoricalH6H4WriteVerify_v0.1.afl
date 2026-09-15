@@ -1,0 +1,62 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H6 H4 write-and-verify harness.
+
+    Muc tieu:
+    - chay H4 stock timeline publisher;
+    - ngay trong cung mot AFL execution, doc lai namespace H4 raw;
+    - phan biet loi ghi H4 voi loi mat StaticVar giua cac formula/session.
+
+    UI moi: tieng Viet ASCII khong dau.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+SetOption("NoDefaultColumns",True);
+
+#include_once <WyckoffVSA_HistoricalStockTimelinePublisher_v0.1.afl>
+
+H6WV_TargetDateNum = 1260911;
+H6WV_Symbol = Name();
+H6WV_Prefix = "WVSA_HIST_STOCK_v01_" + H6WV_Symbol + "_";
+H6WV_YesNo = "Khong\nCo";
+H6WV_Version = "HISTORICAL_H6_H4_WRITE_VERIFY_V01_20260915_A";
+
+H6WV_Ready = Nz(StaticVarGet(H6WV_Prefix+"Ready"),-1);
+H6WV_Generation = Nz(StaticVarGet(H6WV_Prefix+"CommittedGenerationID"),-1);
+H6WV_SchemaMajor = Nz(StaticVarGet(H6WV_Prefix+"SchemaMajor"),-1);
+H6WV_SchemaMinor = Nz(StaticVarGet(H6WV_Prefix+"SchemaMinor"),-1);
+H6WV_StoredSymbol = StaticVarGetText(H6WV_Prefix+"Symbol");
+H6WV_ProducerVersion = StaticVarGetText(H6WV_Prefix+"ProducerVersion");
+H6WV_DateKey = StaticVarGet(H6WV_Prefix+"SourceBusinessDateKey");
+H6WV_SourceValid = StaticVarGet(H6WV_Prefix+"SourceValid");
+
+H6WV_ReadyExists = H6WV_Ready!=-1;
+H6WV_GenerationExists = H6WV_Generation!=-1;
+H6WV_SymbolMatch = H6WV_StoredSymbol==H6WV_Symbol;
+H6WV_DateCount = LastValue(Cum(NOT IsNull(H6WV_DateKey)));
+H6WV_TargetCount = LastValue(Cum(Nz(H6WV_DateKey,0)==H6WV_TargetDateNum));
+H6WV_ValidCount = LastValue(Cum(Nz(H6WV_SourceValid,0)==1));
+H6WV_RawComplete = H6WV_Ready==1 AND H6WV_Generation>0 AND
+                    H6WV_SchemaMajor==1 AND H6WV_SchemaMinor==0 AND
+                    H6WV_SymbolMatch AND H6WV_TargetCount>0 AND H6WV_ValidCount>0;
+
+H6WV_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = H6WV_LastBar;
+
+AddTextColumn(H6WV_Symbol,"Ma co phieu");
+AddColumn(0*BarIndex()+HST_StatusCode,"H4 status code sau ghi",1.0);
+AddMultiTextColumn(0*BarIndex()+(HST_StatusCode==1),H6WV_YesNo,"H4 bao da ghi");
+AddMultiTextColumn(0*BarIndex()+H6WV_ReadyExists,H6WV_YesNo,"Ready ton tai ngay lap tuc");
+AddColumn(0*BarIndex()+H6WV_Ready,"Ready raw ngay lap tuc",1.0);
+AddMultiTextColumn(0*BarIndex()+H6WV_GenerationExists,H6WV_YesNo,"Generation ton tai ngay lap tuc");
+AddColumn(0*BarIndex()+H6WV_Generation,"Generation raw ngay lap tuc",1.0);
+AddColumn(0*BarIndex()+H6WV_SchemaMajor,"Schema major",1.0);
+AddColumn(0*BarIndex()+H6WV_SchemaMinor,"Schema minor",1.0);
+AddTextColumn(H6WV_StoredSymbol,"Symbol da luu");
+AddMultiTextColumn(0*BarIndex()+H6WV_SymbolMatch,H6WV_YesNo,"Symbol khop");
+AddTextColumn(H6WV_ProducerVersion,"Producer version");
+AddColumn(0*BarIndex()+H6WV_DateCount,"So moc ngay doc duoc",1.0);
+AddColumn(0*BarIndex()+H6WV_TargetCount,"So moc 11/09",1.0);
+AddColumn(0*BarIndex()+H6WV_ValidCount,"So ngay source valid",1.0);
+AddMultiTextColumn(0*BarIndex()+H6WV_RawComplete,H6WV_YesNo,"H4 raw day du ngay lap tuc");
+AddTextColumn(H6WV_Version,"Phien ban H6 write verify");
