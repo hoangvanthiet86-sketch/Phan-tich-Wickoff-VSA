@@ -1,0 +1,203 @@
+/*
+    Wyckoff VSA Daily Multiplicity Deep Diagnostic v0.1
+
+    ANALYSIS-ONLY / NON-PRODUCTION.
+
+    Purpose:
+    - investigate Daily Snapshot rows with ContextMultiplicity = 2;
+    - distinguish two contexts merely PRESENT from two contexts truly ACTIVE;
+    - inspect lower/upper range lifecycle without changing methodology;
+    - classify geometry only when both public-equivalent ranges are active.
+
+    IMPORTANT:
+    1) First build watchlist "WVSA DAILY MULTI RANGE" with
+       WyckoffVSA_DailyMultiplicity_WatchlistBuilder_v0.1.afl.
+    2) Run this formula ONLY on that watchlist.
+    3) Daily, 1 recent bar, Explore.
+    4) Do NOT rerun DailyPublisher for this diagnostic.
+
+    This formula uses the same generated Phase/Context Runtime v0.2 stack as
+    DailyPublisher, but intentionally avoids the full PublicSnapshot facade's
+    expensive date-coordinate audit loops. It reconstructs ONLY the public
+    range-status/active lifecycle needed for this investigation.
+
+    AmiBroker 6.20 presentation uses Vietnamese ASCII (no diacritics).
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_DailySnapshotConsumer_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+
+// Snapshot consumer requests only one bar for its scalar read. This formula
+// also executes historical Phase runtime, so keep the diagnostic all-bars.
+SetBarsRequired(sbrAll,sbrAll);
+
+_SECTION_BEGIN("Daily Multiplicity Deep Diagnostic v0.1");
+
+DMD_Zero = 0 * BarIndex();
+DMD_LastVisibleBar = BarIndex()==LastValue(BarIndex());
+
+DMD_LStatus = DMD_Zero;
+DMD_UStatus = DMD_Zero;
+DMD_LActivePublic = DMD_Zero;
+DMD_UActivePublic = DMD_Zero;
+
+DMD_LLastID = -1;
+DMD_ULastID = -1;
+DMD_LInvalid = 0;
+DMD_UInvalid = 0;
+
+for (DMD_i=0; DMD_i<BarCount; DMD_i++)
+{
+    if (WPC_L_ContextPresent[DMD_i]==1 AND WPC_Finite(WPC_L_RangeContextID[DMD_i]))
+    {
+        DMD_LID = WPC_L_RangeContextID[DMD_i];
+        if (DMD_LID!=DMD_LLastID)
+        {
+            DMD_LLastID=DMD_LID;
+            DMD_LInvalid=0;
+        }
+        if (WPCIF_L_RangeSnapshotValid[DMD_i]!=1) DMD_LInvalid=1;
+
+        if (DMD_LInvalid)
+        {
+            DMD_LStatus[DMD_i]=3;
+            DMD_LActivePublic[DMD_i]=0;
+        }
+        else
+        if (WPC_L_RangeTerminal[DMD_i])
+        {
+            DMD_LStatus[DMD_i]=2;
+            DMD_LActivePublic[DMD_i]=0;
+        }
+        else
+        {
+            DMD_LStatus[DMD_i]=1;
+            DMD_LActivePublic[DMD_i]=1;
+        }
+    }
+    else
+    {
+        DMD_LLastID=-1;
+        DMD_LInvalid=0;
+    }
+
+    if (WPC_U_ContextPresent[DMD_i]==1 AND WPC_Finite(WPC_U_RangeContextID[DMD_i]))
+    {
+        DMD_UID = WPC_U_RangeContextID[DMD_i];
+        if (DMD_UID!=DMD_ULastID)
+        {
+            DMD_ULastID=DMD_UID;
+            DMD_UInvalid=0;
+        }
+        if (WPCIF_U_RangeSnapshotValid[DMD_i]!=1) DMD_UInvalid=1;
+
+        if (DMD_UInvalid)
+        {
+            DMD_UStatus[DMD_i]=3;
+            DMD_UActivePublic[DMD_i]=0;
+        }
+        else
+        if (WPC_U_RangeTerminal[DMD_i])
+        {
+            DMD_UStatus[DMD_i]=2;
+            DMD_UActivePublic[DMD_i]=0;
+        }
+        else
+        {
+            DMD_UStatus[DMD_i]=1;
+            DMD_UActivePublic[DMD_i]=1;
+        }
+    }
+    else
+    {
+        DMD_ULastID=-1;
+        DMD_UInvalid=0;
+    }
+}
+
+DMD_PresentCount = WPC_L_ContextPresent + WPC_U_ContextPresent;
+DMD_PublicActiveCount = DMD_LActivePublic + DMD_UActivePublic;
+DMD_BothActive = DMD_PublicActiveCount==2;
+
+DMD_ActiveClassCode = IIf(
+    DMD_BothActive,0,
+    IIf(DMD_LActivePublic,1,
+    IIf(DMD_UActivePublic,2,3)));
+DMD_ActiveClassText =
+    "Ca hai vung dang hoat dong\nChi vung duoi dang hoat dong\nChi vung tren dang hoat dong\nKhong vung nao dang hoat dong";
+
+DMD_SnapshotMultiple = WDSC_Valid AND WDSC_ContextMultiplicity==2;
+DMD_PresentCountMatch = DMD_SnapshotMultiple AND DMD_PresentCount==2;
+DMD_ActiveCountMismatch = DMD_SnapshotMultiple AND DMD_PublicActiveCount<2;
+
+DMD_GeometryInputsValid =
+    DMD_BothActive AND
+    WPC_Finite(WPC_L_PrimaryRangeLow) AND
+    WPC_Finite(WPC_L_PrimaryRangeHigh) AND
+    WPC_Finite(WPC_U_PrimaryRangeLow) AND
+    WPC_Finite(WPC_U_PrimaryRangeHigh) AND
+    WPC_L_PrimaryRangeHigh>WPC_L_PrimaryRangeLow AND
+    WPC_U_PrimaryRangeHigh>WPC_U_PrimaryRangeLow;
+
+DMD_OverlapLow = Max(WPC_L_PrimaryRangeLow,WPC_U_PrimaryRangeLow);
+DMD_OverlapHigh = Min(WPC_L_PrimaryRangeHigh,WPC_U_PrimaryRangeHigh);
+DMD_OverlapWidth = Max(0,DMD_OverlapHigh-DMD_OverlapLow);
+
+DMD_Nested = DMD_GeometryInputsValid AND
+    ((WPC_L_PrimaryRangeLow<=WPC_U_PrimaryRangeLow AND WPC_L_PrimaryRangeHigh>=WPC_U_PrimaryRangeHigh) OR
+     (WPC_U_PrimaryRangeLow<=WPC_L_PrimaryRangeLow AND WPC_U_PrimaryRangeHigh>=WPC_L_PrimaryRangeHigh));
+DMD_PartialOverlap = DMD_GeometryInputsValid AND DMD_OverlapWidth>0 AND NOT DMD_Nested;
+DMD_Disjoint = DMD_GeometryInputsValid AND DMD_OverlapWidth<=0;
+
+DMD_GeometryCode = IIf(
+    NOT DMD_BothActive,0,
+    IIf(NOT DMD_GeometryInputsValid,4,
+    IIf(DMD_Nested,1,
+    IIf(DMD_PartialOverlap,2,3))));
+DMD_GeometryText =
+    "Khong ap dung - chua co 2 vung dang hoat dong\nHai vung long nhau\nHai vung chong lan mot phan\nHai vung tach roi\nDu lieu bien vung khong hop le";
+
+DMD_RangeStatusText =
+    "Khong co vung\nDang hoat dong\nDa vao Pha E / ket thuc\nDa vo hieu";
+DMD_PhaseText =
+    "Khong du boi canh\nPha A\nPha B\nUng vien Pha C\nPha C\nPha D\nPha E\nDa bi thay the / huy";
+DMD_FamilyText =
+    "Khong du\nVung duoi chua xac nhan\nVung tren chua xac nhan\nGia thuyet tich luy\nGia thuyet tai phan phoi\nGia thuyet phan phoi\nGia thuyet tai tich luy\nHon hop / xung dot";
+DMD_YesNoText = "Khong\nCo";
+
+Filter = DMD_LastVisibleBar AND DMD_SnapshotMultiple;
+
+AddColumn(WDSC_ContextMultiplicity,"Snapshot - so context",1.0);
+AddColumn(DMD_PresentCount,"Runtime - context con ton tai",1.0);
+AddColumn(DMD_PublicActiveCount,"Runtime - vung thuc su hoat dong",1.0);
+AddMultiTextColumn(DMD_Zero+DMD_ActiveClassCode,DMD_ActiveClassText,"Phan loai trang thai vung");
+AddMultiTextColumn(DMD_Zero+DMD_ActiveCountMismatch,DMD_YesNoText,"Nghi ngo dem qua rong");
+AddMultiTextColumn(DMD_Zero+DMD_PresentCountMatch,DMD_YesNoText,"Snapshot khop so context ton tai");
+
+AddColumn(WPC_L_ContextPresent,"L - ContextPresent",1.0);
+AddMultiTextColumn(DMD_Zero+DMD_LStatus,DMD_RangeStatusText,"L - trang thai vung");
+AddColumn(DMD_LActivePublic,"L - dang hoat dong",1.0);
+AddColumn(WPC_L_RangeContextID,"L - RangeContextID",1.0);
+AddMultiTextColumn(DMD_Zero+WPC_L_PhaseStateCode,DMD_PhaseText,"L - Pha");
+AddMultiTextColumn(DMD_Zero+WPC_L_FamilyHypothesisCode,DMD_FamilyText,"L - Family");
+AddColumn(WPC_L_RangeAgeBars,"L - tuoi vung",1.0);
+AddColumn(WPC_L_PrimaryRangeLow,"L - day vung",1.4);
+AddColumn(WPC_L_PrimaryRangeHigh,"L - dinh vung",1.4);
+
+AddColumn(WPC_U_ContextPresent,"U - ContextPresent",1.0);
+AddMultiTextColumn(DMD_Zero+DMD_UStatus,DMD_RangeStatusText,"U - trang thai vung");
+AddColumn(DMD_UActivePublic,"U - dang hoat dong",1.0);
+AddColumn(WPC_U_RangeContextID,"U - RangeContextID",1.0);
+AddMultiTextColumn(DMD_Zero+WPC_U_PhaseStateCode,DMD_PhaseText,"U - Pha");
+AddMultiTextColumn(DMD_Zero+WPC_U_FamilyHypothesisCode,DMD_FamilyText,"U - Family");
+AddColumn(WPC_U_RangeAgeBars,"U - tuoi vung",1.0);
+AddColumn(WPC_U_PrimaryRangeLow,"U - day vung",1.4);
+AddColumn(WPC_U_PrimaryRangeHigh,"U - dinh vung",1.4);
+
+AddMultiTextColumn(DMD_Zero+DMD_GeometryCode,DMD_GeometryText,"Quan he hinh hoc 2 vung");
+AddColumn(DMD_OverlapWidth,"Do rong phan giao",1.4);
+AddTextColumn("DAILY_MULTIPLICITY_DEEP_DIAGNOSTIC_V01_20260913_B","Phien ban diagnostic");
+
+_SECTION_END();

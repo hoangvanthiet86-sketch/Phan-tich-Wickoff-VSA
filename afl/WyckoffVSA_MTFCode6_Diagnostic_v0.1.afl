@@ -1,0 +1,92 @@
+/*
+    Wyckoff VSA MTF Code-6 Diagnostic v0.1
+
+    ANALYSIS-ONLY / NON-PRODUCTION.
+
+    Purpose:
+    - explain why current Fast Scanner snapshots carry MTF Directional Alignment = 6;
+    - distinguish Daily ambiguity from Weekly/Monthly ambiguity;
+    - read existing persistent snapshots only;
+    - do NOT execute the heavy Wyckoff/VSA analytical stack;
+    - do NOT alter methodology, filters, candidate classes, or snapshot payloads.
+
+    AmiBroker 6.20 presentation uses Vietnamese ASCII (no diacritics).
+*/
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_DailySnapshotConsumer_v0.2.afl>
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+
+_SECTION_BEGIN("MTF Code-6 Diagnostic v0.1");
+
+WMD_Zero = 0 * BarIndex();
+WMD_LastVisibleBar = BarIndex()==LastValue(BarIndex());
+
+WMD_DMult = WDSC_ContextMultiplicity;
+WMD_DDir  = WDSC_DirectionalContext;
+WMD_WMult = Nz(WTSC_W_ContextMultiplicityCode,0);
+WMD_WDir  = Nz(WTSC_W_DirectionalContextCode,0);
+WMD_MMult = Nz(WTSC_M_ContextMultiplicityCode,0);
+WMD_MDir  = Nz(WTSC_M_DirectionalContextCode,0);
+
+WMD_AnyMultiplicityAmbiguous =
+    WMD_DMult==2 OR WMD_WMult==2 OR WMD_MMult==2;
+WMD_AnyDirectionalMixed =
+    WMD_DDir==4 OR WMD_WDir==4 OR WMD_MDir==4;
+
+// Recompute only the directional-alignment enum from the three snapshot states.
+// This mirrors the approved MTF v0.1 categorical relationship logic.
+WMD_WMDirectional =
+    (WMD_WDir==2 OR WMD_WDir==3) AND
+    (WMD_MDir==2 OR WMD_MDir==3);
+WMD_WMSameDirectional = WMD_WMDirectional AND WMD_WDir==WMD_MDir;
+WMD_WMOppositeDirectional = WMD_WMDirectional AND WMD_WDir!=WMD_MDir;
+WMD_DDirectional = WMD_DDir==2 OR WMD_DDir==3;
+
+WMD_RecomputedAlignment = IIf(
+    WMD_AnyMultiplicityAmbiguous OR WMD_AnyDirectionalMixed,6,
+    IIf(WMD_WMOppositeDirectional,5,
+    IIf(WMD_WMSameDirectional AND WMD_DDirectional AND WMD_DDir!=WMD_WDir,4,
+    IIf(WMD_DDir==2 AND WMD_WDir==2 AND WMD_MDir==2,2,
+    IIf(WMD_DDir==3 AND WMD_WDir==3 AND WMD_MDir==3,3,
+    IIf(WMD_DDir==0 OR WMD_WDir==0 OR WMD_MDir==0,0,
+    IIf(WMD_DDir==1 OR WMD_WDir==1 OR WMD_MDir==1,1,6)))))));
+
+WMD_AlignmentMatch =
+    WDSC_Valid AND WTSC_W_Valid AND WTSC_M_Valid AND
+    WMD_RecomputedAlignment==WDSC_MTFDirectionalAlignment;
+
+// Human-readable root-cause bucket. This is diagnostic classification only.
+// Codes are deliberately zero-based because AddMultiTextColumn uses the code
+// as the text-list index.
+WMD_RootCauseCode = IIf(
+    WMD_DMult==2,0,
+    IIf(WMD_DDir==4,1,
+    IIf(WMD_WMult==2 OR WMD_WDir==4 OR WMD_MMult==2 OR WMD_MDir==4,2,3)));
+
+WMD_RootCauseText =
+    "Daily co nhieu vung giao dich\nDaily mot vung nhung huong van hon hop / xung dot\nNguon gay hon hop nam o Weekly va/hoac Monthly\nKhong thuoc ba nhom chinh - can kiem tra";
+
+WMD_DMultText = "Khong co vung\nMot vung\nNhieu vung";
+WMD_DirText = "Khong du du lieu\nChua xac dinh\nTang\nGiam\nHon hop / xung dot";
+WMD_TFStatusText = "Chua doc / khong du\nHop le\nThieu snapshot\nGhi dang do / the he khong on dinh\nSai schema / version\nSai ma\nSai khung thoi gian\nSnapshot cu\nSnapshot tuong lai\nNguon con dang hinh thanh\nPayload khong hop le";
+WMD_MatchText = "Khong khop / chua du dieu kien\nKhop";
+
+// Only explain current valid rows that the production snapshot classified as MTF=6.
+Filter = WMD_LastVisibleBar AND WDSC_Valid AND WDSC_MTFDirectionalAlignment==6;
+
+AddMultiTextColumn(WMD_Zero+WMD_RootCauseCode,WMD_RootCauseText,"Nhom nguyen nhan chinh");
+AddMultiTextColumn(WMD_Zero+WMD_DMult,WMD_DMultText,"Daily - so vung");
+AddMultiTextColumn(WMD_Zero+WMD_DDir,WMD_DirText,"Daily - huong");
+AddMultiTextColumn(WMD_Zero+WTSC_W_StatusCode,WMD_TFStatusText,"Weekly - trang thai snapshot");
+AddMultiTextColumn(WMD_Zero+WMD_WMult,WMD_DMultText,"Weekly - so vung");
+AddMultiTextColumn(WMD_Zero+WMD_WDir,WMD_DirText,"Weekly - huong");
+AddMultiTextColumn(WMD_Zero+WTSC_M_StatusCode,WMD_TFStatusText,"Monthly - trang thai snapshot");
+AddMultiTextColumn(WMD_Zero+WMD_MMult,WMD_DMultText,"Monthly - so vung");
+AddMultiTextColumn(WMD_Zero+WMD_MDir,WMD_DirText,"Monthly - huong");
+AddColumn(WMD_Zero+WDSC_MTFDirectionalAlignment,"MTF code trong Daily Snapshot",1.0);
+AddColumn(WMD_Zero+WMD_RecomputedAlignment,"MTF code tinh lai",1.0);
+AddMultiTextColumn(WMD_Zero+WMD_AlignmentMatch,WMD_MatchText,"Doi chieu logic");
+AddTextColumn("MTF_CODE6_DIAGNOSTIC_V01_20260913_B","Phien ban diagnostic");
+
+_SECTION_END();
