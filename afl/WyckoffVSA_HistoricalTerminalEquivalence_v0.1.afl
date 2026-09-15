@@ -1,0 +1,397 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H6 terminal / universe equivalence probe.
+
+    So sanh decision surface historical tai business date 11/09/2026 voi
+    persistent Daily Snapshot production da khoa tai cung business date.
+
+    Historical decision duoc tai dung truc tiep tu namespace H3/H4 va dung
+    dung behavioral semantics cua Historical Scanner H4. Production snapshot
+    CHI la oracle so sanh, khong duoc dua vao historical decision.
+
+    Khong Buy/Sell/Short/Cover/PositionScore/P&L.
+    UI moi: tieng Viet ASCII khong dau, khong cot dau thua.
+
+    2026-09-15 B:
+    - sua production Market business-date key ve AmiBroker DateNum 1260911;
+    - so sanh RangePosition theo RangePositionValid, tranh coi gia tri placeholder
+      production la mismatch khi ca hai phia deu khong co vi tri vung hop le.
+    Khong doi methodology/threshold/decision semantics.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+SetOption("NoDefaultColumns",True);
+
+#include_once <WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl>
+
+function H6_Finite(x)
+{
+    return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
+}
+
+function H6_SelectionContext(valid,multiplicity,directional,evidence,hypAlign,mtfAlign)
+{
+    local mixed, bullish, bearish;
+    mixed = multiplicity==2 OR directional==4 OR evidence==3 OR hypAlign==3 OR
+            mtfAlign==4 OR mtfAlign==5 OR mtfAlign==6;
+    bullish = directional==2 AND mtfAlign==2 AND evidence!=2 AND evidence!=3 AND hypAlign!=3;
+    bearish = directional==3 AND mtfAlign==3 AND evidence!=1 AND evidence!=3 AND hypAlign!=3;
+    return IIf(NOT valid,0,IIf(mixed,4,IIf(bullish,2,IIf(bearish,3,1))));
+}
+
+function H6_StageFromPhase(phaseCode)
+{
+    return IIf(phaseCode==1 OR phaseCode==2,1,
+           IIf(phaseCode==3 OR phaseCode==4,2,
+           IIf(phaseCode==5,3,
+           IIf(phaseCode==6,4,
+           IIf(phaseCode==7,5,0)))));
+}
+
+H6_TargetDateNum = 1260911;      // AmiBroker DateNum cho 11/09/2026
+H6_TargetMarketDateKey = H6_TargetDateNum;
+H6_Symbol = Name();
+H6_DT = DateTime();
+H6_DN = DateNum();
+H6_TargetRow = H6_DN==H6_TargetDateNum;
+H6_YesNo = "Khong\nCo";
+H6_Version = "HISTORICAL_TERMINAL_EQUIVALENCE_V01_20260915_B";
+H6_FloatTolerance = 0.0001;
+
+// ---------------------------------------------------------------------------
+// 1. Historical stock timeline (H4 source)
+// ---------------------------------------------------------------------------
+H6_StockPrefix = "WVSA_HIST_STOCK_v01_" + H6_Symbol + "_";
+H6_StockReady = Nz(StaticVarGet(H6_StockPrefix+"Ready"),0)==1 AND
+                 Nz(StaticVarGet(H6_StockPrefix+"CommittedGenerationID"),0)>0 AND
+                 StaticVarGetText(H6_StockPrefix+"Symbol")==H6_Symbol;
+H6_StockKey = StaticVarGet(H6_StockPrefix+"SourceBusinessDateKey");
+H6_StockDT = StaticVarGet(H6_StockPrefix+"SourceBarDateTime");
+H6_StockSourceValid = StaticVarGet(H6_StockPrefix+"SourceValid");
+H6_StockSchemaValid = StaticVarGet(H6_StockPrefix+"StockSchemaValid");
+H6_StockProvisional = StaticVarGet(H6_StockPrefix+"ProvisionalFlag");
+H6_StockClose = StaticVarGet(H6_StockPrefix+"Close");
+H6_StockRSMarketSymbol = StaticVarGetText(H6_StockPrefix+"RSMarketSymbol");
+
+H6_StockMult = StaticVarGet(H6_StockPrefix+"ContextMultiplicityCode");
+H6_StockDir = StaticVarGet(H6_StockPrefix+"DirectionalContextCode");
+H6_StockPhase = StaticVarGet(H6_StockPrefix+"PhaseStateCode");
+H6_StockFamily = StaticVarGet(H6_StockPrefix+"FamilyHypothesisCode");
+H6_StockEvidence = StaticVarGet(H6_StockPrefix+"EvidenceBalanceCode");
+H6_StockHypAlign = StaticVarGet(H6_StockPrefix+"HypothesisAlignmentCode");
+
+H6_RangeStatus = StaticVarGet(H6_StockPrefix+"RangeStatusCode");
+H6_HistRangePosition = StaticVarGet(H6_StockPrefix+"RangePosition");
+H6_RangePositionValid = StaticVarGet(H6_StockPrefix+"RangePositionValid");
+H6_RangeUsableActive = StaticVarGet(H6_StockPrefix+"RangeUsableActive");
+H6_RangeLocationCoherent = StaticVarGet(H6_StockPrefix+"RangeLocationCoherent");
+H6_RangeLocationConflict = StaticVarGet(H6_StockPrefix+"RangeLocationConflict");
+
+H6_MTFValid = StaticVarGet(H6_StockPrefix+"MTFContractValid");
+H6_HistMTF = StaticVarGet(H6_StockPrefix+"MTFDirectionalAlignmentCode");
+H6_RSContextValid = StaticVarGet(H6_StockPrefix+"RSContextValid");
+H6_RSMarketStatus = StaticVarGet(H6_StockPrefix+"RSMarketBenchmarkStatusCode");
+H6_HistRS = StaticVarGet(H6_StockPrefix+"RSStockVsMarketStructureCode");
+H6_PriceRSRelationship = StaticVarGet(H6_StockPrefix+"RSPriceRelationshipCode");
+
+H6_StockExactDate = H6_StockReady AND
+    NOT IsNull(H6_StockKey) AND NOT IsNull(H6_StockDT) AND
+    H6_StockKey==H6_DN AND H6_StockDT==H6_DT;
+H6_HistoricalStockSourceOK = H6_StockExactDate AND H6_StockSourceValid==1;
+
+// ---------------------------------------------------------------------------
+// 2. Historical Market context (H3 source)
+// ---------------------------------------------------------------------------
+H6_HistMarketPrefix = "WVSA_HIST_MKT_v01_" + WVRC_SelectionMarketSymbol + "_";
+H6_HistMarketReady = Nz(StaticVarGet(H6_HistMarketPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(H6_HistMarketPrefix+"CommittedGenerationID"),0)>0 AND
+    StaticVarGetText(H6_HistMarketPrefix+"Symbol")==WVRC_SelectionMarketSymbol;
+H6_HistMarketKey = StaticVarGet(H6_HistMarketPrefix+"SourceBusinessDateKey");
+H6_HistMarketDT = StaticVarGet(H6_HistMarketPrefix+"SourceBarDateTime");
+H6_HistMarketSourceValid = StaticVarGet(H6_HistMarketPrefix+"SourceValid");
+H6_HistMarketMult = StaticVarGet(H6_HistMarketPrefix+"ContextMultiplicityCode");
+H6_HistMarketDir = StaticVarGet(H6_HistMarketPrefix+"DirectionalContextCode");
+H6_HistMarketEvidence = StaticVarGet(H6_HistMarketPrefix+"EvidenceBalanceCode");
+H6_HistMarketHypAlign = StaticVarGet(H6_HistMarketPrefix+"HypothesisAlignmentCode");
+H6_HistMarketPhase = StaticVarGet(H6_HistMarketPrefix+"PhaseStateCode");
+H6_HistMarketStructural = StaticVarGet(H6_HistMarketPrefix+"StructuralDevelopmentCode");
+H6_HistMarketMTF = StaticVarGet(H6_HistMarketPrefix+"MTFDirectionalAlignmentCode");
+H6_HistMarketMTFEvidence = StaticVarGet(H6_HistMarketPrefix+"MTFEvidenceAlignmentCode");
+H6_HistMarketMTFPhase = StaticVarGet(H6_HistMarketPrefix+"MTFPhaseRelationshipCode");
+H6_HistMarketMTFConflict = StaticVarGet(H6_HistMarketPrefix+"MTFConflictReasonCode");
+
+H6_HistMarketPayload =
+    NOT IsNull(H6_HistMarketMult) AND NOT IsNull(H6_HistMarketDir) AND
+    NOT IsNull(H6_HistMarketEvidence) AND NOT IsNull(H6_HistMarketHypAlign) AND
+    NOT IsNull(H6_HistMarketPhase) AND NOT IsNull(H6_HistMarketStructural) AND
+    NOT IsNull(H6_HistMarketMTF) AND NOT IsNull(H6_HistMarketMTFEvidence) AND
+    NOT IsNull(H6_HistMarketMTFPhase) AND NOT IsNull(H6_HistMarketMTFConflict);
+H6_HistMarketValid = H6_HistMarketReady AND H6_HistMarketPayload AND
+    H6_HistMarketSourceValid==1 AND
+    H6_HistMarketKey==H6_DN AND H6_HistMarketDT==H6_DT;
+H6_HistMarketSelection = H6_SelectionContext(
+    H6_HistMarketValid,H6_HistMarketMult,H6_HistMarketDir,
+    H6_HistMarketEvidence,H6_HistMarketHypAlign,H6_HistMarketMTF);
+
+// ---------------------------------------------------------------------------
+// 3. Historical decision semantics — copy exact H4 behavioral rules
+// ---------------------------------------------------------------------------
+H6_HistStage = H6_StageFromPhase(H6_StockPhase);
+H6_MarketConfigMatch = StrLen(WVRC_RSMarketSymbol)>0 AND
+    WVRC_RSMarketSymbol==WVRC_SelectionMarketSymbol AND
+    H6_StockRSMarketSymbol==WVRC_RSMarketSymbol;
+H6_RoleConfigConflict = NOT WVRC_RoleIdentityValid;
+H6_MarketRSReady = H6_RSMarketStatus==3 AND H6_RSContextValid==1;
+
+H6_StockRequiredFinite =
+    H6_Finite(H6_StockClose) AND H6_StockClose>0 AND
+    H6_Finite(H6_StockDT) AND H6_Finite(H6_StockMult) AND
+    H6_Finite(H6_StockDir) AND H6_Finite(H6_StockPhase) AND
+    H6_Finite(H6_StockEvidence) AND H6_Finite(H6_StockHypAlign) AND
+    H6_Finite(H6_HistMTF) AND H6_Finite(H6_HistRS);
+
+H6_HistExclusionMask =
+      IIf(H6_StockProvisional==1,1,0)
+    + IIf(H6_StockSchemaValid!=1,2,0)
+    + IIf(NOT H6_MarketRSReady,4,0)
+    + IIf(WVRC_RSAdjustmentBasisStatus!=1,8,0)
+    + IIf(H6_MTFValid!=1,16,0)
+    + IIf(NOT H6_HistMarketValid,32,0)
+    + IIf(NOT H6_StockRequiredFinite,128,0)
+    + IIf(Interval()!=inDaily,256,0)
+    + IIf(NOT H6_MarketConfigMatch,512,0)
+    + IIf(H6_RoleConfigConflict,1024,0);
+
+H6_HistDataEligible = H6_HistoricalStockSourceOK AND H6_HistExclusionMask==0;
+H6_PriceRSNonConfirmation = H6_PriceRSRelationship==2 OR H6_PriceRSRelationship==3;
+H6_StockVSAMixedOrConflict = H6_StockEvidence==3 OR H6_StockHypAlign==3;
+H6_StockMTFConflict = H6_HistMTF==4 OR H6_HistMTF==5 OR H6_HistMTF==6;
+H6_RSMixed = H6_HistRS==3;
+H6_MultipleRanges = H6_StockMult==2;
+H6_MarketStockDirectionalConflict =
+    (H6_HistMarketSelection==2 AND H6_StockDir==3) OR
+    (H6_HistMarketSelection==3 AND H6_StockDir==2);
+
+H6_HistReview = H6_HistDataEligible AND (
+    H6_MultipleRanges OR H6_PriceRSNonConfirmation OR
+    H6_StockVSAMixedOrConflict OR H6_StockMTFConflict OR H6_RSMixed OR
+    H6_MarketStockDirectionalConflict OR H6_RoleConfigConflict OR
+    H6_RangeLocationConflict==1);
+
+H6_PhaseTooEarly = H6_HistStage==0 OR H6_HistStage==1;
+H6_StockDirectionalUnresolved = H6_StockDir!=2 AND H6_StockDir!=3;
+H6_MTFMethodConflict = H6_HistMTF==4 OR H6_HistMTF==5 OR H6_HistMTF==6;
+H6_RSMethodConflict = H6_HistRS==0 OR H6_HistRS==3;
+
+H6_HistMethodMask =
+      IIf(H6_HistMarketSelection==0 OR H6_HistMarketSelection==1 OR H6_HistMarketSelection==4,1,0)
+    + IIf(H6_PhaseTooEarly,2,0)
+    + IIf(H6_StockDirectionalUnresolved,4,0)
+    + IIf(H6_MTFMethodConflict,8,0)
+    + IIf(H6_RSMethodConflict,16,0)
+    + IIf(H6_StockVSAMixedOrConflict,32,0)
+    + IIf(H6_PriceRSNonConfirmation,64,0)
+    + IIf(H6_MultipleRanges,256,0)
+    + IIf(H6_RoleConfigConflict OR NOT H6_MarketConfigMatch,512,0)
+    + IIf(H6_RangeLocationConflict==1,1024,0);
+
+H6_BullishEvidenceAcceptable = H6_StockEvidence!=2 AND H6_StockEvidence!=3 AND H6_StockHypAlign!=3;
+H6_BearishEvidenceAcceptable = H6_StockEvidence!=1 AND H6_StockEvidence!=3 AND H6_StockHypAlign!=3;
+H6_BullishQualifiedMarket = H6_HistDataEligible AND NOT H6_HistReview AND
+    H6_HistMarketSelection==2 AND H6_StockDir==2 AND
+    (H6_HistStage==3 OR H6_HistStage==4) AND H6_HistMTF==2 AND H6_HistRS==1 AND
+    H6_BullishEvidenceAcceptable AND NOT H6_PriceRSNonConfirmation AND H6_StockMult==1;
+H6_BearishQualifiedMarket = H6_HistDataEligible AND NOT H6_HistReview AND
+    H6_HistMarketSelection==3 AND H6_StockDir==3 AND
+    (H6_HistStage==3 OR H6_HistStage==4) AND H6_HistMTF==3 AND H6_HistRS==2 AND
+    H6_BearishEvidenceAcceptable AND NOT H6_PriceRSNonConfirmation AND H6_StockMult==1;
+H6_BullishDeveloping = H6_HistDataEligible AND NOT H6_HistReview AND
+    H6_HistStage==2 AND H6_HistMarketSelection==2 AND H6_StockDir==2 AND
+    H6_HistRS==1 AND H6_BullishEvidenceAcceptable AND (H6_HistMTF==1 OR H6_HistMTF==2);
+H6_BearishDeveloping = H6_HistDataEligible AND NOT H6_HistReview AND
+    H6_HistStage==2 AND H6_HistMarketSelection==3 AND H6_StockDir==3 AND
+    H6_HistRS==2 AND H6_BearishEvidenceAcceptable AND (H6_HistMTF==1 OR H6_HistMTF==3);
+H6_HistWatch = H6_HistDataEligible AND NOT H6_HistReview AND
+    H6_HistStage==1 AND H6_RangeLocationCoherent==1 AND
+    (H6_HistRS==1 OR H6_HistRS==2);
+
+H6_HistClass = IIf(NOT H6_HistDataEligible,0,
+    IIf(H6_HistReview,9,
+    IIf(H6_BullishQualifiedMarket,4,
+    IIf(H6_BearishQualifiedMarket,7,
+    IIf(H6_BullishDeveloping,3,
+    IIf(H6_BearishDeveloping,6,
+    IIf(H6_HistWatch,2,1)))))));
+
+H6_HistSide = IIf(H6_HistClass==3 OR H6_HistClass==4,1,
+    IIf(H6_HistClass==6 OR H6_HistClass==7,2,
+    IIf(H6_HistClass==2 AND H6_StockDir==2 AND H6_HistRS==1,1,
+    IIf(H6_HistClass==2 AND H6_StockDir==3 AND H6_HistRS==2,2,0))));
+
+// ---------------------------------------------------------------------------
+// 4. Production Daily Snapshot oracle — raw persistent state tai 11/09/2026
+// ---------------------------------------------------------------------------
+H6_ProdPrefix = "WVSA_DAILY_v02_" + H6_Symbol + "_";
+H6_ProdSnapshotOK = Nz(StaticVarGet(H6_ProdPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(H6_ProdPrefix+"WriteComplete"),0)==1 AND
+    Nz(StaticVarGet(H6_ProdPrefix+"CommittedGenerationID"),0)>0 AND
+    Nz(StaticVarGet(H6_ProdPrefix+"SchemaMajor"),0)==2 AND
+    Nz(StaticVarGet(H6_ProdPrefix+"SchemaMinor"),0)==0 AND
+    StaticVarGetText(H6_ProdPrefix+"Symbol")==H6_Symbol AND
+    Nz(StaticVarGet(H6_ProdPrefix+"BusinessDateKey"),0)==H6_TargetDateNum;
+
+H6_ProdDataEligible = StaticVarGet(H6_ProdPrefix+"DataEligible");
+H6_ProdClass = StaticVarGet(H6_ProdPrefix+"CandidateClass");
+H6_ProdSide = StaticVarGet(H6_ProdPrefix+"Side");
+H6_ProdStage = StaticVarGet(H6_ProdPrefix+"Stage");
+H6_ProdPhase = StaticVarGet(H6_ProdPrefix+"PhaseState");
+H6_ProdFamily = StaticVarGet(H6_ProdPrefix+"FamilyHypothesis");
+H6_ProdRangePositionValid = StaticVarGet(H6_ProdPrefix+"RangePositionValid");
+H6_ProdRangePosition = StaticVarGet(H6_ProdPrefix+"RangePosition");
+H6_ProdMTF = StaticVarGet(H6_ProdPrefix+"MTFDirectionalAlignment");
+H6_ProdRS = StaticVarGet(H6_ProdPrefix+"RSStockVsMarketStructure");
+H6_ProdReview = StaticVarGet(H6_ProdPrefix+"Review");
+H6_ProdMethodMask = StaticVarGet(H6_ProdPrefix+"MethodBlockMask");
+
+H6_ProdPayloadOK = H6_ProdSnapshotOK AND
+    NOT IsNull(H6_ProdDataEligible) AND NOT IsNull(H6_ProdClass) AND
+    NOT IsNull(H6_ProdSide) AND NOT IsNull(H6_ProdStage) AND
+    NOT IsNull(H6_ProdPhase) AND NOT IsNull(H6_ProdFamily) AND
+    NOT IsNull(H6_ProdMTF) AND NOT IsNull(H6_ProdRS) AND
+    NOT IsNull(H6_ProdReview) AND NOT IsNull(H6_ProdMethodMask);
+
+// Production Market selection oracle — chi dung de doi chieu, khong cap nguon cho historical decision.
+// WVSA_SELCTX_v01 SourceBusinessDateKey dung cung DateNum-compatible key 1260911.
+H6_ProdMarketPrefix = "WVSA_SELCTX_v01_" + WVRC_SelectionMarketSymbol + "_";
+H6_ProdMarketReady = Nz(StaticVarGet(H6_ProdMarketPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(H6_ProdMarketPrefix+"CommittedGenerationID"),0)>0 AND
+    StaticVarGetText(H6_ProdMarketPrefix+"SourceSymbol")==WVRC_SelectionMarketSymbol AND
+    Nz(StaticVarGet(H6_ProdMarketPrefix+"SourceBusinessDateKey"),0)==H6_TargetMarketDateKey;
+H6_ProdMarketMult = StaticVarGet(H6_ProdMarketPrefix+"ContextMultiplicityCode");
+H6_ProdMarketDir = StaticVarGet(H6_ProdMarketPrefix+"DirectionalContextCode");
+H6_ProdMarketEvidence = StaticVarGet(H6_ProdMarketPrefix+"EvidenceBalanceCode");
+H6_ProdMarketHypAlign = StaticVarGet(H6_ProdMarketPrefix+"HypothesisAlignmentCode");
+H6_ProdMarketMTF = StaticVarGet(H6_ProdMarketPrefix+"MTF_DirectionalAlignmentCode");
+H6_ProdMarketPayload = H6_ProdMarketReady AND
+    NOT IsNull(H6_ProdMarketMult) AND NOT IsNull(H6_ProdMarketDir) AND
+    NOT IsNull(H6_ProdMarketEvidence) AND NOT IsNull(H6_ProdMarketHypAlign) AND
+    NOT IsNull(H6_ProdMarketMTF);
+H6_ProdMarketSelection = H6_SelectionContext(
+    H6_ProdMarketPayload,H6_ProdMarketMult,H6_ProdMarketDir,
+    H6_ProdMarketEvidence,H6_ProdMarketHypAlign,H6_ProdMarketMTF);
+
+// ---------------------------------------------------------------------------
+// 5. Field-by-field terminal equivalence
+// ---------------------------------------------------------------------------
+H6_MatchDataEligible = H6_ProdPayloadOK AND H6_HistDataEligible==H6_ProdDataEligible;
+H6_MatchClass = H6_ProdPayloadOK AND H6_HistClass==H6_ProdClass;
+H6_MatchSide = H6_ProdPayloadOK AND H6_HistSide==H6_ProdSide;
+H6_MatchStage = H6_ProdPayloadOK AND H6_HistStage==H6_ProdStage;
+H6_MatchPhase = H6_ProdPayloadOK AND H6_StockPhase==H6_ProdPhase;
+H6_MatchFamily = H6_ProdPayloadOK AND H6_StockFamily==H6_ProdFamily;
+
+H6_MatchRangeValidity = H6_ProdPayloadOK AND
+    NOT IsNull(H6_RangePositionValid) AND NOT IsNull(H6_ProdRangePositionValid) AND
+    H6_RangePositionValid==H6_ProdRangePositionValid;
+
+H6_MatchRange = H6_MatchRangeValidity AND (
+    H6_RangePositionValid==0 OR
+    (H6_RangePositionValid==1 AND
+     H6_Finite(H6_HistRangePosition) AND H6_Finite(H6_ProdRangePosition) AND
+     abs(H6_HistRangePosition-H6_ProdRangePosition)<=H6_FloatTolerance));
+
+H6_MatchMTF = H6_ProdPayloadOK AND H6_HistMTF==H6_ProdMTF;
+H6_MatchRS = H6_ProdPayloadOK AND H6_HistRS==H6_ProdRS;
+H6_MatchReview = H6_ProdPayloadOK AND H6_HistReview==H6_ProdReview;
+H6_MatchMethod = H6_ProdPayloadOK AND H6_HistMethodMask==H6_ProdMethodMask;
+H6_MatchMarketSelection = H6_ProdMarketPayload AND H6_HistMarketSelection==H6_ProdMarketSelection;
+
+H6_AllMatch = H6_HistoricalStockSourceOK AND H6_HistMarketValid AND
+    H6_ProdPayloadOK AND H6_ProdMarketPayload AND
+    H6_MatchDataEligible AND H6_MatchClass AND H6_MatchSide AND
+    H6_MatchStage AND H6_MatchPhase AND H6_MatchFamily AND H6_MatchRange AND
+    H6_MatchMTF AND H6_MatchRS AND H6_MatchReview AND H6_MatchMethod AND
+    H6_MatchMarketSelection;
+
+// ---------------------------------------------------------------------------
+// 6. Locked controls: SNZ exact; DTP/FRT evidence-resolved fields only
+// ---------------------------------------------------------------------------
+H6_IsSNZ = H6_Symbol=="SNZ";
+H6_IsDTP = H6_Symbol=="DTP";
+H6_IsFRT = H6_Symbol=="FRT";
+H6_IsControl = H6_IsSNZ OR H6_IsDTP OR H6_IsFRT;
+
+H6_SNZExpectedHist = H6_HistClass==2 AND H6_HistSide==0 AND H6_HistStage==1 AND
+    H6_StockPhase==2 AND H6_StockFamily==1 AND
+    H6_Finite(H6_HistRangePosition) AND abs(H6_HistRangePosition-0.3500)<=H6_FloatTolerance AND
+    H6_HistMTF==0 AND H6_HistRS==2 AND H6_HistReview==0 AND H6_HistMethodMask==7;
+H6_SNZExpectedProd = H6_ProdClass==2 AND H6_ProdSide==0 AND H6_ProdStage==1 AND
+    H6_ProdPhase==2 AND H6_ProdFamily==1 AND
+    H6_Finite(H6_ProdRangePosition) AND abs(H6_ProdRangePosition-0.3500)<=H6_FloatTolerance AND
+    H6_ProdMTF==0 AND H6_ProdRS==2 AND H6_ProdReview==0 AND H6_ProdMethodMask==7;
+
+// DTP/FRT production evidence chi khoa Review + method mask 1031 + range position xap xi.
+// Tolerance 0.005 chi ap dung cho reference xap xi trong evidence; H6 historical-vs-production
+// van dung tolerance chat 0.0001 o H6_MatchRange.
+H6_DTPExpectedHist = H6_HistClass==9 AND H6_HistReview==1 AND H6_HistMethodMask==1031 AND
+    H6_Finite(H6_HistRangePosition) AND abs(H6_HistRangePosition-(-2.3027))<=0.005;
+H6_DTPExpectedProd = H6_ProdClass==9 AND H6_ProdReview==1 AND H6_ProdMethodMask==1031 AND
+    H6_Finite(H6_ProdRangePosition) AND abs(H6_ProdRangePosition-(-2.3027))<=0.005;
+H6_FRTExpectedHist = H6_HistClass==9 AND H6_HistReview==1 AND H6_HistMethodMask==1031 AND
+    H6_Finite(H6_HistRangePosition) AND abs(H6_HistRangePosition-(-0.7363))<=0.005;
+H6_FRTExpectedProd = H6_ProdClass==9 AND H6_ProdReview==1 AND H6_ProdMethodMask==1031 AND
+    H6_Finite(H6_ProdRangePosition) AND abs(H6_ProdRangePosition-(-0.7363))<=0.005;
+
+H6_ControlExpectedOK = IIf(H6_IsSNZ,H6_SNZExpectedHist AND H6_SNZExpectedProd,
+    IIf(H6_IsDTP,H6_DTPExpectedHist AND H6_DTPExpectedProd,
+    IIf(H6_IsFRT,H6_FRTExpectedHist AND H6_FRTExpectedProd,1)));
+H6_ControlStatus = IIf(NOT H6_IsControl,0,IIf(H6_ControlExpectedOK AND H6_AllMatch,1,2));
+H6_ControlText = "Khong phai control\nDat control da khoa\nKhong dat control da khoa";
+
+H6_StatusCode = IIf(NOT H6_TargetRow,0,
+    IIf(NOT H6_ProdPayloadOK,1,
+    IIf(NOT H6_HistoricalStockSourceOK,2,
+    IIf(NOT H6_HistMarketValid,3,
+    IIf(NOT H6_ProdMarketPayload,4,
+    IIf(NOT H6_AllMatch,5,6))))));
+H6_StatusText = "Khong phai moc 11/09\nSnapshot production khong hop le\nHistorical stock chua san sang\nHistorical Market chua san sang\nProduction Market oracle chua san sang\nKhong khop terminal\nKhop terminal";
+
+// Exact symbol-set report: production eligible OR historical eligible. Controls duoc giu de debug.
+Filter = H6_TargetRow AND (H6_ProdDataEligible==1 OR H6_HistDataEligible==1 OR H6_IsControl);
+
+AddTextColumn(H6_Symbol,"Ma co phieu");
+AddMultiTextColumn(H6_ProdPayloadOK,H6_YesNo,"Production oracle hop le");
+AddMultiTextColumn(H6_HistoricalStockSourceOK,H6_YesNo,"Historical stock hop le");
+AddMultiTextColumn(H6_HistMarketValid,H6_YesNo,"Historical Market hop le");
+AddMultiTextColumn(H6_MatchDataEligible,H6_YesNo,"Khop Data Eligible");
+AddMultiTextColumn(H6_MatchClass,H6_YesNo,"Khop lop");
+AddMultiTextColumn(H6_MatchSide,H6_YesNo,"Khop huong");
+AddMultiTextColumn(H6_MatchStage,H6_YesNo,"Khop giai doan");
+AddMultiTextColumn(H6_MatchPhase,H6_YesNo,"Khop pha");
+AddMultiTextColumn(H6_MatchFamily,H6_YesNo,"Khop gia thuyet");
+AddMultiTextColumn(H6_MatchRangeValidity,H6_YesNo,"Khop co vi tri vung");
+AddMultiTextColumn(H6_MatchRange,H6_YesNo,"Khop vi tri vung");
+AddMultiTextColumn(H6_MatchMTF,H6_YesNo,"Khop MTF");
+AddMultiTextColumn(H6_MatchRS,H6_YesNo,"Khop RS");
+AddMultiTextColumn(H6_MatchReview,H6_YesNo,"Khop can xem xet");
+AddMultiTextColumn(H6_MatchMethod,H6_YesNo,"Khop ma chan");
+AddMultiTextColumn(H6_MatchMarketSelection,H6_YesNo,"Khop boi canh thi truong");
+AddMultiTextColumn(H6_AllMatch,H6_YesNo,"Khop tat ca");
+
+AddColumn(H6_ProdClass,"Lop production",1.0);
+AddColumn(H6_HistClass,"Lop historical",1.0);
+AddColumn(H6_ProdReview,"Review production",1.0);
+AddColumn(H6_HistReview,"Review historical",1.0);
+AddColumn(H6_ProdMethodMask,"Ma chan production",1.0);
+AddColumn(H6_HistMethodMask,"Ma chan historical",1.0);
+AddColumn(H6_ProdRangePositionValid,"Co vi tri production",1.0);
+AddColumn(H6_RangePositionValid,"Co vi tri historical",1.0);
+AddColumn(IIf(H6_ProdRangePositionValid==1 AND H6_Finite(H6_ProdRangePosition),
+              H6_ProdRangePosition,Null),"Vi tri vung production",1.4);
+AddColumn(IIf(H6_RangePositionValid==1 AND H6_Finite(H6_HistRangePosition),
+              H6_HistRangePosition,Null),"Vi tri vung historical",1.4);
+AddColumn(H6_ProdMarketSelection,"Boi canh thi truong production",1.0);
+AddColumn(H6_HistMarketSelection,"Boi canh thi truong historical",1.0);
+AddMultiTextColumn(H6_ControlStatus,H6_ControlText,"Kiem soat SNZ DTP FRT");
+AddMultiTextColumn(H6_StatusCode,H6_StatusText,"Trang thai H6");
+AddTextColumn(H6_Version,"Phien ban H6");
