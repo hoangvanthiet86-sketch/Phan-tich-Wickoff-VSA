@@ -64,14 +64,15 @@ Checkpoint:
 
 ## P4 — Final Historical Scanner gate
 
-Presentation acceptance da dat. Final release gate chi con thu tu merge:
+Merge order da hoan tat va duoc xac minh:
 
-1. merge PR #56 H6 vao `integration/wyckoff-vsa-production-candidate-v0.1`;
-2. retarget/rebase PR presentation neu can va merge cleanup len integration;
-3. verify integration head chua doi methodology/decision semantics.
+1. PR #56 H6 da merge vao `integration/wyckoff-vsa-production-candidate-v0.1` tai commit `4bad7e2eb09d794190a9eb3d04aa962067890f5c`;
+2. PR #57 presentation cleanup da merge tren H6 integration head tai commit `6e097d9873e488f11a0763dc8ce1737401111541`;
+3. diff `4bad7e2... -> 6e097d9...` chi gom presentation formula + presentation evidence/test plan, khong co thay doi methodology/decision semantics ngoai scope presentation;
+4. strict HS13 van giu `NOT_EXACT_1063_OF_1066` voi accepted exception DMC/SBM/TV3 do data-vintage revision.
 
-Sau khi hai PR da merge dung thu tu:
+Final checkpoint:
 
 `HISTORICAL_SCANNER_V01_FINAL = PASS_WITH_APPROVED_HS13_DATA_VINTAGE_EXCEPTION`
 
-Khong duoc doi thanh strict `PASS_1066_OF_1066`; phe duyet ngoai le DMC/SBM/TV3 phai tiep tuc duoc ghi ro trong release evidence.
+Khong duoc doi thanh strict `PASS_1066_OF_1066`; phe duyet ngoai le DMC/SBM/TV3 phai tiep tuc duoc ghi ro trong release evidence va final handoff.
