@@ -1,0 +1,73 @@
+/*
+    Wyckoff VSA Historical Scanner v0.1
+    H6 raw StaticVar diagnostic for H4 namespace.
+
+    Muc tieu:
+    - doc truc tiep tung truong H4 de xac dinh vi sao prerequisite audit khong thay H4;
+    - KHONG ghi StaticVar;
+    - KHONG chay analytical runtime;
+    - KHONG tao trading signal.
+
+    Chay tren DTP/FRT, Daily, 1 recent bar, Explore.
+    UI moi dung tieng Viet khong dau theo HS14.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+SetOption("NoDefaultColumns",True);
+
+H6D_TargetDateNum = 1260911;
+H6D_Symbol = Name();
+H6D_Prefix = "WVSA_HIST_STOCK_v01_" + H6D_Symbol + "_";
+H6D_YesNo = "Khong\nCo";
+H6D_Version = "HISTORICAL_H6_STATICVAR_DIAGNOSTIC_V01_20260915_A";
+
+H6D_ReadyRaw = StaticVarGet(H6D_Prefix+"Ready");
+H6D_GenerationRaw = StaticVarGet(H6D_Prefix+"CommittedGenerationID");
+H6D_SchemaMajorRaw = StaticVarGet(H6D_Prefix+"SchemaMajor");
+H6D_SchemaMinorRaw = StaticVarGet(H6D_Prefix+"SchemaMinor");
+H6D_StoredSymbol = StaticVarGetText(H6D_Prefix+"Symbol");
+H6D_ProducerVersion = StaticVarGetText(H6D_Prefix+"ProducerVersion");
+H6D_RSMarketSymbol = StaticVarGetText(H6D_Prefix+"RSMarketSymbol");
+
+H6D_Key = StaticVarGet(H6D_Prefix+"SourceBusinessDateKey");
+H6D_DT = StaticVarGet(H6D_Prefix+"SourceBarDateTime");
+H6D_SourceValid = StaticVarGet(H6D_Prefix+"SourceValid");
+
+H6D_ReadyExists = NOT IsNull(H6D_ReadyRaw);
+H6D_GenerationExists = NOT IsNull(H6D_GenerationRaw);
+H6D_SymbolExists = StrLen(H6D_StoredSymbol)>0;
+H6D_SymbolMatch = H6D_SymbolExists AND H6D_StoredSymbol==H6D_Symbol;
+H6D_ProducerExists = StrLen(H6D_ProducerVersion)>0;
+H6D_KeyCount = LastValue(Cum(NOT IsNull(H6D_Key)));
+H6D_KeyTargetCount = LastValue(Cum(Nz(H6D_Key,0)==H6D_TargetDateNum));
+H6D_SourceValidCount = LastValue(Cum(Nz(H6D_SourceValid,0)==1));
+H6D_LastKey = LastValue(Nz(H6D_Key,0));
+H6D_LastDT = LastValue(Nz(H6D_DT,0));
+
+H6D_ReadyOK = H6D_ReadyExists AND Nz(H6D_ReadyRaw,0)==1;
+H6D_GenerationOK = H6D_GenerationExists AND Nz(H6D_GenerationRaw,0)>0;
+H6D_KeyTargetOK = H6D_KeyTargetCount>0;
+H6D_AllRawOK = H6D_ReadyOK AND H6D_GenerationOK AND H6D_SymbolMatch AND H6D_KeyTargetOK;
+
+H6D_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = H6D_LastBar;
+
+AddTextColumn(H6D_Symbol,"Ma co phieu");
+AddTextColumn(H6D_Prefix,"Prefix H4");
+AddMultiTextColumn(H6D_ReadyExists,H6D_YesNo,"Ready ton tai");
+AddColumn(Nz(H6D_ReadyRaw,-1),"Ready raw",1.0);
+AddMultiTextColumn(H6D_GenerationExists,H6D_YesNo,"Generation ton tai");
+AddColumn(Nz(H6D_GenerationRaw,-1),"Generation raw",1.0);
+AddColumn(Nz(H6D_SchemaMajorRaw,-1),"Schema major",1.0);
+AddColumn(Nz(H6D_SchemaMinorRaw,-1),"Schema minor",1.0);
+AddTextColumn(H6D_StoredSymbol,"Symbol da luu");
+AddMultiTextColumn(H6D_SymbolMatch,H6D_YesNo,"Symbol khop");
+AddTextColumn(H6D_ProducerVersion,"Producer version");
+AddTextColumn(H6D_RSMarketSymbol,"RS market symbol");
+AddColumn(H6D_KeyCount,"So moc ngay doc duoc",1.0);
+AddColumn(H6D_KeyTargetCount,"So moc 11/09",1.0);
+AddColumn(H6D_SourceValidCount,"So ngay source valid",1.0);
+AddColumn(H6D_LastKey,"DateNum cuoi doc duoc",1.0);
+AddColumn(H6D_LastDT,"DateTime cuoi doc duoc",1.0);
+AddMultiTextColumn(H6D_AllRawOK,H6D_YesNo,"H4 raw day du");
+AddTextColumn(H6D_Version,"Phien ban diagnostic");
