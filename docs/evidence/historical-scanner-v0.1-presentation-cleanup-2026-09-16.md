@@ -46,12 +46,32 @@ The release-facing Historical Scanner output must satisfy:
 5. no trading-action fields (`Buy`, `Sell`, `Short`, `Cover`, `PositionScore`, P&L);
 6. no change to analytical decision semantics.
 
-Native presentation smoke test is still required on AmiBroker 6.20.01 before declaring overall `HISTORICAL_SCANNER_V01_FINAL = PASS`.
+## Native evidence — AmiBroker 6.20.01
 
-## Static checkpoint
+Native file received from SNZ / Daily / Current / All quotes / `Toan bo kiem tra`.
+
+Observed:
+
+- 1,971 data rows, exactly 17 explicit columns;
+- first two columns are `Ma co phieu`, `Ngay gio`; no duplicate AmiBroker default `Ticker` / `Date/Time` columns;
+- all 1,971 rows identify version `HISTORICAL_SCANNER_V01_H4_20260916_B`;
+- no non-ASCII character exists in column headers or user-facing text values;
+- zero occurrences in user-facing output of `Watch`, `Review`, `Data gated`, `Stock publisher`, `Market context`, `point-in-time`, `Full Top-Down`;
+- 43 rows show blank `Vi tri trong vung (%)`, confirming invalid/unknown range is not rendered as a numeric sentinel;
+- 1,928 rows with valid range display normal numeric percentages;
+- no output fields named `Buy`, `Sell`, `Short`, `Cover`, `PositionScore`, or P&L;
+- SNZ at 11/09/2026 remains the locked terminal control: eligible, `Theo doi`, side unresolved, stage Watch-equivalent, Phase B, lower unresolved family, RangePosition 35.00%, MTF 0 display, RS down, Review false, MethodBlockMask 7.
+
+No publisher rerun was performed for this presentation acceptance.
+
+## Checkpoints
 
 `HISTORICAL_SCANNER_V01_PRESENTATION_STATIC = PASS`
 
-Pending native checkpoint:
+`HISTORICAL_SCANNER_V01_PRESENTATION_NATIVE = PASS`
 
-`HISTORICAL_SCANNER_V01_PRESENTATION_NATIVE = PENDING`
+Overall final release checkpoint remains pending merge order only: PR #56 H6 first, then this presentation PR.
+
+After H6 acceptance is merged into integration and this presentation cleanup is merged on top, the planned final checkpoint is:
+
+`HISTORICAL_SCANNER_V01_FINAL = PASS_WITH_APPROVED_HS13_DATA_VINTAGE_EXCEPTION`
