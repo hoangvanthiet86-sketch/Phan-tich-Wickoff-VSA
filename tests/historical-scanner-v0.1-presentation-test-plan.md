@@ -23,19 +23,21 @@ Checkpoint:
 
 ## P2 — Native syntax / formula
 
-Mo ban moi cua:
+Da chay native tren AmiBroker 6.20.01 bang ban:
 
-`afl/WyckoffVSA_HistoricalScanner_v0.1.afl`
+`HISTORICAL_SCANNER_V01_H4_20260916_B`
 
-tren AmiBroker 6.20.01 va Verify Syntax/Formula.
+Formula compile va Explore thanh cong, khong co loi include/compile trong run native da nop.
 
-Yeu cau: khong loi compile/include.
+Checkpoint:
+
+`HISTORICAL_SCANNER_V01_PRESENTATION_FORMULA_NATIVE = PASS`
 
 ## P3 — Native display smoke
 
 Khong rerun H2/H3/H4 publisher.
 
-Chay:
+Native run:
 
 - symbol: `SNZ`;
 - Periodicity: Daily;
@@ -44,23 +46,31 @@ Chay:
 - Parameters -> `1.1 Che do loc lich su = Toan bo kiem tra`;
 - Explore.
 
-Kiem tra:
+Ket qua native:
 
-1. khong co cot mac dinh `Ticker` / `Date/Time` lap them;
-2. hai cot dau do formula tao la `Ma co phieu`, `Ngay gio`;
-3. cac nhan nguoi dung la tieng Viet ASCII, ngoai acronym `MTF`, `RS`;
-4. khong con nhan `Watch`, `Review`, `Data gated`, `Stock publisher`, `Market context`, `point-in-time`, `Full Top-Down` trong output nguoi dung;
-5. dong co `RangePositionValid != 1` hien `Vi tri trong vung (%)` rong/blank, khong hien sentinel so am lon;
-6. dong hop le van hien gia tri phan tram binh thuong;
-7. khong co `Buy`, `Sell`, `Short`, `Cover`, `PositionScore`, P&L.
+1. 1,971 dong du lieu, 17 cot explicit;
+2. khong co cot mac dinh `Ticker` / `Date/Time` lap them;
+3. hai cot dau do formula tao la `Ma co phieu`, `Ngay gio`;
+4. header va text nguoi dung deu ASCII; acronym `MTF`, `RS` duoc giu;
+5. khong con nhan `Watch`, `Review`, `Data gated`, `Stock publisher`, `Market context`, `point-in-time`, `Full Top-Down` trong output nguoi dung;
+6. co 43 dong `Vi tri trong vung (%)` blank, khong co numeric sentinel cho state invalid/unknown;
+7. 1,928 dong valid van hien phan tram binh thuong;
+8. khong co cot `Buy`, `Sell`, `Short`, `Cover`, `PositionScore`, P&L;
+9. SNZ tai 11/09/2026 van giu terminal control: eligible, Theo doi, side 0, Stage 1, Phase 2, Family 1, Range 35.00%, MTF 0, RS 2, Review 0, MethodBlockMask 7.
 
-Checkpoint neu dat:
+Checkpoint:
 
 `HISTORICAL_SCANNER_V01_PRESENTATION_NATIVE = PASS`
 
 ## P4 — Final Historical Scanner gate
 
-Chi sau khi P2 + P3 PASS va H6 acceptance da duoc merge vao integration:
+Presentation acceptance da dat. Final release gate chi con thu tu merge:
+
+1. merge PR #56 H6 vao `integration/wyckoff-vsa-production-candidate-v0.1`;
+2. retarget/rebase PR presentation neu can va merge cleanup len integration;
+3. verify integration head chua doi methodology/decision semantics.
+
+Sau khi hai PR da merge dung thu tu:
 
 `HISTORICAL_SCANNER_V01_FINAL = PASS_WITH_APPROVED_HS13_DATA_VINTAGE_EXCEPTION`
 
