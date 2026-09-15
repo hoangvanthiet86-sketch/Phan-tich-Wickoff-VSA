@@ -111,11 +111,11 @@ The evidence does not support changing Historical Scanner methodology or range-s
 
 Therefore no analytical code correction is justified from these three mismatches.
 
-## 5. Acceptance consequence
+## 5. Strict HS13 result
 
 HS13 requires exact terminal-date production decision-surface reconstruction for the same 1,066 symbols, otherwise a full mismatch report must be retained and PASS must not be declared.
 
-Current strict result:
+Strict comparator result remains:
 
 `HISTORICAL_SCANNER_V01_H6C_UNIVERSE_TERMINAL_EQUIVALENCE = NOT_EXACT_1063_OF_1066`
 
@@ -125,8 +125,30 @@ Reason:
 
 All three locked controls `SNZ`, `DTP`, and `FRT` remain exact.
 
-To obtain strict HS13 exact equivalence without an exception, the historical engine would need the exact historical database/data vintage that existed when the 11/09/2026 production snapshot was created.
+To obtain strict 1066/1066 equivalence without an exception, the historical engine would need the exact historical database/data vintage that existed when the 11/09/2026 production snapshot was created.
 
-Alternatively, the project owner may explicitly approve an acceptance exception for these three verified data-vintage RangePosition differences, as permitted by the Definition of Done.
+## 6. Project-owner acceptance exception
 
-No production files were modified and no methodology/threshold/decision semantics were changed by this investigation.
+On 15/09/2026, after the root-cause evidence above was presented, the project owner explicitly approved the acceptance exception for `DMC`, `SBM`, and `TV3` due to verified data-vintage revision and instructed the project to continue H6 completion.
+
+Approved scope is deliberately narrow:
+
+- only symbols: `DMC`, `SBM`, `TV3`;
+- only field: `RangePosition`;
+- cause: historical source-data vintage differs from the archived production data vintage;
+- no exception for Class, Side, Stage, Phase, Family, MTF, RS, Review, MethodBlockMask, Market context, DataEligible, universe membership, or RangePosition validity;
+- no methodology/threshold/enum/decision-semantic change;
+- no tolerance widening;
+- no production rewrite.
+
+Acceptance record:
+
+`HISTORICAL_SCANNER_V01_HS13_ACCEPTANCE_EXCEPTION = APPROVED_DMC_SBM_TV3_DATA_VINTAGE_REVISION`
+
+H6-C accepted status under the approved exception:
+
+`HISTORICAL_SCANNER_V01_H6C = PASS_WITH_APPROVED_EXCEPTION`
+
+The strict measured result is intentionally retained alongside the exception and is not rewritten as a false `PASS_1066_OF_1066`.
+
+No production files were modified and no methodology/threshold/decision semantics were changed by this investigation or acceptance decision.
