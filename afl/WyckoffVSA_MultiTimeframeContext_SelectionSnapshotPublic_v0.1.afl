@@ -4,13 +4,18 @@
     Projection facade only for Cross-Symbol Selection Context Snapshot XS01-XS38.
     No new Wyckoff/VSA interpretation. No ranking or trading signal.
 
-    SPEC-ALIGNED / UNTESTED DEVELOPMENT.
+    DCMA v0.1 contract note:
+    schema minor 1 carries PublicActive-based Daily multiplicity semantics and
+    versioned Weekly/Monthly snapshot multiplicity. Old minor-0 transports must
+    not be interpreted silently under this semantic contract.
+
+    SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
 */
 #include_once <WyckoffVSA_MultiTimeframeContext_v0.1.afl>
 
 _SECTION_BEGIN("97. MTF selection snapshot public projection");
 WMTF_PublicSchemaMajor = 1;
-WMTF_PublicSchemaMinor = 0;
+WMTF_PublicSchemaMinor = 1;
 WMTF_PublicProducerVersion = "0.1";
 
 WMTF_WeeklyValid = WMTF_Zero + WMTF_WeeklyValidScalar;
