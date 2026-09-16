@@ -37,7 +37,7 @@ HMC_SourceDateTime = DateTime();
 HMC_SourceBusinessDateKey = DateNum();
 
 HMC_Prefix = "WVSA_HIST_MKT_v01_" + HMC_Symbol + "_";
-HMC_Version = "HISTORICAL_MARKET_CONTEXT_PUBLISHER_V01_20260914_C";
+HMC_Version = "HISTORICAL_MARKET_CONTEXT_PUBLISHER_V01_20260916_D";
 
 HMC_SourceValid =
     HMC_IntervalValid AND
@@ -81,7 +81,7 @@ else
 
     StaticVarSet(HMC_Prefix+"Ready",0,True);
     StaticVarSet(HMC_Prefix+"SchemaMajor",1,True);
-    StaticVarSet(HMC_Prefix+"SchemaMinor",0,True);
+    StaticVarSet(HMC_Prefix+"SchemaMinor",1,True);
     StaticVarSetText(HMC_Prefix+"Symbol",HMC_Symbol,True);
     StaticVarSetText(HMC_Prefix+"ProducerVersion",HMC_Version,True);
 
@@ -89,6 +89,11 @@ else
     StaticVarSet(HMC_Prefix+"SourceBarDateTime",HMC_SourceDateTime,True);
     StaticVarSet(HMC_Prefix+"SourceValid",HMC_SourceValid,True);
 
+    // DCMA-10 audit: lifecycle presence va public-active duoc luu rieng.
+    StaticVarSet(HMC_Prefix+"L_ContextPresent",WPC_L_ContextPresent,True);
+    StaticVarSet(HMC_Prefix+"U_ContextPresent",WPC_U_ContextPresent,True);
+    StaticVarSet(HMC_Prefix+"L_PublicActive",WPCP_L_RangeActivePublic,True);
+    StaticVarSet(HMC_Prefix+"U_PublicActive",WPCP_U_RangeActivePublic,True);
     StaticVarSet(HMC_Prefix+"ContextMultiplicityCode",HPM_DMult,True);
     StaticVarSet(HMC_Prefix+"DirectionalContextCode",HPM_DDir,True);
     StaticVarSet(HMC_Prefix+"EvidenceBalanceCode",HPM_DEvidence,True);
