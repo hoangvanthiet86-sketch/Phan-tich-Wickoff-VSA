@@ -12,13 +12,17 @@
     through deeply nested #include_once chains while preserving all numeric
     public outputs and methodology.
 
+    DCMA v0.1 note:
+    schema minor 1 identifies ContextMultiplicity as PublicActive-based and
+    exposes lower/upper PublicActive diagnostics from Composite.
+
     INTEGRATED DEVELOPMENT / NATIVE ACCEPTANCE PENDING.
 */
 #include_once <WyckoffVSA_CompositeIndicator_v0.1.afl>
 
 _SECTION_BEGIN("88. Composite snapshot public diagnostics");
 WCI_PublicSchemaMajor = 1;
-WCI_PublicSchemaMinor = 0;
+WCI_PublicSchemaMinor = 1;
 
 // D09 projection, preserved independently for each RangeContext so a
 // multiple-context snapshot never needs to select a winner.
