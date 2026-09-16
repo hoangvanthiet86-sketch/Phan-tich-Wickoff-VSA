@@ -1,0 +1,122 @@
+/*
+    Wyckoff VSA ContextMultiplicity PublicActive correction v0.1
+    Native regression / audit probe for DCMA-A01..A07.
+
+    Diagnostic only. No StaticVar writes. No trading signals.
+    User-facing labels are Vietnamese ASCII for AmiBroker 6.20.01.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+SetOption("NoDefaultColumns",True);
+
+// Full explicit-order Runtime v0.2 stack. Generated Runtime files must first be
+// rebuilt from this branch's canonical sources using the existing builders.
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_MultiTimeframeContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+#include_once <WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_MarketScanner_Runtime_v0.2.afl>
+
+DCMA_LastBar = BarIndex()==LastValue(BarIndex());
+DCMA_PresentLower = LastValue(WCI_L_ContextPresent);
+DCMA_PresentUpper = LastValue(WCI_U_ContextPresent);
+DCMA_ActiveLower = LastValue(WCI_L_PublicActive);
+DCMA_ActiveUpper = LastValue(WCI_U_PublicActive);
+DCMA_PresentMultiplicity = DCMA_PresentLower + DCMA_PresentUpper;
+DCMA_ActiveMultiplicity = DCMA_ActiveLower + DCMA_ActiveUpper;
+DCMA_CompositeMultiplicity = LastValue(WCI_ContextMultiplicityCode);
+DCMA_CompositeAmbiguous = LastValue(WCI_ContextAmbiguous);
+DCMA_SemanticMismatch = DCMA_PresentMultiplicity != DCMA_ActiveMultiplicity;
+DCMA_ContractCorrect = DCMA_CompositeMultiplicity==DCMA_ActiveMultiplicity;
+
+// Read the archived pre-correction Daily Snapshot as an oracle without using
+// the fail-closed consumer. This probe never writes or mutates the snapshot.
+DCMA_OldPrefix = "WVSA_DAILY_v02_" + Name() + "_";
+DCMA_OldReady = Nz(StaticVarGet(DCMA_OldPrefix+"Ready"),0);
+DCMA_OldGeneration = Nz(StaticVarGet(DCMA_OldPrefix+"CommittedGenerationID"),0);
+DCMA_OldBusinessDate = Nz(StaticVarGet(DCMA_OldPrefix+"BusinessDateKey"),0);
+DCMA_OldMultiplicity = StaticVarGet(DCMA_OldPrefix+"ContextMultiplicity");
+DCMA_OldClass = StaticVarGet(DCMA_OldPrefix+"CandidateClass");
+DCMA_OldStage = StaticVarGet(DCMA_OldPrefix+"Stage");
+DCMA_OldReview = StaticVarGet(DCMA_OldPrefix+"Review");
+DCMA_OldMethodBlockMask = StaticVarGet(DCMA_OldPrefix+"MethodBlockMask");
+DCMA_OldMTF = StaticVarGet(DCMA_OldPrefix+"MTFDirectionalAlignment");
+DCMA_OldOracleAvailable =
+    DCMA_OldReady==1 AND DCMA_OldGeneration>0 AND
+    NOT IsNull(DCMA_OldMultiplicity) AND NOT IsNull(DCMA_OldClass) AND
+    NOT IsNull(DCMA_OldReview) AND NOT IsNull(DCMA_OldMethodBlockMask) AND
+    NOT IsNull(DCMA_OldMTF);
+
+DCMA_NewClass = LastValue(WSCN_CandidateClassCode);
+DCMA_NewStage = LastValue(WSCN_CandidateStageCode);
+DCMA_NewReview = LastValue(WSCN_ReviewFlag);
+DCMA_NewMethodBlockMask = LastValue(WSCN_MethodBlockReasonMask);
+DCMA_NewMTF = LastValue(WMTF_DirectionalAlignmentCode);
+DCMA_NewEligible = LastValue(WSCN_DataEligibilityCode);
+
+DCMA_ClassChanged = DCMA_OldOracleAvailable AND DCMA_OldClass!=DCMA_NewClass;
+DCMA_StageChanged = DCMA_OldOracleAvailable AND DCMA_OldStage!=DCMA_NewStage;
+DCMA_ReviewChanged = DCMA_OldOracleAvailable AND DCMA_OldReview!=DCMA_NewReview;
+DCMA_MaskChanged = DCMA_OldOracleAvailable AND DCMA_OldMethodBlockMask!=DCMA_NewMethodBlockMask;
+DCMA_MTFChanged = DCMA_OldOracleAvailable AND DCMA_OldMTF!=DCMA_NewMTF;
+DCMA_DecisionChanged = DCMA_ClassChanged OR DCMA_StageChanged OR DCMA_ReviewChanged OR DCMA_MaskChanged OR DCMA_MTFChanged;
+
+// Any decision change outside 2-present/<2-active is forbidden by DCMA-A06.
+DCMA_TargetPopulation = DCMA_PresentMultiplicity==2 AND DCMA_ActiveMultiplicity<2;
+DCMA_OutsidePopulationDecisionChange = DCMA_DecisionChanged AND NOT DCMA_TargetPopulation;
+
+Filter = DCMA_LastBar;
+
+AddTextColumn(Name(),"Ma co phieu");
+AddColumn(DateTime(),"Ngay gio",formatDateTime);
+AddColumn(DCMA_PresentLower,"Lower Present",1.0);
+AddColumn(DCMA_PresentUpper,"Upper Present",1.0);
+AddColumn(DCMA_ActiveLower,"Lower PublicActive",1.0);
+AddColumn(DCMA_ActiveUpper,"Upper PublicActive",1.0);
+AddColumn(DCMA_PresentMultiplicity,"So context Present",1.0);
+AddColumn(DCMA_ActiveMultiplicity,"So context Active",1.0);
+AddColumn(DCMA_CompositeMultiplicity,"Composite Multiplicity moi",1.0);
+AddColumn(DCMA_CompositeAmbiguous,"Composite Ambiguous moi",1.0);
+AddColumn(DCMA_ContractCorrect,"Multiplicity dung PublicActive",1.0);
+AddColumn(DCMA_SemanticMismatch,"Present khac Active",1.0);
+AddColumn(DCMA_TargetPopulation,"Thuoc tap sua semantics",1.0);
+
+AddColumn(DCMA_OldOracleAvailable,"Oracle cu san sang",1.0);
+AddColumn(DCMA_OldBusinessDate,"Ngay snapshot cu",1.0);
+AddColumn(DCMA_OldMultiplicity,"Multiplicity cu",1.0);
+AddColumn(DCMA_OldClass,"Class cu",1.0);
+AddColumn(DCMA_NewClass,"Class moi",1.0);
+AddColumn(DCMA_OldStage,"Stage cu",1.0);
+AddColumn(DCMA_NewStage,"Stage moi",1.0);
+AddColumn(DCMA_OldMTF,"MTF cu",1.0);
+AddColumn(DCMA_NewMTF,"MTF moi",1.0);
+AddColumn(DCMA_OldReview,"Review cu",1.0);
+AddColumn(DCMA_NewReview,"Review moi",1.0);
+AddColumn(DCMA_OldMethodBlockMask,"MethodBlockMask cu",1.0);
+AddColumn(DCMA_NewMethodBlockMask,"MethodBlockMask moi",1.0);
+AddColumn(DCMA_DecisionChanged,"Quyet dinh co thay doi",1.0);
+AddColumn(DCMA_OutsidePopulationDecisionChange,"LOI thay doi ngoai tap muc tieu",1.0);
+AddColumn(DCMA_NewEligible,"Data Eligible moi",1.0);
+AddTextColumn("DCMA_REGRESSION_V01_20260916_A","Phien ban probe");
