@@ -50,7 +50,7 @@ Muc dich: snapshot cu mang old Present-based multiplicity phai fail closed sau k
 
 `WDS_ConfigFingerprint` khong doi vi correction khong sua RuntimeConfig/threshold/methodology controls.
 
-Audit Daily Publisher xac nhan old oracle dung dung cac persisted key ma regression probe doc truc tiep: `BusinessDateKey`, `ContextMultiplicity`, `CandidateClass`, `Stage`, `Review`, `MethodBlockMask`, `MTFDirectionalAlignment`, cung commit markers `Ready` va `CommittedGenerationID`. Vi vay probe co the doc snapshot cu read-only ma khong can consumer va khong republish.
+Audit Daily Publisher xac nhan old oracle dung dung cac persisted key ma regression probe doc truc tiep: `BusinessDateKey`, `DataEligible`, `ContextMultiplicity`, `CandidateClass`, `Stage`, `PhaseState`, `FamilyHypothesis`, `DirectionalContext`, `Review`, `MethodBlockMask`, `MTFDirectionalAlignment`, cung commit markers `Ready` va `CommittedGenerationID`. Vi vay probe co the doc snapshot cu read-only ma khong can consumer va khong republish.
 
 ### Timeframe Snapshot W/M
 
@@ -96,13 +96,17 @@ Khong sua formula identity/checkpoint cua release `historical-scanner-v0.1.0`; t
 
 ## Regression probe
 
-`afl/WyckoffVSA_ContextMultiplicity_Regression_v0.1.afl`:
+`afl/WyckoffVSA_ContextMultiplicity_Regression_v0.1.afl` version `DCMA_REGRESSION_V01_20260916_B`:
 - khong ghi StaticVar;
 - doc old Daily Snapshot truc tiep lam oracle truoc correction;
 - tinh Present count va PublicActive count song song;
-- bao cao CandidateClass/Stage/MTF/Review/MethodBlockMask cu va moi;
+- bao cao old/new DataEligible, Class, Stage, Phase, Family, Directional, MTF, Review, MethodBlockMask;
 - danh dau population muc tieu `2 Present / <2 Active`;
-- danh dau bat ky decision change ngoai population muc tieu la loi.
+- kiem tra oracle business date phai trung operational as-of;
+- khong cho phep ket luan decision equivalence neu W/M/RS/Selection dependencies moi chua san sang;
+- chi bat `LOI thay doi ngoai tap muc tieu` khi `Cho phep so sanh quyet dinh=1`.
+
+Diem nay can thiet vi old W/M/Selection payload phai fail closed theo DCMA-10 ngay sau khi cai consumer moi. Full decision regression chi hop le sau khi cac downstream dependency da republish theo contract moi, trong khi old Daily Snapshot van duoc bao toan lam oracle.
 
 ## Audit dependency runtime
 
