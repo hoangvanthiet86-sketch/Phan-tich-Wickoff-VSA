@@ -1,0 +1,57 @@
+/*
+    Wyckoff VSA Daily Multiplicity Watchlist Builder v0.1
+
+    ANALYSIS-ONLY / NON-PRODUCTION.
+
+    Purpose:
+    - build a small diagnostic universe from the existing Daily Snapshot;
+    - include only symbols whose current Daily Composite reports
+      ContextMultiplicity = 2;
+    - avoid rerunning DailyPublisher just to identify those symbols.
+
+    Run:
+    - Apply to: VN STOCKS ONLY
+    - Periodicity: Daily
+    - Range: 1 recent bar
+    - Explore
+
+    Creates/updates watchlist: WVSA DAILY MULTI RANGE
+*/
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_DailySnapshotConsumer_v0.2.afl>
+
+_SECTION_BEGIN("Daily Multiplicity Watchlist Builder v0.1");
+
+WMB_WatchlistName = "WVSA DAILY MULTI RANGE";
+WMB_LastVisibleBar = BarIndex()==LastValue(BarIndex());
+WMB_Target = WDSC_Valid AND WDSC_ContextMultiplicity==2;
+
+WMB_WatchlistID = CategoryFind(WMB_WatchlistName,categoryWatchlist);
+if (WMB_WatchlistID<0)
+{
+    WMB_WatchlistID = CategoryCreate(WMB_WatchlistName,categoryWatchlist);
+}
+
+if (WMB_Target)
+{
+    CategoryAddSymbol("",categoryWatchlist,WMB_WatchlistID);
+}
+else
+{
+    CategoryRemoveSymbol("",categoryWatchlist,WMB_WatchlistID);
+}
+
+WMB_MemberAfter = InWatchListName(WMB_WatchlistName);
+WMB_Match = WMB_MemberAfter==WMB_Target;
+
+Filter = WMB_LastVisibleBar AND WMB_Target;
+
+AddTextColumn(Name(),"Ma");
+AddColumn(WDSC_StatusCode,"Trang thai Daily Snapshot",1.0);
+AddColumn(WDSC_ContextMultiplicity,"So context trong snapshot",1.0);
+AddColumn(WMB_MemberAfter,"Da vao watchlist",1.0);
+AddColumn(WMB_Match,"Doi chieu",1.0);
+AddTextColumn("DAILY_MULTIPLICITY_WATCHLIST_BUILDER_V01_20260913_A","Phien ban");
+
+_SECTION_END();
