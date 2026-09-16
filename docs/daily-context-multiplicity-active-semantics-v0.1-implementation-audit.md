@@ -50,15 +50,28 @@ Muc dich: snapshot cu mang old Present-based multiplicity phai fail closed sau k
 
 `WDS_ConfigFingerprint` khong doi vi correction khong sua RuntimeConfig/threshold/methodology controls.
 
+Audit Daily Publisher xac nhan old oracle dung dung cac persisted key ma regression probe doc truc tiep: `BusinessDateKey`, `ContextMultiplicity`, `CandidateClass`, `Stage`, `Review`, `MethodBlockMask`, `MTFDirectionalAlignment`, cung commit markers `Ready` va `CommittedGenerationID`. Vi vay probe co the doc snapshot cu read-only ma khong can consumer va khong republish.
+
 ### Timeframe Snapshot W/M
 
 Publisher/Consumer da duoc version-guard theo Composite public schema 1.1 va payload PublicActive. Snapshot W/M cu khong duoc doc nhu payload semantics moi.
 
 ### Cross-Symbol Selection Context
 
-Publisher da luu producer Composite schema trong persisted payload. Vi vay khong can doi top-level `WXS_SchemaMinor` chi de sua multiplicity.
+Top-level `WXS_SchemaMajor/Minor` van 1.0 de base consumer hien huu co the deserialize va chuyen tiep cho version guard, nhung semantic contract da duoc tang:
+- `ProducerContractVersion = 0.1.1`;
+- `CompositeSchema = 1.1`;
+- `MTFSchema = 1.1`;
+- persist rieng `L_PublicActive` / `U_PublicActive` ben canh `L_ContextPresent` / `U_ContextPresent`;
+- publisher bat buoc `ContextMultiplicityCode == L_PublicActive + U_PublicActive`.
 
-`WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl` nay yeu cau `CompositeSchemaMajor=1` va `CompositeSchemaMinor=1`. Selection snapshot cu duoc tao tu Composite 1.0 se fail closed voi schema/version mismatch.
+`WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl` yeu cau dong thoi:
+- `ProducerContractVersion=0.1.1`;
+- Composite schema 1.1;
+- MTF schema 1.1;
+- hai PublicActive flags ton tai, chi nhan 0/1 va tong cua chung bang transported multiplicity.
+
+Selection snapshot cu co contract 0.1, Composite/MTF minor 0, hoac thieu PublicActive se fail closed voi schema/version mismatch thay vi bi dien giai ngam theo semantics moi.
 
 ### Market Scanner compatibility
 
@@ -109,7 +122,7 @@ Cac transport mang `ContextMultiplicityCode` da co mot trong hai co che bat buoc
 
 Payload truoc correction khong duoc consumer moi doc ngam nhu cung semantics.
 
-Day la source/static closure, KHONG phai native PASS. Native phai xac minh old payload fail closed va republished payload 1.1 duoc doc dung.
+Day la source/static closure, KHONG phai native PASS. Native phai xac minh old payload fail closed va republished payload 1.1/0.1.1 duoc doc dung.
 
 ## Khong thay doi
 
@@ -127,6 +140,6 @@ Correction nay khong:
 
 Chua co native PASS cho implementation nay.
 
-Cac gate con lai: DCMA-A01..A07, bao gom old-payload fail-closed, republish contract 1.1 va VN STOCKS ONLY regression.
+Cac gate con lai: DCMA-A01..A07, bao gom old-payload fail-closed, republish contract moi va VN STOCKS ONLY regression.
 
 Checkpoint `DAILY_CONTEXT_MULTIPLICITY_ACTIVE_SEMANTICS_V01 = PASS` bi cam su dung cho den khi cac native gate tren deu dat.
