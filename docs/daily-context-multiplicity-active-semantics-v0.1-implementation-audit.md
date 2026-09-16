@@ -1,6 +1,6 @@
 # Daily Context Multiplicity PublicActive v0.1 — Implementation Audit
 
-Trang thai: `SOURCE IMPLEMENTATION IN PROGRESS / NATIVE PENDING / NO PRODUCTION MERGE`
+Trang thai: `SOURCE COMPLETE / NATIVE PENDING / NO PRODUCTION MERGE`
 
 Spec normative: PR #62, `DAILY_CONTEXT_MULTIPLICITY_ACTIVE_SEMANTICS_V01_SPEC = APPROVED`.
 
@@ -50,6 +50,37 @@ Muc dich: snapshot cu mang old Present-based multiplicity phai fail closed sau k
 
 `WDS_ConfigFingerprint` khong doi vi correction khong sua RuntimeConfig/threshold/methodology controls.
 
+### Timeframe Snapshot W/M
+
+Publisher/Consumer da duoc version-guard theo Composite public schema 1.1 va payload PublicActive. Snapshot W/M cu khong duoc doc nhu payload semantics moi.
+
+### Cross-Symbol Selection Context
+
+Publisher da luu producer Composite schema trong persisted payload. Vi vay khong can doi top-level `WXS_SchemaMinor` chi de sua multiplicity.
+
+`WyckoffVSA_CrossSymbolSelectionContext_ConsumerVersionGuard_v0.1.afl` nay yeu cau `CompositeSchemaMajor=1` va `CompositeSchemaMinor=1`. Selection snapshot cu duoc tao tu Composite 1.0 se fail closed voi schema/version mismatch.
+
+### Market Scanner compatibility
+
+Khong doi bat ky Filter/Class/threshold/MethodBlockMask rule nao.
+
+Chi dong bo consumer voi semantics da phe duyet:
+- stock Composite schema yeu cau 1.1;
+- singleton range-location chon side theo `WPCP_*_RangeActivePublic`, khong theo `ContextPresent`.
+
+Dieu nay ngan truong hop `2 Present / 1 PublicActive` bi mat singleton range-location chi vi terminal context van con lifecycle-present.
+
+### Historical persisted transports
+
+Historical release tag cu van bat bien. Mainline transport moi duoc version de payload cu khong bi doc ngam:
+- `WVSA_HIST_MTF_v01_*`: schema minor `0 -> 1`; luu them Present/PublicActive audit fields;
+- `HistoricalMTFPayloadProof`: chi chap nhan W/M historical timeline schema 1.1;
+- `WVSA_HIST_STOCK_v01_*`: schema minor `0 -> 1`; singleton range chon PublicActive; luu Present/PublicActive audit fields;
+- `WVSA_HIST_MKT_v01_*`: schema minor `0 -> 1`; luu Present/PublicActive audit fields;
+- `HistoricalScanner`: chi chap nhan stock/market stored timeline schema 1.1.
+
+Khong sua formula identity/checkpoint cua release `historical-scanner-v0.1.0`; tag release cu khong bi thay doi.
+
 ## Regression probe
 
 `afl/WyckoffVSA_ContextMultiplicity_Regression_v0.1.afl`:
@@ -62,22 +93,23 @@ Muc dich: snapshot cu mang old Present-based multiplicity phai fail closed sau k
 
 ## Audit dependency runtime
 
-Runtime Phase/Composite files la generated artifacts, khong duoc commit vao repo. Builder `BUILD_WVRC_PHASE_COMPOSITE_RUNTIME_STACK_v0.2.2.ps1` lay canonical source lam oracle va chi redirect include/config. Vi vay source correction phai nam o canonical files, sau do local runtime duoc regenerate.
+Runtime Phase/Composite files la generated artifacts, khong duoc commit vao repo. Builder `BUILD_WVRC_PHASE_COMPOSITE_RUNTIME_STACK_v0.2.2.ps1` lay canonical source lam oracle va chi redirect include/config. Vi vay source correction nam o canonical files, sau do local runtime phai regenerate.
 
 Tuong tu, MTF/Selection/Scanner Runtime files duoc tao tu canonical source boi `BUILD_WVRC_SCANNER_RUNTIME_STACK_v0.2.4.ps1`.
 
-Khong duoc tu tao mot generated runtime file trong repo de ne builder.
+Khong duoc tu tao generated runtime file trong repo de ne builder.
 
-## Persisted/public payload audit con phai dong
+## DCMA-10 persisted/public payload audit
 
-Ngoai Daily Snapshot, `ContextMultiplicityCode` con duoc persist qua:
-- Timeframe Snapshot W/M;
-- Cross-Symbol Selection Context;
-- Historical Market/Stock timeline.
+`DCMA-10 SOURCE GATE = CLOSED / STATIC PASS`
 
-Do DCMA-10 cam silently reuse old schema cho payload doi semantics, implementation chua duoc coi la source-complete cho toi khi cac transport nay co version/migration guard ro rang.
+Cac transport mang `ContextMultiplicityCode` da co mot trong hai co che bat buoc:
+- schema/contract minor moi; hoac
+- producer-sub-schema migration guard ro rang.
 
-Historical Scanner release `historical-scanner-v0.1.0` da dong va tag release khong bi sua. Neu mainline Historical transport duoc version sau release, release tag cu van bat bien.
+Payload truoc correction khong duoc consumer moi doc ngam nhu cung semantics.
+
+Day la source/static closure, KHONG phai native PASS. Native phai xac minh old payload fail closed va republished payload 1.1 duoc doc dung.
 
 ## Khong thay doi
 
@@ -95,4 +127,6 @@ Correction nay khong:
 
 Chua co native PASS cho implementation nay.
 
-Checkpoint `DAILY_CONTEXT_MULTIPLICITY_ACTIVE_SEMANTICS_V01 = PASS` bi cam su dung cho den khi DCMA-A01..A07 va persisted-contract gates deu dat.
+Cac gate con lai: DCMA-A01..A07, bao gom old-payload fail-closed, republish contract 1.1 va VN STOCKS ONLY regression.
+
+Checkpoint `DAILY_CONTEXT_MULTIPLICITY_ACTIVE_SEMANTICS_V01 = PASS` bi cam su dung cho den khi cac native gate tren deu dat.
