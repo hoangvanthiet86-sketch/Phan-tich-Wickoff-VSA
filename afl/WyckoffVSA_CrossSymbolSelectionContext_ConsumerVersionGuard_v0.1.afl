@@ -16,7 +16,7 @@ WXS_ExpectedContractVersion = "0.1";
 WXS_ExpectedCompositeVersion = "0.1";
 WXS_ExpectedMTFVersion = "0.1";
 WXS_ExpectedCompositeSchemaMajor = 1;
-WXS_ExpectedCompositeSchemaMinor = 0;
+WXS_ExpectedCompositeSchemaMinor = 1;
 WXS_ExpectedMTFSchemaMajor = 1;
 WXS_ExpectedMTFSchemaMinor = 0;
 
