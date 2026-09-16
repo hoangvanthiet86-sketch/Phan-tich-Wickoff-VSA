@@ -57,35 +57,70 @@ DCMA_OldPrefix = "WVSA_DAILY_v02_" + Name() + "_";
 DCMA_OldReady = Nz(StaticVarGet(DCMA_OldPrefix+"Ready"),0);
 DCMA_OldGeneration = Nz(StaticVarGet(DCMA_OldPrefix+"CommittedGenerationID"),0);
 DCMA_OldBusinessDate = Nz(StaticVarGet(DCMA_OldPrefix+"BusinessDateKey"),0);
+DCMA_OldDataEligible = StaticVarGet(DCMA_OldPrefix+"DataEligible");
 DCMA_OldMultiplicity = StaticVarGet(DCMA_OldPrefix+"ContextMultiplicity");
 DCMA_OldClass = StaticVarGet(DCMA_OldPrefix+"CandidateClass");
 DCMA_OldStage = StaticVarGet(DCMA_OldPrefix+"Stage");
+DCMA_OldPhase = StaticVarGet(DCMA_OldPrefix+"PhaseState");
+DCMA_OldFamily = StaticVarGet(DCMA_OldPrefix+"FamilyHypothesis");
+DCMA_OldDirectional = StaticVarGet(DCMA_OldPrefix+"DirectionalContext");
 DCMA_OldReview = StaticVarGet(DCMA_OldPrefix+"Review");
 DCMA_OldMethodBlockMask = StaticVarGet(DCMA_OldPrefix+"MethodBlockMask");
 DCMA_OldMTF = StaticVarGet(DCMA_OldPrefix+"MTFDirectionalAlignment");
 DCMA_OldOracleAvailable =
     DCMA_OldReady==1 AND DCMA_OldGeneration>0 AND
-    NOT IsNull(DCMA_OldMultiplicity) AND NOT IsNull(DCMA_OldClass) AND
-    NOT IsNull(DCMA_OldReview) AND NOT IsNull(DCMA_OldMethodBlockMask) AND
-    NOT IsNull(DCMA_OldMTF);
+    NOT IsNull(DCMA_OldDataEligible) AND NOT IsNull(DCMA_OldMultiplicity) AND
+    NOT IsNull(DCMA_OldClass) AND NOT IsNull(DCMA_OldStage) AND
+    NOT IsNull(DCMA_OldPhase) AND NOT IsNull(DCMA_OldFamily) AND
+    NOT IsNull(DCMA_OldDirectional) AND NOT IsNull(DCMA_OldReview) AND
+    NOT IsNull(DCMA_OldMethodBlockMask) AND NOT IsNull(DCMA_OldMTF);
+
+DCMA_CurrentBusinessDate = WCLK_AsOfBusinessDateKey;
+DCMA_OracleDateAligned = DCMA_OldOracleAvailable AND DCMA_OldBusinessDate==DCMA_CurrentBusinessDate;
 
 DCMA_NewClass = LastValue(WSCN_CandidateClassCode);
 DCMA_NewStage = LastValue(WSCN_CandidateStageCode);
+DCMA_NewPhase = LastValue(WCI_PhaseStateCode);
+DCMA_NewFamily = LastValue(WCI_FamilyHypothesisCode);
+DCMA_NewDirectional = LastValue(WCI_DirectionalContextCode);
 DCMA_NewReview = LastValue(WSCN_ReviewFlag);
 DCMA_NewMethodBlockMask = LastValue(WSCN_MethodBlockReasonMask);
 DCMA_NewMTF = LastValue(WMTF_DirectionalAlignmentCode);
 DCMA_NewEligible = LastValue(WSCN_DataEligibilityCode);
 
-DCMA_ClassChanged = DCMA_OldOracleAvailable AND DCMA_OldClass!=DCMA_NewClass;
-DCMA_StageChanged = DCMA_OldOracleAvailable AND DCMA_OldStage!=DCMA_NewStage;
-DCMA_ReviewChanged = DCMA_OldOracleAvailable AND DCMA_OldReview!=DCMA_NewReview;
-DCMA_MaskChanged = DCMA_OldOracleAvailable AND DCMA_OldMethodBlockMask!=DCMA_NewMethodBlockMask;
-DCMA_MTFChanged = DCMA_OldOracleAvailable AND DCMA_OldMTF!=DCMA_NewMTF;
-DCMA_DecisionChanged = DCMA_ClassChanged OR DCMA_StageChanged OR DCMA_ReviewChanged OR DCMA_MaskChanged OR DCMA_MTFChanged;
+// Old W/M and Selection snapshots are expected to fail closed after the schema
+// correction. Therefore decision equivalence must not be asserted until the
+// new downstream dependencies have been republished for the SAME as-of date.
+DCMA_NewMTFReady = LastValue(WMTF_SnapshotContractValid)==1;
+DCMA_NewRSReady = LastValue(WRS_ContextValid)==1;
+DCMA_NewSelectionMarketReady = LastValue(WXS_MarketValid)==1;
+DCMA_NewSelectionGroupReady = IIf(WVRC_RequireFullTopDown==1,LastValue(WXS_GroupValid)==1,1);
+DCMA_NewDependenciesReady =
+    DCMA_NewMTFReady AND DCMA_NewRSReady AND
+    DCMA_NewSelectionMarketReady AND DCMA_NewSelectionGroupReady;
+DCMA_DecisionComparisonEnabled =
+    DCMA_OldOracleAvailable AND DCMA_OracleDateAligned AND DCMA_NewDependenciesReady;
 
-// Any decision change outside 2-present/<2-active is forbidden by DCMA-A06.
+DCMA_EligibleChanged = DCMA_DecisionComparisonEnabled AND DCMA_OldDataEligible!=DCMA_NewEligible;
+DCMA_ClassChanged = DCMA_DecisionComparisonEnabled AND DCMA_OldClass!=DCMA_NewClass;
+DCMA_StageChanged = DCMA_DecisionComparisonEnabled AND DCMA_OldStage!=DCMA_NewStage;
+DCMA_PhaseChanged = DCMA_DecisionComparisonEnabled AND DCMA_OldPhase!=DCMA_NewPhase;
+DCMA_FamilyChanged = DCMA_DecisionComparisonEnabled AND DCMA_OldFamily!=DCMA_NewFamily;
+DCMA_DirectionalChanged = DCMA_DecisionComparisonEnabled AND DCMA_OldDirectional!=DCMA_NewDirectional;
+DCMA_ReviewChanged = DCMA_DecisionComparisonEnabled AND DCMA_OldReview!=DCMA_NewReview;
+DCMA_MaskChanged = DCMA_DecisionComparisonEnabled AND DCMA_OldMethodBlockMask!=DCMA_NewMethodBlockMask;
+DCMA_MTFChanged = DCMA_DecisionComparisonEnabled AND DCMA_OldMTF!=DCMA_NewMTF;
+DCMA_DecisionChanged =
+    DCMA_EligibleChanged OR DCMA_ClassChanged OR DCMA_StageChanged OR
+    DCMA_PhaseChanged OR DCMA_FamilyChanged OR DCMA_DirectionalChanged OR
+    DCMA_ReviewChanged OR DCMA_MaskChanged OR DCMA_MTFChanged;
+
+// Any comparable decision change outside 2-present/<2-active is forbidden by
+// DCMA-A06. Before dependencies are republished this field remains 0 by design
+// and DecisionComparisonEnabled makes the blocked state explicit.
 DCMA_TargetPopulation = DCMA_PresentMultiplicity==2 AND DCMA_ActiveMultiplicity<2;
-DCMA_OutsidePopulationDecisionChange = DCMA_DecisionChanged AND NOT DCMA_TargetPopulation;
+DCMA_OutsidePopulationDecisionChange =
+    DCMA_DecisionComparisonEnabled AND DCMA_DecisionChanged AND NOT DCMA_TargetPopulation;
 
 Filter = DCMA_LastBar;
 
@@ -105,11 +140,27 @@ AddColumn(DCMA_TargetPopulation,"Thuoc tap sua semantics",1.0);
 
 AddColumn(DCMA_OldOracleAvailable,"Oracle cu san sang",1.0);
 AddColumn(DCMA_OldBusinessDate,"Ngay snapshot cu",1.0);
+AddColumn(DCMA_CurrentBusinessDate,"Ngay van hanh moi",1.0);
+AddColumn(DCMA_OracleDateAligned,"Oracle cung ngay",1.0);
+AddColumn(DCMA_NewMTFReady,"MTF moi san sang",1.0);
+AddColumn(DCMA_NewRSReady,"RS moi san sang",1.0);
+AddColumn(DCMA_NewSelectionMarketReady,"Selection Market moi san sang",1.0);
+AddColumn(DCMA_NewSelectionGroupReady,"Selection Group moi san sang",1.0);
+AddColumn(DCMA_DecisionComparisonEnabled,"Cho phep so sanh quyet dinh",1.0);
+
+AddColumn(DCMA_OldDataEligible,"Data Eligible cu",1.0);
+AddColumn(DCMA_NewEligible,"Data Eligible moi",1.0);
 AddColumn(DCMA_OldMultiplicity,"Multiplicity cu",1.0);
 AddColumn(DCMA_OldClass,"Class cu",1.0);
 AddColumn(DCMA_NewClass,"Class moi",1.0);
 AddColumn(DCMA_OldStage,"Stage cu",1.0);
 AddColumn(DCMA_NewStage,"Stage moi",1.0);
+AddColumn(DCMA_OldPhase,"Phase cu",1.0);
+AddColumn(DCMA_NewPhase,"Phase moi",1.0);
+AddColumn(DCMA_OldFamily,"Family cu",1.0);
+AddColumn(DCMA_NewFamily,"Family moi",1.0);
+AddColumn(DCMA_OldDirectional,"Directional cu",1.0);
+AddColumn(DCMA_NewDirectional,"Directional moi",1.0);
 AddColumn(DCMA_OldMTF,"MTF cu",1.0);
 AddColumn(DCMA_NewMTF,"MTF moi",1.0);
 AddColumn(DCMA_OldReview,"Review cu",1.0);
@@ -118,5 +169,4 @@ AddColumn(DCMA_OldMethodBlockMask,"MethodBlockMask cu",1.0);
 AddColumn(DCMA_NewMethodBlockMask,"MethodBlockMask moi",1.0);
 AddColumn(DCMA_DecisionChanged,"Quyet dinh co thay doi",1.0);
 AddColumn(DCMA_OutsidePopulationDecisionChange,"LOI thay doi ngoai tap muc tieu",1.0);
-AddColumn(DCMA_NewEligible,"Data Eligible moi",1.0);
-AddTextColumn("DCMA_REGRESSION_V01_20260916_A","Phien ban probe");
+AddTextColumn("DCMA_REGRESSION_V01_20260916_B","Phien ban probe");
