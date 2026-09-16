@@ -66,6 +66,8 @@ H4_StockPrefix = "WVSA_HIST_STOCK_v01_" + H4_Symbol + "_";
 H4_StockReady =
     Nz(StaticVarGet(H4_StockPrefix+"Ready"),0)==1 AND
     Nz(StaticVarGet(H4_StockPrefix+"CommittedGenerationID"),0)>0 AND
+    Nz(StaticVarGet(H4_StockPrefix+"SchemaMajor"),0)==1 AND
+    Nz(StaticVarGet(H4_StockPrefix+"SchemaMinor"),-1)==1 AND
     StaticVarGetText(H4_StockPrefix+"Symbol")==H4_Symbol;
 H4_StockSourceKey = StaticVarGet(H4_StockPrefix+"SourceBusinessDateKey");
 H4_StockSourceDT = StaticVarGet(H4_StockPrefix+"SourceBarDateTime");
@@ -118,6 +120,8 @@ H4_MarketPrefix = "WVSA_HIST_MKT_v01_" + H4_MarketSymbol + "_";
 H4_MarketReady =
     Nz(StaticVarGet(H4_MarketPrefix+"Ready"),0)==1 AND
     Nz(StaticVarGet(H4_MarketPrefix+"CommittedGenerationID"),0)>0 AND
+    Nz(StaticVarGet(H4_MarketPrefix+"SchemaMajor"),0)==1 AND
+    Nz(StaticVarGet(H4_MarketPrefix+"SchemaMinor"),-1)==1 AND
     StaticVarGetText(H4_MarketPrefix+"Symbol")==H4_MarketSymbol;
 H4_MarketSourceKey = StaticVarGet(H4_MarketPrefix+"SourceBusinessDateKey");
 H4_MarketSourceDT = StaticVarGet(H4_MarketPrefix+"SourceBarDateTime");
