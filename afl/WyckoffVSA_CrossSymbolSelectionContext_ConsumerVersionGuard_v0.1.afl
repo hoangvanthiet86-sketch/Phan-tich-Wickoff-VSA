@@ -3,7 +3,15 @@
 
     XS14 compatibility projection. It does not change transported market state;
     it only tightens VALID status when producer versions/sub-schemas do not
-    match the explicitly supported v0.1 contract.
+    match the explicitly supported contract.
+
+    DCMA v0.1 contract correction:
+    - producer contract 0.1.1 is required;
+    - Composite and MTF public schema minor 1 are required;
+    - lower/upper PublicActive flags must be present and their sum must equal
+      transported ContextMultiplicityCode.
+    Old Present-based payloads therefore fail closed instead of being silently
+    interpreted under the new multiplicity semantics.
 
     Operational compatibility note:
     the guard also republishes the stable-generation audit fields expected by
@@ -12,13 +20,13 @@
 #include_once <WyckoffVSA_CrossSymbolSelectionContext_Consumer_v0.1.afl>
 
 _SECTION_BEGIN("112.5 Cross-Symbol producer compatibility guard");
-WXS_ExpectedContractVersion = "0.1";
+WXS_ExpectedContractVersion = "0.1.1";
 WXS_ExpectedCompositeVersion = "0.1";
 WXS_ExpectedMTFVersion = "0.1";
 WXS_ExpectedCompositeSchemaMajor = 1;
 WXS_ExpectedCompositeSchemaMinor = 1;
 WXS_ExpectedMTFSchemaMajor = 1;
-WXS_ExpectedMTFSchemaMinor = 0;
+WXS_ExpectedMTFSchemaMinor = 1;
 
 function WXS_ApplyVersionGuard(RolePrefix,ExpectedSymbol,RequestedFlag,PriorStatus)
 {
@@ -30,6 +38,10 @@ function WXS_ApplyVersionGuard(RolePrefix,ExpectedSymbol,RequestedFlag,PriorStat
     CompositeSchemaMinor = Null;
     MTFSchemaMajor = Null;
     MTFSchemaMinor = Null;
+    ContextMultiplicityCode = Null;
+    LPublicActive = Null;
+    UPublicActive = Null;
+    ActivePayloadValid = 0;
     VersionValid = 0;
     StatusCode = PriorStatus;
     AuditReady = Null;
@@ -45,8 +57,18 @@ function WXS_ApplyVersionGuard(RolePrefix,ExpectedSymbol,RequestedFlag,PriorStat
         CompositeSchemaMinor = StaticVarGet(Prefix+"CompositeSchemaMinor");
         MTFSchemaMajor = StaticVarGet(Prefix+"MTFSchemaMajor");
         MTFSchemaMinor = StaticVarGet(Prefix+"MTFSchemaMinor");
+        ContextMultiplicityCode = StaticVarGet(Prefix+"ContextMultiplicityCode");
+        LPublicActive = StaticVarGet(Prefix+"L_PublicActive");
+        UPublicActive = StaticVarGet(Prefix+"U_PublicActive");
         AuditReady = StaticVarGet(Prefix+"Ready");
         AuditGeneration = StaticVarGet(Prefix+"CommittedGenerationID");
+
+        ActivePayloadValid =
+            NOT IsNull(ContextMultiplicityCode) AND
+            NOT IsNull(LPublicActive) AND NOT IsNull(UPublicActive) AND
+            (LPublicActive==0 OR LPublicActive==1) AND
+            (UPublicActive==0 OR UPublicActive==1) AND
+            ContextMultiplicityCode==LPublicActive+UPublicActive;
 
         VersionValid =
             ContractVersion==WXS_ExpectedContractVersion AND
@@ -55,10 +77,11 @@ function WXS_ApplyVersionGuard(RolePrefix,ExpectedSymbol,RequestedFlag,PriorStat
             CompositeSchemaMajor==WXS_ExpectedCompositeSchemaMajor AND
             CompositeSchemaMinor==WXS_ExpectedCompositeSchemaMinor AND
             MTFSchemaMajor==WXS_ExpectedMTFSchemaMajor AND
-            MTFSchemaMinor==WXS_ExpectedMTFSchemaMinor;
+            MTFSchemaMinor==WXS_ExpectedMTFSchemaMinor AND
+            ActivePayloadValid;
 
         if (PriorStatus==1 AND NOT VersionValid)
-            StatusCode = 5; // SCHEMA VERSION MISMATCH
+            StatusCode = 5; // SCHEMA VERSION MISMATCH / SEMANTIC CONTRACT MISMATCH
     }
 
     VarSetText(RolePrefix+"ProducerContractVersion",ContractVersion);
@@ -68,6 +91,9 @@ function WXS_ApplyVersionGuard(RolePrefix,ExpectedSymbol,RequestedFlag,PriorStat
     VarSet(RolePrefix+"CompositeSchemaMinor",CompositeSchemaMinor);
     VarSet(RolePrefix+"MTFSchemaMajor",MTFSchemaMajor);
     VarSet(RolePrefix+"MTFSchemaMinor",MTFSchemaMinor);
+    VarSet(RolePrefix+"L_PublicActive",LPublicActive);
+    VarSet(RolePrefix+"U_PublicActive",UPublicActive);
+    VarSet(RolePrefix+"ActiveMultiplicityPayloadValid",ActivePayloadValid);
     VarSet(RolePrefix+"ProducerVersionCompatible",VersionValid);
 
     // Re-expose stable-generation audit fields used by the existing audit UI.
