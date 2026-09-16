@@ -20,10 +20,11 @@
       legacy Params. Standalone legacy formulas remain unchanged when the flag
       is absent.
 
-    PRESENTATION PATCH 2026-09-14:
-    - all user-facing Parameters use Vietnamese ASCII for AmiBroker 6.20.01;
-    - defaults, numeric ranges, steps, variable names and analytical semantics
-      are unchanged, except free-text declaration defaults are translated for UI;
+    PRESENTATION PATCH 2026-09-16:
+    - all user-facing Parameter labels/options use Vietnamese ASCII for AmiBroker 6.20.01;
+    - variable names, numeric defaults/ranges/steps and analytical semantics are unchanged;
+    - canonical free-text adjustment-basis declaration payload defaults remain
+      unchanged because they participate in runtime/snapshot identity/provenance;
     - adjustment-basis validity continues to be controlled by the numeric status.
 */
 
@@ -66,7 +67,7 @@ WVRC_RSMarketSymbol = ParamStr("6.1 Chi so thi truong doi chieu","VNINDEX");
 WVRC_RSGroupSymbol = ParamStr("6.2 Chi so nhom doi chieu","");
 WVRC_RSAdjustmentBasisDeclaration = ParamStr(
     "6.3 Khai bao co so dieu chinh",
-    "GIA DA DIEU CHINH");
+    "ADJUSTED PRICE");
 WVRC_RSAdjustmentBasisStatus = Param(
     "6.4 Trang thai co so dieu chinh: 0=Chua xac minh 1=Da khai bao tuong thich 2=Khong tuong thich",
     1,0,2,1);
@@ -92,7 +93,7 @@ WVRC_PnFGridOrigin = Param("9.3 Moc goc luoi",0,-1000000000,1000000000,0.01);
 WVRC_PnFReversalBoxes = Param("9.4 So hop dao chieu: 1 hoac 3",3,1,3,2);
 WVRC_PnFAdjustmentBasisDeclaration = ParamStr(
     "9.5 Khai bao co so dieu chinh",
-    "TUONG THICH - DA KHAI BAO");
+    "COMPATIBLE - DECLARED");
 WVRC_PnFAdjustmentBasisStatus = Param(
     "9.6 Trang thai co so dieu chinh: 0=Chua xac minh 1=Da khai bao tuong thich 2=Khong tuong thich",
     1,0,2,1);
