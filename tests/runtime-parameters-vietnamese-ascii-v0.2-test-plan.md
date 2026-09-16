@@ -48,21 +48,42 @@ Dong thoi xac nhan:
 
 Khong duoc doi hai payload nay trong acceptance run.
 
-### VP-N03 — Fast Scanner All Eligible regression
-Khong chay lai DailyPublisher. Tren cung snapshot 11/09/2026:
+### VP-N02A — Archived snapshot date diagnostic
+Snapshot acceptance oracle hien tai la snapshot ngay 11/09/2026, business DateNum `1260911`.
+
+Neu database hien tai da co thanh sau ngay 11/09/2026 thi ordinary Fast Scanner voi `1 recent bar` se FAIL-CLOSED theo thiet ke vi `Current Business DateNum` lon hon snapshot business date.
+
+Diagnostic native 16/09/2026 tren SNZ da quan sat:
+- `Snapshot Status = 6` = stale snapshot;
+- `Snapshot Business DateNum = 1260911`;
+- `Current Business DateNum = 1260915`;
+- `Fast Scanner Status = 0` = snapshot invalid / fail closed.
+
+Ket qua 0 dong o Filter 4/2 trong ordinary current-date run KHONG duoc coi la analytical regression va KHONG duoc sua bang cach republish chi de lam bai test presentation.
+
+### VP-N03 — Fast Scanner All Eligible regression tren archived snapshot
+Khong chay lai DailyPublisher.
+
+De tai lap dung as-of 11/09/2026, dung **Bar Replay** va dua playback position den thanh Daily 11/09/2026 sau khi thanh nay da hoan tat. Operational Clock cua runtime dung last visible quotation lam as-of, nen Bar Replay se an cac quotation sau playback position.
+
+Sau do:
 - dat `1.2 Bo loc san xuat = 4`;
 - `Apply to = VN STOCKS ONLY`;
-- Daily / 1 recent bar;
+- Periodicity = Daily;
+- chay Explore trong trang thai replay as-of 11/09/2026;
+- xac nhan diagnostic neu can: `Snapshot Business DateNum = Current Business DateNum = 1260911`;
 - ky vong 1,066 ticker duy nhat.
 
-### VP-N04 — Fast Scanner Watch+ regression
+Neu replay as-of van cho `Current Business DateNum > 1260911`, dung lai va ghi diagnostic; khong republish va khong sua analytical code.
+
+### VP-N04 — Fast Scanner Watch+ regression tren archived snapshot
+Van giu Bar Replay as-of 11/09/2026 va cung universe/snapshot:
 - dat `1.2 Bo loc san xuat = 2`;
-- cung snapshot/universe;
 - ky vong duy nhat `SNZ` voi:
   Class=2, Side=0, Stage=1, Phase=2, Family=1, Range=0.3500, MTF=0, RS=2, Review=0, MethodBlockMask=7.
 
 ### VP-N05 — Khong analytical/runtime identity drift
-Neu VP-N03/04 khop checkpoint cu, snapshot van hop le ma khong republish, va hai canonical free-text payload khong doi thi patch duoc chot la presentation-only doi voi decision surface va runtime identity da test.
+Neu VP-N03/04 khop checkpoint cu, snapshot hop le trong archived as-of ma khong republish, va hai canonical free-text payload khong doi thi patch duoc chot la presentation-only doi voi decision surface va runtime identity da test.
 
 ## 5. Checkpoint khi dat
 
