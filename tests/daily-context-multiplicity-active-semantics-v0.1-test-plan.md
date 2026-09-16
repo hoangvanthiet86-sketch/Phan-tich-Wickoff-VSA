@@ -97,13 +97,14 @@ Moi mismatch so voi oracle cu phai truy vet duoc ve `PresentMultiplicity != Acti
 ## DCMA-10 — persisted contract native gate
 
 Source/static gate da dong. Native phai xac minh:
-- Daily Snapshot cu schema/contract truoc correction fail closed;
-- Weekly/Monthly snapshot cu fail closed;
-- Cross-Symbol Selection snapshot co producer Composite schema 1.0 fail closed;
+- Daily Snapshot cu schema 2.0 / contract 0.2 fail closed voi consumer moi schema 2.1 / contract 0.2.1;
+- Weekly/Monthly snapshot cu schema 1.0 / contract 0.1 fail closed voi consumer moi 1.1 / 0.1.1;
+- Cross-Symbol Selection snapshot cu co `ProducerContractVersion=0.1`, Composite/MTF public schema minor 0 hoac thieu `L_PublicActive/U_PublicActive` phai fail closed trong version guard;
+- Cross-Symbol payload moi phai co `ProducerContractVersion=0.1.1`, Composite schema 1.1, MTF schema 1.1 va `ContextMultiplicityCode == L_PublicActive + U_PublicActive`;
 - Historical W/M timeline schema 1.0 fail closed trong `HistoricalMTFPayloadProof`;
 - Historical Stock/Market timeline schema 1.0 fail closed trong `HistoricalScanner`.
 
-Sau khi xac minh fail-closed moi republish payload moi. Payload moi phai mang schema/producer guard tuong thich voi Composite 1.1.
+Sau khi xac minh fail-closed moi republish payload moi. Payload moi phai mang schema/producer guard phu hop voi PublicActive semantics.
 
 ## Thu tu native de tranh rerun nang
 
