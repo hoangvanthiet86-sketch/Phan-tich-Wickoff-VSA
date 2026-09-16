@@ -13,6 +13,9 @@
     - Bar Replay mode uses GetPlaybackDateTime() through WCLK;
     - all period ordinals and publish provenance use the same causal as-of.
 
+    DCMA v0.1: schema 1.1 / contract 0.1.1 / Composite 0.1.1 identifies
+    PublicActive-based ContextMultiplicity. Old 1.0 snapshots must fail closed.
+
     SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
     No trading signal. No MTF alignment logic.
 */
@@ -21,9 +24,9 @@
 
 _SECTION_BEGIN("90. Timeframe Snapshot Publisher contract");
 WTS_SchemaMajor = 1;
-WTS_SchemaMinor = 0;
-WTS_CompositeVersion = "0.1";
-WTS_ContractVersion = "0.1";
+WTS_SchemaMinor = 1;
+WTS_CompositeVersion = "0.1.1";
+WTS_ContractVersion = "0.1.1";
 WTS_CompletionBasisCode = 1; // CALENDAR PERIOD ROLLED OVER relative to WCLK as-of
 WTS_ClockBasisCode = WCLK_ClockBasisCode; // 1 LIVE_SYSTEM, 2 BAR_REPLAY
 WTS_Now = WCLK_AsOfDateTime;
@@ -87,6 +90,7 @@ else
             WTS_SourceMonthlyOrdinalArray[WTS_i]);
 
         WTS_CandidateCompositeValid =
+            WCI_PublicSchemaMajor==1 AND WCI_PublicSchemaMinor==1 AND
             NOT IsNull(WCI_ContextMultiplicityCode[WTS_i]) AND
             NOT IsNull(WCI_CurrentEventMask[WTS_i]) AND
             WCI_ProvisionalFlag[WTS_i]==0;
@@ -151,6 +155,7 @@ else
 
         // S18 lower-derived RangeContext diagnostics.
         StaticVarSet(WTS_Prefix+"L_ContextPresent",WCI_L_ContextPresent[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"L_PublicActive",WCI_L_PublicActive[WTS_SelectedIndex],True);
         StaticVarSet(WTS_Prefix+"L_RangeContextID",WCI_L_RangeContextID[WTS_SelectedIndex],True);
         StaticVarSet(WTS_Prefix+"L_RangeStatusCode",WCI_L_RangeStatusCode[WTS_SelectedIndex],True);
         StaticVarSet(WTS_Prefix+"L_PhaseStateCode",WCI_L_PhaseStateCode[WTS_SelectedIndex],True);
@@ -163,6 +168,7 @@ else
 
         // S18 upper-derived RangeContext diagnostics.
         StaticVarSet(WTS_Prefix+"U_ContextPresent",WCI_U_ContextPresent[WTS_SelectedIndex],True);
+        StaticVarSet(WTS_Prefix+"U_PublicActive",WCI_U_PublicActive[WTS_SelectedIndex],True);
         StaticVarSet(WTS_Prefix+"U_RangeContextID",WCI_U_RangeContextID[WTS_SelectedIndex],True);
         StaticVarSet(WTS_Prefix+"U_RangeStatusCode",WCI_U_RangeStatusCode[WTS_SelectedIndex],True);
         StaticVarSet(WTS_Prefix+"U_PhaseStateCode",WCI_U_PhaseStateCode[WTS_SelectedIndex],True);
