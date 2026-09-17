@@ -40,6 +40,8 @@ SetOption("NoDefaultColumns",True);
 #include_once <WyckoffVSA_MarketScanner_Runtime_v0.2.afl>
 
 DCMA_LastBar = BarIndex()==LastValue(BarIndex());
+
+// Daily current-state semantics.
 DCMA_PresentLower = LastValue(WCI_L_ContextPresent);
 DCMA_PresentUpper = LastValue(WCI_U_ContextPresent);
 DCMA_ActiveLower = LastValue(WCI_L_PublicActive);
@@ -50,6 +52,29 @@ DCMA_CompositeMultiplicity = LastValue(WCI_ContextMultiplicityCode);
 DCMA_CompositeAmbiguous = LastValue(WCI_ContextAmbiguous);
 DCMA_SemanticMismatch = DCMA_PresentMultiplicity != DCMA_ActiveMultiplicity;
 DCMA_ContractCorrect = DCMA_CompositeMultiplicity==DCMA_ActiveMultiplicity;
+
+// Weekly/Monthly semantics are consumed by MTF, so a legitimate correction at
+// either higher timeframe may change Daily downstream decisions even when the
+// Daily row itself remains Present=1 / Active=1. Only validated snapshots are
+// admitted to the semantic-impact population.
+DCMA_WPresentLower = Nz(WTSC_W_L_ContextPresent,0);
+DCMA_WPresentUpper = Nz(WTSC_W_U_ContextPresent,0);
+DCMA_WActiveLower = Nz(WTSC_W_L_PublicActive,0);
+DCMA_WActiveUpper = Nz(WTSC_W_U_PublicActive,0);
+DCMA_WPresentMultiplicity = DCMA_WPresentLower + DCMA_WPresentUpper;
+DCMA_WActiveMultiplicity = DCMA_WActiveLower + DCMA_WActiveUpper;
+DCMA_WSemanticMismatch = WTSC_W_Valid AND (DCMA_WPresentMultiplicity != DCMA_WActiveMultiplicity);
+
+DCMA_MPresentLower = Nz(WTSC_M_L_ContextPresent,0);
+DCMA_MPresentUpper = Nz(WTSC_M_U_ContextPresent,0);
+DCMA_MActiveLower = Nz(WTSC_M_L_PublicActive,0);
+DCMA_MActiveUpper = Nz(WTSC_M_U_PublicActive,0);
+DCMA_MPresentMultiplicity = DCMA_MPresentLower + DCMA_MPresentUpper;
+DCMA_MActiveMultiplicity = DCMA_MActiveLower + DCMA_MActiveUpper;
+DCMA_MSemanticMismatch = WTSC_M_Valid AND (DCMA_MPresentMultiplicity != DCMA_MActiveMultiplicity);
+
+DCMA_AnySemanticMismatch =
+    DCMA_SemanticMismatch OR DCMA_WSemanticMismatch OR DCMA_MSemanticMismatch;
 
 // Read the archived pre-correction Daily Snapshot as an oracle without using
 // the fail-closed consumer. This probe never writes or mutates the snapshot.
@@ -115,10 +140,19 @@ DCMA_DecisionChanged =
     DCMA_PhaseChanged OR DCMA_FamilyChanged OR DCMA_DirectionalChanged OR
     DCMA_ReviewChanged OR DCMA_MaskChanged OR DCMA_MTFChanged;
 
-// Any comparable decision change outside 2-present/<2-active is forbidden by
-// DCMA-A06. Before dependencies are republished this field remains 0 by design
-// and DecisionComparisonEnabled makes the blocked state explicit.
-DCMA_TargetPopulation = DCMA_PresentMultiplicity==2 AND DCMA_ActiveMultiplicity<2;
+// A04 is a stability gate, not a rule that suppresses legitimate higher-TF
+// correction effects. Daily 1/1 rows are bit-for-bit regression rows only when
+// neither validated Weekly nor Monthly also has PresentMultiplicity!=ActiveMultiplicity.
+DCMA_A04StableSingleActive =
+    DCMA_PresentMultiplicity==1 AND DCMA_ActiveMultiplicity==1 AND
+    NOT DCMA_WSemanticMismatch AND NOT DCMA_MSemanticMismatch;
+DCMA_A04RegressionError =
+    DCMA_DecisionComparisonEnabled AND DCMA_A04StableSingleActive AND DCMA_DecisionChanged;
+
+// A06 target population is the union of legitimate semantic corrections across
+// Daily, Weekly and Monthly. This includes 2->1, 2->0 and 1->0 transitions.
+// A comparable decision change with no D/W/M semantic mismatch is a real error.
+DCMA_TargetPopulation = DCMA_AnySemanticMismatch;
 DCMA_OutsidePopulationDecisionChange =
     DCMA_DecisionComparisonEnabled AND DCMA_DecisionChanged AND NOT DCMA_TargetPopulation;
 
@@ -135,8 +169,17 @@ AddColumn(DCMA_ActiveMultiplicity,"So context Active",1.0);
 AddColumn(DCMA_CompositeMultiplicity,"Composite Multiplicity moi",1.0);
 AddColumn(DCMA_CompositeAmbiguous,"Composite Ambiguous moi",1.0);
 AddColumn(DCMA_ContractCorrect,"Multiplicity dung PublicActive",1.0);
-AddColumn(DCMA_SemanticMismatch,"Present khac Active",1.0);
+AddColumn(DCMA_SemanticMismatch,"Daily Present khac Active",1.0);
+
+AddColumn(DCMA_WPresentMultiplicity,"Weekly context Present",1.0);
+AddColumn(DCMA_WActiveMultiplicity,"Weekly context Active",1.0);
+AddColumn(DCMA_WSemanticMismatch,"Weekly Present khac Active",1.0);
+AddColumn(DCMA_MPresentMultiplicity,"Monthly context Present",1.0);
+AddColumn(DCMA_MActiveMultiplicity,"Monthly context Active",1.0);
+AddColumn(DCMA_MSemanticMismatch,"Monthly Present khac Active",1.0);
+AddColumn(DCMA_AnySemanticMismatch,"Present khac Active DWM",1.0);
 AddColumn(DCMA_TargetPopulation,"Thuoc tap sua semantics",1.0);
+AddColumn(DCMA_A04StableSingleActive,"A04 single active on dinh",1.0);
 
 AddColumn(DCMA_OldOracleAvailable,"Oracle cu san sang",1.0);
 AddColumn(DCMA_OldBusinessDate,"Ngay snapshot cu",1.0);
@@ -168,5 +211,6 @@ AddColumn(DCMA_NewReview,"Review moi",1.0);
 AddColumn(DCMA_OldMethodBlockMask,"MethodBlockMask cu",1.0);
 AddColumn(DCMA_NewMethodBlockMask,"MethodBlockMask moi",1.0);
 AddColumn(DCMA_DecisionChanged,"Quyet dinh co thay doi",1.0);
+AddColumn(DCMA_A04RegressionError,"LOI A04 single active",1.0);
 AddColumn(DCMA_OutsidePopulationDecisionChange,"LOI thay doi ngoai tap muc tieu",1.0);
-AddTextColumn("DCMA_REGRESSION_V01_20260916_B","Phien ban probe");
+AddTextColumn("DCMA_REGRESSION_V01_20260917_C","Phien ban probe");
