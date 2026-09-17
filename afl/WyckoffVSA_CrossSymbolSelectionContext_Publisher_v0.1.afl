@@ -13,6 +13,12 @@
     - the same causal clock therefore works in ordinary Analysis and Bar Replay;
     - no computer-date comparison is used.
 
+    DCMA v0.1 transport correction:
+    - ProducerContractVersion 0.1.1 identifies PublicActive multiplicity semantics;
+    - ContextPresent remains lifecycle/audit data;
+    - L/U PublicActive are transported explicitly and must sum to multiplicity;
+    - Composite/MTF public schema minor 1 is required.
+
     SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
 */
 #include_once <WyckoffVSA_OperationalClock_v0.1.afl>
@@ -21,13 +27,13 @@
 _SECTION_BEGIN("110. Cross-Symbol Selection Context Publisher");
 WXS_SchemaMajor = 1;
 WXS_SchemaMinor = 0;
-WXS_ContractVersion = "0.1";
+WXS_ContractVersion = "0.1.1";
 WXS_CompositeVersion = "0.1";
 WXS_MTFVersion = "0.1";
 WXS_SourceSymbol = Name();
 WXS_SourceInterval = Interval();
 WXS_SourceBarDateTime = LastValue(DateTime());
-WXS_SourceBusinessDateKey = LastValue(Year()*10000 + Month()*100 + Day());
+WXS_SourceBusinessDateKey = LastValue(DateNum());
 WXS_CurrentCalendarBusinessDateKey = WCLK_AsOfBusinessDateKey;
 WXS_PublishedAtDateTime = WCLK_AsOfDateTime;
 WXS_ClockBasisCode = WCLK_ClockBasisCode;
@@ -73,8 +79,9 @@ WXS_PrimaryRangeLow = LastValue(WCI_PrimaryRangeLow);
 WXS_PrimaryRangeHigh = LastValue(WCI_PrimaryRangeHigh);
 WXS_RangeAgeBars = LastValue(WCI_RangeAgeBars);
 
-// XS25: lower/upper contexts remain independent.
+// XS25: lifecycle Present and decision-surface PublicActive remain independent.
 WXS_L_ContextPresent = LastValue(WCI_L_ContextPresent);
+WXS_L_PublicActive = LastValue(WCI_L_PublicActive);
 WXS_L_RangeContextID = LastValue(WCI_L_RangeContextID);
 WXS_L_RangeStatusCode = LastValue(WCI_L_RangeStatusCode);
 WXS_L_PhaseStateCode = LastValue(WCI_L_PhaseStateCode);
@@ -86,6 +93,7 @@ WXS_L_PrimaryRangeHigh = LastValue(WCI_L_PrimaryRangeHigh);
 WXS_L_RangeAgeBars = LastValue(WCI_L_RangeAgeBars);
 
 WXS_U_ContextPresent = LastValue(WCI_U_ContextPresent);
+WXS_U_PublicActive = LastValue(WCI_U_PublicActive);
 WXS_U_RangeContextID = LastValue(WCI_U_RangeContextID);
 WXS_U_RangeStatusCode = LastValue(WCI_U_RangeStatusCode);
 WXS_U_PhaseStateCode = LastValue(WCI_U_PhaseStateCode);
@@ -132,6 +140,11 @@ WXS_MTF_M_SchemaMajor = LastValue(WMTF_M_SchemaMajor);
 WXS_MTF_M_SchemaMinor = LastValue(WMTF_M_SchemaMinor);
 
 WXS_SourceDateValid = WCLK_ClockValid AND NOT IsNull(WXS_SourceBarDateTime) AND NOT IsNull(WXS_SourceBusinessDateKey) AND WXS_SourceBusinessDateKey>0;
+WXS_ActiveMultiplicityValid =
+    NOT IsNull(WXS_L_PublicActive) AND NOT IsNull(WXS_U_PublicActive) AND
+    (WXS_L_PublicActive==0 OR WXS_L_PublicActive==1) AND
+    (WXS_U_PublicActive==0 OR WXS_U_PublicActive==1) AND
+    WXS_ContextMultiplicityCode==WXS_L_PublicActive+WXS_U_PublicActive;
 WXS_CompositeCoreValid =
     NOT IsNull(WXS_ContextMultiplicityCode) AND
     NOT IsNull(WXS_ContextAmbiguous) AND
@@ -143,18 +156,22 @@ WXS_CompositeCoreValid =
     NOT IsNull(WXS_HypothesisAlignmentCode) AND
     NOT IsNull(WXS_HypothesisRevisionCode) AND
     NOT IsNull(WXS_CurrentEventMask) AND
-    NOT IsNull(WXS_ProvisionalFlag);
+    NOT IsNull(WXS_ProvisionalFlag) AND
+    WXS_ActiveMultiplicityValid;
 
 WXS_SingleContextPayloadValid = IIf(
     WXS_ContextMultiplicityCode==1,
+    (WXS_L_PublicActive+WXS_U_PublicActive)==1 AND
     NOT IsNull(WXS_CurrentRangeContextID) AND NOT IsNull(WXS_PrimaryRangeLow) AND NOT IsNull(WXS_PrimaryRangeHigh),1);
 WXS_MultipleContextPayloadValid = IIf(
     WXS_ContextMultiplicityCode==2,
+    WXS_L_PublicActive==1 AND WXS_U_PublicActive==1 AND
     WXS_L_ContextPresent==1 AND WXS_U_ContextPresent==1 AND
     NOT IsNull(WXS_L_RangeContextID) AND NOT IsNull(WXS_U_RangeContextID) AND
     NOT IsNull(WXS_L_PrimaryRangeLow) AND NOT IsNull(WXS_L_PrimaryRangeHigh) AND
     NOT IsNull(WXS_U_PrimaryRangeLow) AND NOT IsNull(WXS_U_PrimaryRangeHigh),1);
-WXS_CompositePayloadValid = WXS_CompositeCoreValid AND WXS_SingleContextPayloadValid AND WXS_MultipleContextPayloadValid;
+WXS_ZeroContextPayloadValid = IIf(WXS_ContextMultiplicityCode==0,WXS_L_PublicActive==0 AND WXS_U_PublicActive==0,1);
+WXS_CompositePayloadValid = WXS_CompositeCoreValid AND WXS_SingleContextPayloadValid AND WXS_MultipleContextPayloadValid AND WXS_ZeroContextPayloadValid;
 
 WXS_MTFPayloadValid =
     WXS_MTF_SnapshotContractValid==1 AND
@@ -170,18 +187,19 @@ WXS_MTFPayloadValid =
 
 WXS_UpstreamReady =
     WXS_SourceInterval==inDaily AND
-    WCI_PublicSchemaMajor==1 AND WMTF_PublicSchemaMajor==1 AND
+    WCI_PublicSchemaMajor==1 AND WCI_PublicSchemaMinor==1 AND
+    WMTF_PublicSchemaMajor==1 AND WMTF_PublicSchemaMinor==1 AND
     WXS_ProvisionalFlag==0 AND
     WXS_MTFPayloadValid;
 
 if (WXS_SourceBusinessDateKey < WXS_CurrentCalendarBusinessDateKey)
 {
-    WXS_CompletionBasisCode = 1; // CALENDAR DAY ROLLED OVER relative to visible-data as-of
+    WXS_CompletionBasisCode = 1;
 }
 else
 if (WXS_SourceBusinessDateKey == WXS_CurrentCalendarBusinessDateKey AND WXS_DailyCompletionDeclaration==1)
 {
-    WXS_CompletionBasisCode = 2; // OPERATOR EOD COMPLETION DECLARATION
+    WXS_CompletionBasisCode = 2;
 }
 
 if (NOT WXS_SourceDateValid)
@@ -245,6 +263,7 @@ else
         StaticVarSet(WXS_Prefix+"RangeAgeBars",WXS_RangeAgeBars,True);
 
         StaticVarSet(WXS_Prefix+"L_ContextPresent",WXS_L_ContextPresent,True);
+        StaticVarSet(WXS_Prefix+"L_PublicActive",WXS_L_PublicActive,True);
         StaticVarSet(WXS_Prefix+"L_RangeContextID",WXS_L_RangeContextID,True);
         StaticVarSet(WXS_Prefix+"L_RangeStatusCode",WXS_L_RangeStatusCode,True);
         StaticVarSet(WXS_Prefix+"L_PhaseStateCode",WXS_L_PhaseStateCode,True);
@@ -256,6 +275,7 @@ else
         StaticVarSet(WXS_Prefix+"L_RangeAgeBars",WXS_L_RangeAgeBars,True);
 
         StaticVarSet(WXS_Prefix+"U_ContextPresent",WXS_U_ContextPresent,True);
+        StaticVarSet(WXS_Prefix+"U_PublicActive",WXS_U_PublicActive,True);
         StaticVarSet(WXS_Prefix+"U_RangeContextID",WXS_U_RangeContextID,True);
         StaticVarSet(WXS_Prefix+"U_RangeStatusCode",WXS_U_RangeStatusCode,True);
         StaticVarSet(WXS_Prefix+"U_PhaseStateCode",WXS_U_PhaseStateCode,True);

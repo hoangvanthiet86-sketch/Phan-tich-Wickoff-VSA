@@ -56,15 +56,20 @@ WPCF_U_MixedEvidenceReasonCode =
     + IIf((WPCP_U_SpringLinkedCount>0 OR WPCP_U_SupplyTestLinkedCount>0)
           AND (WPCP_U_UpthrustLinkedCount>0 OR WPC_U_LPSYLinkedCount>0),8,0);
 
-// Singleton convenience facade is valid only when exactly one public context is
-// present. When two ranges coexist the caller must inspect both contexts.
-WPCF_CurrentRangeContextCount = WPC_L_ContextPresent + WPC_U_ContextPresent;
+// DCMA v0.1 correction: ContextPresent remains lifecycle/provenance only.
+// The singleton production facade is selected solely from public-active ranges.
+// Two public-active ranges remain strict ambiguity; no winner is selected.
+WPCF_L_ContextPresentAudit = WPC_L_ContextPresent;
+WPCF_U_ContextPresentAudit = WPC_U_ContextPresent;
+WPCF_L_PublicActive = IIf(WPCP_L_RangeActivePublic==1,1,0);
+WPCF_U_PublicActive = IIf(WPCP_U_RangeActivePublic==1,1,0);
+WPCF_CurrentRangeContextCount = WPCF_L_PublicActive + WPCF_U_PublicActive;
 WPCF_CurrentRangeContextID = IIf(WPCF_CurrentRangeContextCount==1,
-    IIf(WPC_L_ContextPresent,WPC_L_RangeContextID,WPC_U_RangeContextID),Null);
+    IIf(WPCF_L_PublicActive,WPC_L_RangeContextID,WPC_U_RangeContextID),Null);
 WPCF_CurrentPhaseStateCode = IIf(WPCF_CurrentRangeContextCount==1,
-    IIf(WPC_L_ContextPresent,WPCP_L_PublicPhaseStateCode,WPCP_U_PublicPhaseStateCode),0);
+    IIf(WPCF_L_PublicActive,WPCP_L_PublicPhaseStateCode,WPCP_U_PublicPhaseStateCode),0);
 WPCF_CurrentFamilyHypothesisCode = IIf(WPCF_CurrentRangeContextCount==1,
-    IIf(WPC_L_ContextPresent,WPCF_L_FamilyHypothesisCode,WPCF_U_FamilyHypothesisCode),
+    IIf(WPCF_L_PublicActive,WPCF_L_FamilyHypothesisCode,WPCF_U_FamilyHypothesisCode),
     IIf(WPCF_CurrentRangeContextCount>1,7,0));
 WPCF_CurrentContextAmbiguous = IIf(WPCF_CurrentRangeContextCount>1,1,0);
 
@@ -78,6 +83,10 @@ AddColumn(WPCF_PriorTrendDirectionalUpper,"WPCF_U_PriorTrendDirectional",1.0);
 AddColumn(WPCF_U_FamilyHypothesisCode,"WPCF_U_FamilyHypothesisCode",1.0);
 AddMultiTextColumn(WPCF_U_FamilyHypothesisCode,WPC_FamilyText,"WPCF_U_FamilyHypothesis");
 AddColumn(WPCF_U_MixedEvidenceReasonCode,"WPCF_U_MixedEvidenceReasonCode",1.0);
+AddColumn(WPCF_L_ContextPresentAudit,"WPCF_L_ContextPresent",1.0);
+AddColumn(WPCF_U_ContextPresentAudit,"WPCF_U_ContextPresent",1.0);
+AddColumn(WPCF_L_PublicActive,"WPCF_L_PublicActive",1.0);
+AddColumn(WPCF_U_PublicActive,"WPCF_U_PublicActive",1.0);
 AddColumn(WPCF_CurrentRangeContextCount,"WPCF_CurrentRangeContextCount",1.0);
 AddColumn(WPCF_CurrentRangeContextID,"WPCF_CurrentRangeContextID",1.0);
 AddColumn(WPCF_CurrentPhaseStateCode,"WPCF_CurrentPhaseStateCode",1.0);

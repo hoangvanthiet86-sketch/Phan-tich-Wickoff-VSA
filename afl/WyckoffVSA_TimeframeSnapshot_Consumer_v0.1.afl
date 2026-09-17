@@ -13,15 +13,18 @@
     - Bar Replay validates against replay playback position;
     - snapshot clock basis must match the current operational clock basis.
 
+    DCMA v0.1: expects schema 1.1 / contract 0.1.1 / Composite 0.1.1 and
+    validates ContextMultiplicity against persisted PublicActive flags.
+
     SPEC-ALIGNED / NATIVE ACCEPTANCE PENDING.
 */
 #include_once <WyckoffVSA_OperationalClock_v0.1.afl>
 
 _SECTION_BEGIN("91. Timeframe Snapshot Consumer contract");
 WTSC_ExpectedSchemaMajor = 1;
-WTSC_ExpectedSchemaMinor = 0;
-WTSC_ExpectedCompositeVersion = "0.1";
-WTSC_ExpectedContractVersion = "0.1";
+WTSC_ExpectedSchemaMinor = 1;
+WTSC_ExpectedCompositeVersion = "0.1.1";
+WTSC_ExpectedContractVersion = "0.1.1";
 WTSC_ClockBasisCode = WCLK_ClockBasisCode;
 WTSC_Now = WCLK_AsOfDateTime;
 WTSC_WeekEpoch = WCLK_WeekEpoch;
@@ -71,6 +74,7 @@ WTSC_W_CurrentEventMask = StaticVarGet(WTSC_W_Prefix+"CurrentEventMask");
 WTSC_W_ProvisionalFlag = StaticVarGet(WTSC_W_Prefix+"ProvisionalFlag");
 
 WTSC_W_L_ContextPresent = StaticVarGet(WTSC_W_Prefix+"L_ContextPresent");
+WTSC_W_L_PublicActive = StaticVarGet(WTSC_W_Prefix+"L_PublicActive");
 WTSC_W_L_RangeContextID = StaticVarGet(WTSC_W_Prefix+"L_RangeContextID");
 WTSC_W_L_RangeStatusCode = StaticVarGet(WTSC_W_Prefix+"L_RangeStatusCode");
 WTSC_W_L_PhaseStateCode = StaticVarGet(WTSC_W_Prefix+"L_PhaseStateCode");
@@ -82,6 +86,7 @@ WTSC_W_L_PrimaryRangeHigh = StaticVarGet(WTSC_W_Prefix+"L_PrimaryRangeHigh");
 WTSC_W_L_RangeAgeBars = StaticVarGet(WTSC_W_Prefix+"L_RangeAgeBars");
 
 WTSC_W_U_ContextPresent = StaticVarGet(WTSC_W_Prefix+"U_ContextPresent");
+WTSC_W_U_PublicActive = StaticVarGet(WTSC_W_Prefix+"U_PublicActive");
 WTSC_W_U_RangeContextID = StaticVarGet(WTSC_W_Prefix+"U_RangeContextID");
 WTSC_W_U_RangeStatusCode = StaticVarGet(WTSC_W_Prefix+"U_RangeStatusCode");
 WTSC_W_U_PhaseStateCode = StaticVarGet(WTSC_W_Prefix+"U_PhaseStateCode");
@@ -107,8 +112,13 @@ WTSC_W_TimeframeMismatch = WTSC_W_TimeframeText!="W";
 WTSC_W_Future = WTSC_W_SourcePeriodOrdinal>=WTSC_CurrentWeeklyOrdinal;
 WTSC_W_Stale = WTSC_W_SourcePeriodOrdinal!=WTSC_ExpectedWeeklyOrdinal;
 WTSC_W_Provisional = WTSC_W_ProvisionalFlag!=0;
+WTSC_W_ActivePayloadValid =
+    (WTSC_W_L_PublicActive==0 OR WTSC_W_L_PublicActive==1) AND
+    (WTSC_W_U_PublicActive==0 OR WTSC_W_U_PublicActive==1) AND
+    WTSC_W_ContextMultiplicityCode==(WTSC_W_L_PublicActive+WTSC_W_U_PublicActive);
 WTSC_W_PayloadValid =
     WTSC_W_ContextMultiplicityCode>=0 AND WTSC_W_ContextMultiplicityCode<=2 AND
+    WTSC_W_ActivePayloadValid AND
     WTSC_W_PhaseStateCode>=0 AND WTSC_W_PhaseStateCode<=7 AND
     WTSC_W_FamilyHypothesisCode>=0 AND WTSC_W_FamilyHypothesisCode<=7 AND
     WTSC_W_DirectionalContextCode>=0 AND WTSC_W_DirectionalContextCode<=4 AND
@@ -119,7 +129,7 @@ WTSC_W_PayloadValid =
     WTSC_W_SourceClockBasisCode==WTSC_ClockBasisCode AND
     NOT IsNull(WTSC_W_SourceBarDateTime) AND
     (WTSC_W_ContextMultiplicityCode!=1 OR NOT IsNull(WTSC_W_CurrentRangeContextID)) AND
-    (WTSC_W_ContextMultiplicityCode!=2 OR (WTSC_W_L_ContextPresent==1 AND WTSC_W_U_ContextPresent==1));
+    (WTSC_W_ContextMultiplicityCode!=2 OR (WTSC_W_L_PublicActive==1 AND WTSC_W_U_PublicActive==1));
 
 WTSC_W_StatusCode = 0;
 if (WTSC_ConsumerIntervalValid)
@@ -173,6 +183,7 @@ WTSC_M_CurrentEventMask = StaticVarGet(WTSC_M_Prefix+"CurrentEventMask");
 WTSC_M_ProvisionalFlag = StaticVarGet(WTSC_M_Prefix+"ProvisionalFlag");
 
 WTSC_M_L_ContextPresent = StaticVarGet(WTSC_M_Prefix+"L_ContextPresent");
+WTSC_M_L_PublicActive = StaticVarGet(WTSC_M_Prefix+"L_PublicActive");
 WTSC_M_L_RangeContextID = StaticVarGet(WTSC_M_Prefix+"L_RangeContextID");
 WTSC_M_L_RangeStatusCode = StaticVarGet(WTSC_M_Prefix+"L_RangeStatusCode");
 WTSC_M_L_PhaseStateCode = StaticVarGet(WTSC_M_Prefix+"L_PhaseStateCode");
@@ -184,6 +195,7 @@ WTSC_M_L_PrimaryRangeHigh = StaticVarGet(WTSC_M_Prefix+"L_PrimaryRangeHigh");
 WTSC_M_L_RangeAgeBars = StaticVarGet(WTSC_M_Prefix+"L_RangeAgeBars");
 
 WTSC_M_U_ContextPresent = StaticVarGet(WTSC_M_Prefix+"U_ContextPresent");
+WTSC_M_U_PublicActive = StaticVarGet(WTSC_M_Prefix+"U_PublicActive");
 WTSC_M_U_RangeContextID = StaticVarGet(WTSC_M_Prefix+"U_RangeContextID");
 WTSC_M_U_RangeStatusCode = StaticVarGet(WTSC_M_Prefix+"U_RangeStatusCode");
 WTSC_M_U_PhaseStateCode = StaticVarGet(WTSC_M_Prefix+"U_PhaseStateCode");
@@ -209,8 +221,13 @@ WTSC_M_TimeframeMismatch = WTSC_M_TimeframeText!="M";
 WTSC_M_Future = WTSC_M_SourcePeriodOrdinal>=WTSC_CurrentMonthlyOrdinal;
 WTSC_M_Stale = WTSC_M_SourcePeriodOrdinal!=WTSC_ExpectedMonthlyOrdinal;
 WTSC_M_Provisional = WTSC_M_ProvisionalFlag!=0;
+WTSC_M_ActivePayloadValid =
+    (WTSC_M_L_PublicActive==0 OR WTSC_M_L_PublicActive==1) AND
+    (WTSC_M_U_PublicActive==0 OR WTSC_M_U_PublicActive==1) AND
+    WTSC_M_ContextMultiplicityCode==(WTSC_M_L_PublicActive+WTSC_M_U_PublicActive);
 WTSC_M_PayloadValid =
     WTSC_M_ContextMultiplicityCode>=0 AND WTSC_M_ContextMultiplicityCode<=2 AND
+    WTSC_M_ActivePayloadValid AND
     WTSC_M_PhaseStateCode>=0 AND WTSC_M_PhaseStateCode<=7 AND
     WTSC_M_FamilyHypothesisCode>=0 AND WTSC_M_FamilyHypothesisCode<=7 AND
     WTSC_M_DirectionalContextCode>=0 AND WTSC_M_DirectionalContextCode<=4 AND
@@ -221,7 +238,7 @@ WTSC_M_PayloadValid =
     WTSC_M_SourceClockBasisCode==WTSC_ClockBasisCode AND
     NOT IsNull(WTSC_M_SourceBarDateTime) AND
     (WTSC_M_ContextMultiplicityCode!=1 OR NOT IsNull(WTSC_M_CurrentRangeContextID)) AND
-    (WTSC_M_ContextMultiplicityCode!=2 OR (WTSC_M_L_ContextPresent==1 AND WTSC_M_U_ContextPresent==1));
+    (WTSC_M_ContextMultiplicityCode!=2 OR (WTSC_M_L_PublicActive==1 AND WTSC_M_U_PublicActive==1));
 
 WTSC_M_StatusCode = 0;
 if (WTSC_ConsumerIntervalValid)

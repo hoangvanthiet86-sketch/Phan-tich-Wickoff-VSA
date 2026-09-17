@@ -61,7 +61,7 @@ HHTP_SourceValid =
 
 HHTP_ValidBarCount = LastValue(Cum(HHTP_SourceValid));
 HHTP_Prefix = "WVSA_HIST_MTF_v01_" + HHTP_Symbol + "_" + HHTP_TFCode + "_";
-HHTP_Version = "HISTORICAL_TF_TIMELINE_PUBLISHER_V01_20260914_A";
+HHTP_Version = "HISTORICAL_TF_TIMELINE_PUBLISHER_V01_20260916_B";
 _SECTION_END();
 
 _SECTION_BEGIN("03. GHI NAMESPACE LICH SU");
@@ -94,7 +94,7 @@ else
 
     StaticVarSet(HHTP_Prefix+"Ready",0,True);
     StaticVarSet(HHTP_Prefix+"SchemaMajor",1,True);
-    StaticVarSet(HHTP_Prefix+"SchemaMinor",0,True);
+    StaticVarSet(HHTP_Prefix+"SchemaMinor",1,True);
     StaticVarSetText(HHTP_Prefix+"Symbol",HHTP_Symbol,True);
     StaticVarSetText(HHTP_Prefix+"TimeframeCode",HHTP_TFCode,True);
     StaticVarSetText(HHTP_Prefix+"ProducerVersion",HHTP_Version,True);
@@ -103,6 +103,12 @@ else
     StaticVarSet(HHTP_Prefix+"SourcePeriodOrdinal",HHTP_SourcePeriodOrdinal,True);
     StaticVarSet(HHTP_Prefix+"SourceBarDateTime",HHTP_DT,True);
     StaticVarSet(HHTP_Prefix+"SourceValid",HHTP_SourceValid,True);
+
+    // DCMA-10 audit: lifecycle presence va public-active duoc luu rieng.
+    StaticVarSet(HHTP_Prefix+"L_ContextPresent",WPC_L_ContextPresent,True);
+    StaticVarSet(HHTP_Prefix+"U_ContextPresent",WPC_U_ContextPresent,True);
+    StaticVarSet(HHTP_Prefix+"L_PublicActive",WPCP_L_RangeActivePublic,True);
+    StaticVarSet(HHTP_Prefix+"U_PublicActive",WPCP_U_RangeActivePublic,True);
 
     // Payload dung bo truong ma MultiTimeframeContext v0.1 tieu thu.
     StaticVarSet(HHTP_Prefix+"ContextMultiplicityCode",WCI_ContextMultiplicityCode,True);

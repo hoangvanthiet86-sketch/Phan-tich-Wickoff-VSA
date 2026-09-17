@@ -66,6 +66,8 @@ HPM_WPrefix = "WVSA_HIST_MTF_v01_" + HPM_Symbol + "_W_";
 HPM_WReadyScalar =
     Nz(StaticVarGet(HPM_WPrefix+"Ready"),0)==1 AND
     Nz(StaticVarGet(HPM_WPrefix+"CommittedGenerationID"),0)>0 AND
+    Nz(StaticVarGet(HPM_WPrefix+"SchemaMajor"),0)==1 AND
+    Nz(StaticVarGet(HPM_WPrefix+"SchemaMinor"),-1)==1 AND
     StaticVarGetText(HPM_WPrefix+"Symbol")==HPM_Symbol AND
     StaticVarGetText(HPM_WPrefix+"TimeframeCode")=="W";
 
@@ -147,6 +149,8 @@ HPM_MPrefix = "WVSA_HIST_MTF_v01_" + HPM_Symbol + "_M_";
 HPM_MReadyScalar =
     Nz(StaticVarGet(HPM_MPrefix+"Ready"),0)==1 AND
     Nz(StaticVarGet(HPM_MPrefix+"CommittedGenerationID"),0)>0 AND
+    Nz(StaticVarGet(HPM_MPrefix+"SchemaMajor"),0)==1 AND
+    Nz(StaticVarGet(HPM_MPrefix+"SchemaMinor"),-1)==1 AND
     StaticVarGetText(HPM_MPrefix+"Symbol")==HPM_Symbol AND
     StaticVarGetText(HPM_MPrefix+"TimeframeCode")=="M";
 
@@ -308,7 +312,7 @@ HPM_StatusCode = IIf(
     IIf(NOT HPM_WValid OR NOT HPM_MValid,2,
     IIf(HPM_ContractValid,3,2))));
 HPM_StatusText = "Sai khung thoi gian\nChua co du timeline Tuan/Thang\nChua du payload da hoan tat\nDat tai dung payload va MTF";
-HPM_Version = "HISTORICAL_MTF_PAYLOAD_PROOF_V01_20260914_B";
+HPM_Version = "HISTORICAL_MTF_PAYLOAD_PROOF_V01_20260916_C";
 
 Filter = HPM_IntervalValid AND IIf(HPM_OnlyBoundary,HPM_AnyRollover,HPM_ContractValid);
 

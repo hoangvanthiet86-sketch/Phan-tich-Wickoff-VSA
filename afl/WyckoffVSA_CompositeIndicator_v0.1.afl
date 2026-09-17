@@ -55,53 +55,55 @@ WCI_DirectionalContextCode = IIf(
     IIf(WCI_FamilyHypothesisCode==4 OR WCI_FamilyHypothesisCode==5,3,
     IIf(WCI_FamilyHypothesisCode==7,4,0))))));
 
+// DCMA v0.1: when exactly one public-active context exists, every singleton
+// projection must select that active side, not a terminal-but-present side.
 WCI_PrimaryRangeLow = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_PrimaryRangeLow,WPC_U_PrimaryRangeLow),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_PrimaryRangeLow,WPC_U_PrimaryRangeLow),Null);
 WCI_PrimaryRangeHigh = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_PrimaryRangeHigh,WPC_U_PrimaryRangeHigh),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_PrimaryRangeHigh,WPC_U_PrimaryRangeHigh),Null);
 WCI_PrimaryRangeWidth = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_PrimaryRangeWidth,WPC_U_PrimaryRangeWidth),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_PrimaryRangeWidth,WPC_U_PrimaryRangeWidth),Null);
 WCI_RangeAgeBars = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_RangeAgeBars,WPC_U_RangeAgeBars),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_RangeAgeBars,WPC_U_RangeAgeBars),Null);
 WCI_RangePositionValid = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_RangePositionValid,WPC_U_RangePositionValid),0);
+    IIf(WPCF_L_PublicActive==1,WPC_L_RangePositionValid,WPC_U_RangePositionValid),0);
 WCI_RangePosition = IIf(
     WCI_ContextMultiplicityCode==1 AND WCI_RangePositionValid==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_RangePosition,WPC_U_RangePosition),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_RangePosition,WPC_U_RangePosition),Null);
 WCI_RangeStatusCode = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPCP_L_RangeStatusCode,WPCP_U_RangeStatusCode),0);
+    IIf(WPCF_L_PublicActive==1,WPCP_L_RangeStatusCode,WPCP_U_RangeStatusCode),0);
 
 WCI_PriorTrendContextCode = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_PriorTrendContextCode,WPC_U_PriorTrendContextCode),0);
+    IIf(WPCF_L_PublicActive==1,WPC_L_PriorTrendContextCode,WPC_U_PriorTrendContextCode),0);
 WCI_HypothesisRevisionCode = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_HypothesisRevisionCode,WPC_U_HypothesisRevisionCode),0);
+    IIf(WPCF_L_PublicActive==1,WPC_L_HypothesisRevisionCode,WPC_U_HypothesisRevisionCode),0);
 WCI_HypothesisKnownAtBarIndex = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_HypothesisKnownAtBarIndex,WPC_U_HypothesisKnownAtBarIndex),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_HypothesisKnownAtBarIndex,WPC_U_HypothesisKnownAtBarIndex),Null);
 WCI_HypothesisKnownAtDateTime = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPCP_L_HypothesisKnownAtDateTime,WPCP_U_HypothesisKnownAtDateTime),Null);
+    IIf(WPCF_L_PublicActive==1,WPCP_L_HypothesisKnownAtDateTime,WPCP_U_HypothesisKnownAtDateTime),Null);
 WCI_MixedEvidenceReasonCode = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPCF_L_MixedEvidenceReasonCode,WPCF_U_MixedEvidenceReasonCode),
+    IIf(WPCF_L_PublicActive==1,WPCF_L_MixedEvidenceReasonCode,WPCF_U_MixedEvidenceReasonCode),
     IIf(WCI_ContextMultiplicityCode==2,15,0));
 _SECTION_END();
 
 _SECTION_BEGIN("82. Composite evidence and alignment projection");
 WCI_CurrentBullishEvidence = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_BullishEvidenceState,WPC_U_BullishEvidenceState),0);
+    IIf(WPCF_L_PublicActive==1,WPC_L_BullishEvidenceState,WPC_U_BullishEvidenceState),0);
 WCI_CurrentBearishEvidence = IIf(
     WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_BearishEvidenceState,WPC_U_BearishEvidenceState),0);
+    IIf(WPCF_L_PublicActive==1,WPC_L_BearishEvidenceState,WPC_U_BearishEvidenceState),0);
 
 WCI_EvidenceBalanceCode = IIf(
     WCI_ContextMultiplicityCode==0,0,
@@ -146,9 +148,10 @@ WCI_CurrentEventMask =
 _SECTION_END();
 
 _SECTION_BEGIN("84. Composite lower/upper diagnostics and counts");
-// Preserve both channels. Singleton fields above never select a winner when
-// both contexts coexist.
+// Preserve lifecycle and public-active channels independently. Singleton
+// fields above never select a winner when both public-active contexts coexist.
 WCI_L_ContextPresent = WPC_L_ContextPresent;
+WCI_L_PublicActive = WPCF_L_PublicActive;
 WCI_L_RangeContextID = WPC_L_RangeContextID;
 WCI_L_RangeStatusCode = WPCP_L_RangeStatusCode;
 WCI_L_PrimaryRangeLow = WPC_L_PrimaryRangeLow;
@@ -159,6 +162,7 @@ WCI_L_FamilyHypothesisCode = WPCF_L_FamilyHypothesisCode;
 WCI_L_MixedEvidenceReasonCode = WPCF_L_MixedEvidenceReasonCode;
 
 WCI_U_ContextPresent = WPC_U_ContextPresent;
+WCI_U_PublicActive = WPCF_U_PublicActive;
 WCI_U_RangeContextID = WPC_U_RangeContextID;
 WCI_U_RangeStatusCode = WPCP_U_RangeStatusCode;
 WCI_U_PrimaryRangeLow = WPC_U_PrimaryRangeLow;
@@ -169,21 +173,21 @@ WCI_U_FamilyHypothesisCode = WPCF_U_FamilyHypothesisCode;
 WCI_U_MixedEvidenceReasonCode = WPCF_U_MixedEvidenceReasonCode;
 
 WCI_SOSLinkedCount = IIf(WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_SOSLinkedCount,WPC_U_SOSLinkedCount),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_SOSLinkedCount,WPC_U_SOSLinkedCount),Null);
 WCI_LPSLinkedCount = IIf(WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_LPSLinkedCount,WPC_U_LPSLinkedCount),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_LPSLinkedCount,WPC_U_LPSLinkedCount),Null);
 WCI_SOWLinkedCount = IIf(WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_SOWLinkedCount,WPC_U_SOWLinkedCount),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_SOWLinkedCount,WPC_U_SOWLinkedCount),Null);
 WCI_LPSYLinkedCount = IIf(WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_LPSYLinkedCount,WPC_U_LPSYLinkedCount),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_LPSYLinkedCount,WPC_U_LPSYLinkedCount),Null);
 WCI_NoSupplyAfterStrengthCount = IIf(WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_NoSupplyAfterStrengthCount,WPC_U_NoSupplyAfterStrengthCount),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_NoSupplyAfterStrengthCount,WPC_U_NoSupplyAfterStrengthCount),Null);
 WCI_NoDemandAfterWeaknessCount = IIf(WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_NoDemandAfterWeaknessCount,WPC_U_NoDemandAfterWeaknessCount),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_NoDemandAfterWeaknessCount,WPC_U_NoDemandAfterWeaknessCount),Null);
 WCI_BullishAbsorptionResponseCount = IIf(WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_BullishAbsorptionResponseCount,WPC_U_BullishAbsorptionResponseCount),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_BullishAbsorptionResponseCount,WPC_U_BullishAbsorptionResponseCount),Null);
 WCI_BearishAbsorptionResponseCount = IIf(WCI_ContextMultiplicityCode==1,
-    IIf(WPC_L_ContextPresent==1,WPC_L_BearishAbsorptionResponseCount,WPC_U_BearishAbsorptionResponseCount),Null);
+    IIf(WPCF_L_PublicActive==1,WPC_L_BearishAbsorptionResponseCount,WPC_U_BearishAbsorptionResponseCount),Null);
 _SECTION_END();
 
 _SECTION_BEGIN("85. Composite exploration-first public interface");
@@ -245,6 +249,7 @@ AddColumn(WCI_CurrentBullishAbsorptionResponse,"WCI_CurrentBullishAbsorptionResp
 AddColumn(WCI_CurrentBearishAbsorptionResponse,"WCI_CurrentBearishAbsorptionResponse",1.0);
 
 AddColumn(WCI_L_ContextPresent,"WCI_L_ContextPresent",1.0);
+AddColumn(WCI_L_PublicActive,"WCI_L_PublicActive",1.0);
 AddColumn(WCI_L_RangeContextID,"WCI_L_RangeContextID",1.0);
 AddColumn(WCI_L_RangeStatusCode,"WCI_L_RangeStatusCode",1.0);
 AddColumn(WCI_L_PrimaryRangeLow,"WCI_L_PrimaryRangeLow",1.12);
@@ -255,6 +260,7 @@ AddColumn(WCI_L_FamilyHypothesisCode,"WCI_L_FamilyHypothesisCode",1.0);
 AddColumn(WCI_L_MixedEvidenceReasonCode,"WCI_L_MixedEvidenceReasonCode",1.0);
 
 AddColumn(WCI_U_ContextPresent,"WCI_U_ContextPresent",1.0);
+AddColumn(WCI_U_PublicActive,"WCI_U_PublicActive",1.0);
 AddColumn(WCI_U_RangeContextID,"WCI_U_RangeContextID",1.0);
 AddColumn(WCI_U_RangeStatusCode,"WCI_U_RangeStatusCode",1.0);
 AddColumn(WCI_U_PrimaryRangeLow,"WCI_U_PrimaryRangeLow",1.12);

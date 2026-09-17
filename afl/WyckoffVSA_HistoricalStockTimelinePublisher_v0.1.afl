@@ -121,13 +121,13 @@ HST_DT = DateTime();
 HST_DateKey = DateNum();
 HST_IntervalValid = Interval()==inDaily;
 HST_Prefix = "WVSA_HIST_STOCK_v01_" + HST_Symbol + "_";
-HST_Version = "HISTORICAL_STOCK_TIMELINE_PUBLISHER_V01_20260914_B";
+HST_Version = "HISTORICAL_STOCK_TIMELINE_PUBLISHER_V01_20260916_C";
 
 HST_Stage = HST_StageFromPhase(WCI_PhaseStateCode);
 HST_SingleLower = WCI_ContextMultiplicityCode==1 AND
-    WPC_L_ContextPresent==1 AND WPC_U_ContextPresent!=1;
+    WPCP_L_RangeActivePublic==1 AND WPCP_U_RangeActivePublic!=1;
 HST_SingleUpper = WCI_ContextMultiplicityCode==1 AND
-    WPC_U_ContextPresent==1 AND WPC_L_ContextPresent!=1;
+    WPCP_U_RangeActivePublic==1 AND WPCP_L_RangeActivePublic!=1;
 HST_RangeStatus = IIf(HST_SingleLower,WPCP_L_RangeStatusCode,
     IIf(HST_SingleUpper,WPCP_U_RangeStatusCode,0));
 HST_RangePosition = IIf(HST_SingleLower,WPC_L_RangePosition,
@@ -194,7 +194,7 @@ else
 
     StaticVarSet(HST_Prefix+"Ready",0,True);
     StaticVarSet(HST_Prefix+"SchemaMajor",1,True);
-    StaticVarSet(HST_Prefix+"SchemaMinor",0,True);
+    StaticVarSet(HST_Prefix+"SchemaMinor",1,True);
     StaticVarSetText(HST_Prefix+"Symbol",HST_Symbol,True);
     StaticVarSetText(HST_Prefix+"ProducerVersion",HST_Version,True);
     StaticVarSetText(HST_Prefix+"RSMarketSymbol",HST_RSMarketSymbol,True);
@@ -206,6 +206,11 @@ else
     StaticVarSet(HST_Prefix+"ProvisionalFlag",WCI_ProvisionalFlag,True);
     StaticVarSet(HST_Prefix+"Close",Close,True);
 
+    // DCMA-10 audit: lifecycle presence va public-active duoc luu rieng.
+    StaticVarSet(HST_Prefix+"L_ContextPresent",WPC_L_ContextPresent,True);
+    StaticVarSet(HST_Prefix+"U_ContextPresent",WPC_U_ContextPresent,True);
+    StaticVarSet(HST_Prefix+"L_PublicActive",WPCP_L_RangeActivePublic,True);
+    StaticVarSet(HST_Prefix+"U_PublicActive",WPCP_U_RangeActivePublic,True);
     StaticVarSet(HST_Prefix+"ContextMultiplicityCode",WCI_ContextMultiplicityCode,True);
     StaticVarSet(HST_Prefix+"DirectionalContextCode",WCI_DirectionalContextCode,True);
     StaticVarSet(HST_Prefix+"PhaseStateCode",WCI_PhaseStateCode,True);

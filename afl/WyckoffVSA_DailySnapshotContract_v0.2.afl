@@ -9,13 +9,18 @@
     - one schema/prefix/config-fingerprint definition shared by Publisher and Consumer;
     - exact configuration identity without hash-collision risk (full text fingerprint);
     - persistent per-symbol snapshot namespace.
+
+    DCMA v0.1 contract note:
+    schema 2.1 / contract 0.2.1 identifies PublicActive-based ContextMultiplicity.
+    Existing 2.0 snapshots must fail closed until republished; RuntimeConfig
+    fingerprint is intentionally unchanged.
 */
 #include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
 
 WDS_SchemaMajor = 2;
-WDS_SchemaMinor = 0;
+WDS_SchemaMinor = 1;
 WDS_RuntimeVersion = "0.2";
-WDS_ContractVersion = "0.2";
+WDS_ContractVersion = "0.2.1";
 WDS_Symbol = Name();
 WDS_Prefix = "WVSA_DAILY_v02_" + WDS_Symbol + "_";
 
