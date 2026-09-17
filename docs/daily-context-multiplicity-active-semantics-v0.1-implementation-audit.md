@@ -1,6 +1,6 @@
 # Daily Context Multiplicity PublicActive v0.1 — Implementation Audit
 
-Trang thai: `SOURCE COMPLETE / NATIVE PENDING / NO PRODUCTION MERGE`
+Trang thai: `SOURCE COMPLETE / NATIVE PASS / READY FOR REVIEW / NO AUTO MERGE`
 
 Spec normative: PR #62, `DAILY_CONTEXT_MULTIPLICITY_ACTIVE_SEMANTICS_V01_SPEC = APPROVED`.
 
@@ -96,12 +96,15 @@ Khong sua formula identity/checkpoint cua release `historical-scanner-v0.1.0`; t
 
 ## Regression probe
 
-`afl/WyckoffVSA_ContextMultiplicity_Regression_v0.1.afl` version `DCMA_REGRESSION_V01_20260916_B`:
+`afl/WyckoffVSA_ContextMultiplicity_Regression_v0.1.afl` version `DCMA_REGRESSION_V01_20260917_C`:
 - khong ghi StaticVar;
 - doc old Daily Snapshot truc tiep lam oracle truoc correction;
-- tinh Present count va PublicActive count song song;
+- tinh Present count va PublicActive count song song tren Daily;
+- doc validated Weekly/Monthly Present/PublicActive de truy vet semantic impact D/W/M;
 - bao cao old/new DataEligible, Class, Stage, Phase, Family, Directional, MTF, Review, MethodBlockMask;
-- danh dau population muc tieu `2 Present / <2 Active`;
+- semantic-impact population la hop cua `PresentMultiplicity != ActiveMultiplicity` tren Daily, Weekly hoac Monthly validated snapshot;
+- chap nhan transition dung semantics `2->1`, `2->0` va `1->0`;
+- A04 bit-for-bit chi ap dung cho Daily `1 Present / 1 Active` khi Weekly/Monthly khong co semantic mismatch;
 - kiem tra oracle business date phai trung operational as-of;
 - khong cho phep ket luan decision equivalence neu W/M/RS/Selection dependencies moi chua san sang;
 - chi bat `LOI thay doi ngoai tap muc tieu` khi `Cho phep so sanh quyet dinh=1`.
@@ -126,7 +129,12 @@ Cac transport mang `ContextMultiplicityCode` da co mot trong hai co che bat buoc
 
 Payload truoc correction khong duoc consumer moi doc ngam nhu cung semantics.
 
-Day la source/static closure, KHONG phai native PASS. Native phai xac minh old payload fail closed va republished payload 1.1/0.1.1 duoc doc dung.
+Native persisted-contract gate da xac minh:
+- old Daily 2.0/0.2 fail closed voi consumer 2.1/0.2.1;
+- old Weekly/Monthly 1.0/0.1 fail closed voi consumer 1.1/0.1.1;
+- old Selection producer contract 0.1 fail closed; payload moi 0.1.1 + Composite/MTF schema 1.1 hop le;
+- Historical W/M timeline 1.0 fail closed trong `HistoricalMTFPayloadProof`;
+- Historical Stock/Market timeline 1.0 fail closed trong `HistoricalScanner`.
 
 ## Khong thay doi
 
@@ -142,8 +150,24 @@ Correction nay khong:
 
 ## Native acceptance
 
-Chua co native PASS cho implementation nay.
+Locked as-of: `11/09/2026`.
 
-Cac gate con lai: DCMA-A01..A07, bao gom old-payload fail-closed, republish contract moi va VN STOCKS ONLY regression.
+Ket qua native:
+- `DCMA-A01..A06 = PASS` tren `VN STOCKS ONLY`;
+- `LOI A04 single active = 0`;
+- `LOI thay doi ngoai tap muc tieu = 0`;
+- moi decision change quan sat duoc deu truy vet ve semantic correction D/W/M hop le;
+- Weekly/Monthly/Selection payload moi da republish va contract guard PASS;
+- DailyPublisher moi da commit sau khi regression oracle dong;
+- `DCMA-A07 / Composite = PASS`;
+- `DCMA-A07 / MTF = PASS`;
+- `DCMA-A07 / Fast Scanner = PASS`;
+- `DCMA-A07 / Market Scanner = PASS`;
+- Historical W/M fail-closed = PASS;
+- Historical Stock/Market fail-closed = PASS.
 
-Checkpoint `DAILY_CONTEXT_MULTIPLICITY_ACTIVE_SEMANTICS_V01 = PASS` bi cam su dung cho den khi cac native gate tren deu dat.
+Checkpoint:
+
+`DAILY_CONTEXT_MULTIPLICITY_ACTIVE_SEMANTICS_V01 = PASS`
+
+PR duoc phep o trang thai Ready for review; khong auto-merge.
