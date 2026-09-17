@@ -1,6 +1,6 @@
 # Daily Context Multiplicity PublicActive v0.1 — Ke hoach kiem thu
 
-Trang thai: `SOURCE COMPLETE / NATIVE PENDING`
+Trang thai: `SOURCE COMPLETE / NATIVE PASS / READY FOR REVIEW`
 
 Nguon dac ta da duoc phe duyet: PR #62, checkpoint `DAILY_CONTEXT_MULTIPLICITY_ACTIVE_SEMANTICS_V01_SPEC = APPROVED`.
 
@@ -165,8 +165,25 @@ Sau khi xac minh fail-closed moi republish payload moi. Payload moi phai mang sc
 9. Chay Fast Scanner va downstream A07 tren payload moi.
 10. Historical transport chi republish khi can chay regression Historical cho correction; khong rerun Historical publisher chi de xac minh source/static gate.
 
+## Ket qua native da khoa
+
+Locked as-of: `11/09/2026`.
+
+- `DCMA-A01..A06 = PASS` tren `VN STOCKS ONLY`.
+- Probe cuoi: `DCMA_REGRESSION_V01_20260917_C`.
+- `LOI A04 single active = 0`.
+- `LOI thay doi ngoai tap muc tieu = 0`.
+- Moi decision change quan sat duoc deu truy vet ve semantic-impact D/W/M hop le.
+- Weekly/Monthly/Selection payload moi va Daily Snapshot contract moi da duoc xac minh.
+- `DCMA-A07 / Composite = PASS`.
+- `DCMA-A07 / MTF = PASS`.
+- `DCMA-A07 / Fast Scanner = PASS`.
+- `DCMA-A07 / Market Scanner = PASS`.
+- Historical W/M schema 1.0 fail-closed = PASS.
+- Historical Stock/Market schema 1.0 fail-closed = PASS.
+
 ## Checkpoint
 
-Chi khi A01-A07 va persisted-contract native gates deu dat moi duoc ghi:
+Tat ca A01-A07 va persisted-contract native gates da dat.
 
 `DAILY_CONTEXT_MULTIPLICITY_ACTIVE_SEMANTICS_V01 = PASS`
