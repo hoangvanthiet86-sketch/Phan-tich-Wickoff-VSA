@@ -3,7 +3,7 @@
 **Trạng thái:** DRAFT FOR IMPLEMENTATION  
 **Nhánh triển khai:** `feature/one-click-scanner-v0.1`  
 **Baseline:** `main` tại `c3b3b45bc3adb18b55d25abae07693c5b7e4df2b`  
-**Mục tiêu:** một AFL duy nhất, một lần Explore, trả kết quả lọc cuối cùng.
+**Mục tiêu:** một AFL duy nhất cho cả dữ liệu hiện tại và Bar Replay, một lần Explore, trả kết quả lọc cuối cùng đúng point-in-time.
 
 ---
 
@@ -17,6 +17,8 @@ Người dùng chỉ phải thực hiện:
 4. `Range = 1 Recent Bar`;
 5. chọn Production Filter;
 6. bấm `Explore` đúng một lần.
+
+Khi dùng Bar Replay, người dùng chỉ đưa playback tới thời điểm cần kiểm tra rồi vẫn dùng chính `WyckoffVSA_OneClickScanner_v0.1.afl`; không có Replay entrypoint riêng và không có nút chuyển Live/Replay.
 
 Không được yêu cầu người dùng chạy trước hoặc chạy riêng:
 
@@ -143,16 +145,18 @@ Diagnostics có thể bật riêng nhưng không được yêu cầu cho workflo
 
 ## 6. Kiến trúc triển khai
 
-Không khóa trước kỹ thuật nội bộ miễn là đáp ứng hợp đồng một-click và bảo toàn kết quả.
+Kiến trúc đã chốt: **Unified Point-in-Time Self-Healing Cache Scanner**.
 
-Các hướng hợp lệ gồm:
+- `LastValue(DateTime())` và `LastValue(DateNum())` là as-of thống nhất cho current và Bar Replay.
+- Final Decision Snapshot là warm path chính.
+- VNINDEX context được tính/cached dùng chung theo as-of/config.
+- Weekly/Monthly cache theo completed-period ordinal.
+- Cache miss chạy canonical analytical body; cache hit không chạy heavy body.
+- Production Filter không nằm trong analytical fingerprint.
 
-- tính trực tiếp Daily/Weekly/Monthly/Benchmark trong một runtime namespaced;
-- tự refresh cache/snapshot nội bộ;
-- refactor analytical engines thành các runtime callable/namespaced để có thể chạy stock và benchmark trong cùng một Analysis;
-- kết hợp direct-compute + cache với fallback causal.
+Analytical body được builder sinh từ source chuẩn, bỏ presentation/output và tách helper functions. Body chỉ xuất hiện **một lần** trong formula và được thực thi lặp có điều kiện qua context loop D/W/M/Market; không inline sáu bản sao body.
 
-Không được chỉ tạo một wrapper gọi `FastScanner` rồi tiếp tục yêu cầu publisher thủ công.
+Không được chỉ tạo wrapper gọi `FastScanner` rồi tiếp tục yêu cầu publisher thủ công.
 
 ---
 
@@ -212,8 +216,11 @@ Thiếu dữ liệu benchmark, dữ liệu nguồn hỏng, schema không thể x
 
 Yêu cầu: fail closed có lý do rõ ràng; không dùng dữ liệu cũ.
 
-### OC09 — Performance
-Đo thời gian one-click cold run và warm run.
+### OC09 — Unified Bar Replay
+Cùng một AFL phải chạy đúng tại replay as-of; không dùng cache tương lai; tiến ngày/tuần/tháng tự refresh dependency cần thiết.
+
+### OC10 — Performance
+Đo ít nhất: cold current, warm current, filter-only rerun, new day, week rollover, month rollover, replay cold, replay warm và replay backward jump.
 
 Không chấp nhận tăng tốc bằng cách hạ tiêu chuẩn phân tích.
 
@@ -238,6 +245,6 @@ Chỉ được gọi:
 
 `ONE_CLICK_SCANNER_V01 = PASS`
 
-khi OC01-OC09 đạt trên AmiBroker 6.20.01 và không có unexplained mismatch so với production canonical pipeline.
+khi OC01-OC10 đạt trên AmiBroker 6.20.01 và không có unexplained mismatch so với production canonical pipeline.
 
 Không merge `main`, không tag/release nếu chưa có final review và phê duyệt riêng.
