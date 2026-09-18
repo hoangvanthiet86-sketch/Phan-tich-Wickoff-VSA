@@ -252,8 +252,8 @@ $bodyHeader = @"
     Analytical execution body only. No helper definitions, Params, output columns,
     plots, Filter assignments or include directives.
 
-    This file is intentionally designed for repeated #include execution under
-    different timeframe/foreign contexts. Do not #include_once this body.
+    This file is intentionally designed for repeated context execution under
+    different timeframe/foreign contexts. It must not be protected by include-once semantics.
 */
 "@
 
@@ -277,8 +277,8 @@ $forbiddenBody = @(
 )
 
 foreach ($bad in $forbiddenBody) {
-    if ($bodyText.Contains($bad)) {
-        throw "Generated body contains forbidden token: $bad"
+    if (($allBody -join [Environment]::NewLine).Contains($bad)) {
+        throw "Generated analytical body contains forbidden token: $bad"
     }
 }
 
