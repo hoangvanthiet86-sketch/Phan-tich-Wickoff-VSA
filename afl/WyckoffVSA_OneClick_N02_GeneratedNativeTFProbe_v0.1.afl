@@ -1,0 +1,116 @@
+/*
+    Wyckoff VSA One-Click N02 Generated Native-TF Probe v0.1
+
+    Run on native Weekly, then native Monthly.
+    Selects the expected completed period and exposes the generated-body payload.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_OneClickContextHelpers_Generated_v0.1.afl>
+
+GetPerformanceCounter(1);
+#include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
+WVOC_N02_ContextBodyMs = GetPerformanceCounter();
+
+
+WVOC_N02_IsWeekly = Interval()==inWeekly;
+WVOC_N02_IsMonthly = Interval()==inMonthly;
+WVOC_N02_IntervalValid = WVOC_N02_IsWeekly OR WVOC_N02_IsMonthly;
+
+WVOC_N02_ExpectedOrdinal = IIf(
+    WVOC_N02_IsWeekly,
+    WCLK_ExpectedCompletedWeeklyOrdinal,
+    IIf(WVOC_N02_IsMonthly,WCLK_ExpectedCompletedMonthlyOrdinal,Null));
+
+WVOC_N02_SourceDT = DateTime();
+WVOC_N02_SourceWeeklyOrdinal = Floor(DateTimeDiff(WVOC_N02_SourceDT,WCLK_WeekEpoch)/604800);
+WVOC_N02_SourceMonthlyOrdinal = Year()*12 + Month();
+WVOC_N02_SourceOrdinal = IIf(
+    WVOC_N02_IsWeekly,
+    WVOC_N02_SourceWeeklyOrdinal,
+    WVOC_N02_SourceMonthlyOrdinal);
+
+WVOC_N02_SelectedIndex = -1;
+for (WVOC_N02_i=BarCount-1; WVOC_N02_i>=0; WVOC_N02_i--)
+{
+    if (WVOC_N02_SelectedIndex<0 AND
+        WVOC_N02_SourceOrdinal[WVOC_N02_i]==WVOC_N02_ExpectedOrdinal)
+    {
+        WVOC_N02_SelectedIndex = WVOC_N02_i;
+    }
+}
+
+WVOC_N02_Found = WVOC_N02_SelectedIndex>=0;
+WVOC_N02_SafeIndex = IIf(WVOC_N02_Found,WVOC_N02_SelectedIndex,0);
+WVOC_N02_SelectedSourceOrdinal = IIf(WVOC_N02_Found,WVOC_N02_SourceOrdinal[WVOC_N02_SafeIndex],Null);
+WVOC_N02_SelectedSourceDT = IIf(WVOC_N02_Found,WVOC_N02_SourceDT[WVOC_N02_SafeIndex],Null);
+
+WVOC_N02_Multiplicity = IIf(WVOC_N02_Found,WCI_ContextMultiplicityCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_Ambiguous = IIf(WVOC_N02_Found,WCI_ContextAmbiguous[WVOC_N02_SafeIndex],Null);
+WVOC_N02_LPresent = IIf(WVOC_N02_Found,WCI_L_ContextPresent[WVOC_N02_SafeIndex],Null);
+WVOC_N02_UPresent = IIf(WVOC_N02_Found,WCI_U_ContextPresent[WVOC_N02_SafeIndex],Null);
+WVOC_N02_LActive = IIf(WVOC_N02_Found,WCI_L_PublicActive[WVOC_N02_SafeIndex],Null);
+WVOC_N02_UActive = IIf(WVOC_N02_Found,WCI_U_PublicActive[WVOC_N02_SafeIndex],Null);
+WVOC_N02_RangeID = IIf(WVOC_N02_Found,WCI_CurrentRangeContextID[WVOC_N02_SafeIndex],Null);
+WVOC_N02_RangeStatus = IIf(WVOC_N02_Found,WCI_RangeStatusCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_RangePosition = IIf(WVOC_N02_Found,WCI_RangePosition[WVOC_N02_SafeIndex],Null);
+WVOC_N02_Phase = IIf(WVOC_N02_Found,WCI_PhaseStateCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_Structural = IIf(WVOC_N02_Found,WCI_StructuralDevelopmentCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_Family = IIf(WVOC_N02_Found,WCI_FamilyHypothesisCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_Directional = IIf(WVOC_N02_Found,WCI_DirectionalContextCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_Evidence = IIf(WVOC_N02_Found,WCI_EvidenceBalanceCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_HypAlign = IIf(WVOC_N02_Found,WCI_HypothesisAlignmentCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_EventMask = IIf(WVOC_N02_Found,WCI_CurrentEventMask[WVOC_N02_SafeIndex],Null);
+WVOC_N02_LRangeID = IIf(WVOC_N02_Found,WCI_L_RangeContextID[WVOC_N02_SafeIndex],Null);
+WVOC_N02_LRangeStatus = IIf(WVOC_N02_Found,WCI_L_RangeStatusCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_LPhase = IIf(WVOC_N02_Found,WCI_L_PhaseStateCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_LFamily = IIf(WVOC_N02_Found,WCI_L_FamilyHypothesisCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_URangeID = IIf(WVOC_N02_Found,WCI_U_RangeContextID[WVOC_N02_SafeIndex],Null);
+WVOC_N02_URangeStatus = IIf(WVOC_N02_Found,WCI_U_RangeStatusCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_UPhase = IIf(WVOC_N02_Found,WCI_U_PhaseStateCode[WVOC_N02_SafeIndex],Null);
+WVOC_N02_UFamily = IIf(WVOC_N02_Found,WCI_U_FamilyHypothesisCode[WVOC_N02_SafeIndex],Null);
+
+WVOC_N02_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = WVOC_N02_LastBar;
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of",formatDateTime);
+AddColumn(0*BarIndex()+Interval(),"Native Interval",1.0);
+AddColumn(0*BarIndex()+WVRC_ConfigValid,"Config Valid",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_IntervalValid,"Interval Valid",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_ExpectedOrdinal,"Expected Completed Ordinal",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_SelectedSourceOrdinal,"Selected Source Ordinal",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_SelectedSourceDT,"Selected Source DateTime",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N02_Found,"Completed Period Found",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N02_Multiplicity,"Composite Multiplicity",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_Ambiguous,"Composite Ambiguous",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_LPresent,"L Present",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_UPresent,"U Present",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_LActive,"L PublicActive",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_UActive,"U PublicActive",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_RangeID,"Current Range ID",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_RangeStatus,"Range Status",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_RangePosition,"Range Position",1.4);
+AddColumn(0*BarIndex()+WVOC_N02_Phase,"Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_Structural,"Structural Development",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_Family,"Family",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_Directional,"Directional",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_Evidence,"Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_HypAlign,"Hyp Alignment",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_EventMask,"Event Mask",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_LRangeID,"L Range ID",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_LRangeStatus,"L Range Status",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_LPhase,"L Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_LFamily,"L Family",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_URangeID,"U Range ID",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_URangeStatus,"U Range Status",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_UPhase,"U Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N02_UFamily,"U Family",1.0);
+
+
+AddColumn(0*BarIndex()+WVOC_N02_ContextBodyMs,"Context Body ms",1.3);
+AddTextColumn("ONE_CLICK_N02_GENERATED_NATIVE_TF_V01_20260918_A","Probe Version");
