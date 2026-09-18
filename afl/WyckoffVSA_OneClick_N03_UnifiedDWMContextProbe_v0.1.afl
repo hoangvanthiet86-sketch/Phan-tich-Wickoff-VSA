@@ -1,0 +1,275 @@
+/*
+    Wyckoff VSA One-Click N03 Unified D/W/M Context Probe v0.1
+
+    Purpose:
+    - run ONE generated analytical body in a Daily Analysis;
+    - execute Daily, Weekly and Monthly contexts in one AFL;
+    - prove TimeFrameSet/TimeFrameRestore preserves the native-TF payloads
+      already accepted in N01/N02.
+
+    Control:
+    - Apply to = SNZ only
+    - Periodicity = Daily
+    - Range = 1 Recent Bar
+    - 1.3 last bar provisional = No
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_OneClickContextHelpers_Generated_v0.1.afl>
+
+WVOC_N03_AsOfDN = WCLK_AsOfDateNum;
+WVOC_N03_AsOfDT = WCLK_AsOfDateTime;
+WVOC_N03_ExpectedW = WCLK_ExpectedCompletedWeeklyOrdinal;
+WVOC_N03_ExpectedM = WCLK_ExpectedCompletedMonthlyOrdinal;
+
+// Scalars initialized to Null/0.
+WVOC_N03_D_Found = 0;
+WVOC_N03_W_Found = 0;
+WVOC_N03_M_Found = 0;
+
+for (WVOC_N03_Context = 0; WVOC_N03_Context < 3; WVOC_N03_Context++)
+{
+    if (WVOC_N03_Context == 1)
+        TimeFrameSet(inWeekly);
+
+    if (WVOC_N03_Context == 2)
+        TimeFrameSet(inMonthly);
+
+    GetPerformanceCounter(1);
+
+    #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
+
+    WVOC_N03_Elapsed = GetPerformanceCounter();
+
+    if (WVOC_N03_Context == 0)
+    {
+        WVOC_N03_D_Found = 1;
+        WVOC_N03_D_SourceDT = LastValue(DateTime());
+        WVOC_N03_D_Multiplicity = LastValue(WCI_ContextMultiplicityCode);
+        WVOC_N03_D_Ambiguous = LastValue(WCI_ContextAmbiguous);
+        WVOC_N03_D_LPresent = LastValue(WCI_L_ContextPresent);
+        WVOC_N03_D_UPresent = LastValue(WCI_U_ContextPresent);
+        WVOC_N03_D_LActive = LastValue(WCI_L_PublicActive);
+        WVOC_N03_D_UActive = LastValue(WCI_U_PublicActive);
+        WVOC_N03_D_RangeID = LastValue(WCI_CurrentRangeContextID);
+        WVOC_N03_D_RangeStatus = LastValue(WCI_RangeStatusCode);
+        WVOC_N03_D_RangePosition = LastValue(WCI_RangePosition);
+        WVOC_N03_D_Phase = LastValue(WCI_PhaseStateCode);
+        WVOC_N03_D_Structural = LastValue(WCI_StructuralDevelopmentCode);
+        WVOC_N03_D_Family = LastValue(WCI_FamilyHypothesisCode);
+        WVOC_N03_D_Directional = LastValue(WCI_DirectionalContextCode);
+        WVOC_N03_D_Evidence = LastValue(WCI_EvidenceBalanceCode);
+        WVOC_N03_D_HypAlign = LastValue(WCI_HypothesisAlignmentCode);
+        WVOC_N03_D_EventMask = LastValue(WCI_CurrentEventMask);
+        WVOC_N03_D_LRangeID = LastValue(WCI_L_RangeContextID);
+        WVOC_N03_D_LRangeStatus = LastValue(WCI_L_RangeStatusCode);
+        WVOC_N03_D_LPhase = LastValue(WCI_L_PhaseStateCode);
+        WVOC_N03_D_LFamily = LastValue(WCI_L_FamilyHypothesisCode);
+        WVOC_N03_D_URangeID = LastValue(WCI_U_RangeContextID);
+        WVOC_N03_D_URangeStatus = LastValue(WCI_U_RangeStatusCode);
+        WVOC_N03_D_UPhase = LastValue(WCI_U_PhaseStateCode);
+        WVOC_N03_D_UFamily = LastValue(WCI_U_FamilyHypothesisCode);
+        WVOC_N03_D_ms = WVOC_N03_Elapsed;
+    }
+
+    if (WVOC_N03_Context == 1)
+    {
+        WVOC_N03_W_SourceDTArray = DateTime();
+        WVOC_N03_W_SourceOrdinalArray =
+            Floor(DateTimeDiff(WVOC_N03_W_SourceDTArray,WCLK_WeekEpoch)/604800);
+
+        WVOC_N03_W_Index = -1;
+        for (WVOC_N03_j = BarCount-1; WVOC_N03_j >= 0; WVOC_N03_j--)
+        {
+            if (WVOC_N03_W_Index < 0 AND
+                WVOC_N03_W_SourceOrdinalArray[WVOC_N03_j] == WVOC_N03_ExpectedW)
+            {
+                WVOC_N03_W_Index = WVOC_N03_j;
+            }
+        }
+
+        WVOC_N03_W_Found = WVOC_N03_W_Index >= 0;
+        WVOC_N03_W_Safe = IIf(WVOC_N03_W_Found,WVOC_N03_W_Index,0);
+
+        WVOC_N03_W_SourceOrdinal = IIf(WVOC_N03_W_Found,WVOC_N03_W_SourceOrdinalArray[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_SourceDT = IIf(WVOC_N03_W_Found,WVOC_N03_W_SourceDTArray[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_Multiplicity = IIf(WVOC_N03_W_Found,WCI_ContextMultiplicityCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_Ambiguous = IIf(WVOC_N03_W_Found,WCI_ContextAmbiguous[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_LPresent = IIf(WVOC_N03_W_Found,WCI_L_ContextPresent[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_UPresent = IIf(WVOC_N03_W_Found,WCI_U_ContextPresent[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_LActive = IIf(WVOC_N03_W_Found,WCI_L_PublicActive[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_UActive = IIf(WVOC_N03_W_Found,WCI_U_PublicActive[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_RangeID = IIf(WVOC_N03_W_Found,WCI_CurrentRangeContextID[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_RangeStatus = IIf(WVOC_N03_W_Found,WCI_RangeStatusCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_RangePosition = IIf(WVOC_N03_W_Found,WCI_RangePosition[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_Phase = IIf(WVOC_N03_W_Found,WCI_PhaseStateCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_Structural = IIf(WVOC_N03_W_Found,WCI_StructuralDevelopmentCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_Family = IIf(WVOC_N03_W_Found,WCI_FamilyHypothesisCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_Directional = IIf(WVOC_N03_W_Found,WCI_DirectionalContextCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_Evidence = IIf(WVOC_N03_W_Found,WCI_EvidenceBalanceCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_HypAlign = IIf(WVOC_N03_W_Found,WCI_HypothesisAlignmentCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_EventMask = IIf(WVOC_N03_W_Found,WCI_CurrentEventMask[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_LRangeID = IIf(WVOC_N03_W_Found,WCI_L_RangeContextID[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_LRangeStatus = IIf(WVOC_N03_W_Found,WCI_L_RangeStatusCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_LPhase = IIf(WVOC_N03_W_Found,WCI_L_PhaseStateCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_LFamily = IIf(WVOC_N03_W_Found,WCI_L_FamilyHypothesisCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_URangeID = IIf(WVOC_N03_W_Found,WCI_U_RangeContextID[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_URangeStatus = IIf(WVOC_N03_W_Found,WCI_U_RangeStatusCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_UPhase = IIf(WVOC_N03_W_Found,WCI_U_PhaseStateCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_UFamily = IIf(WVOC_N03_W_Found,WCI_U_FamilyHypothesisCode[WVOC_N03_W_Safe],Null);
+        WVOC_N03_W_ms = WVOC_N03_Elapsed;
+    }
+
+    if (WVOC_N03_Context == 2)
+    {
+        WVOC_N03_M_SourceDTArray = DateTime();
+        WVOC_N03_M_SourceOrdinalArray = Year()*12 + Month();
+
+        WVOC_N03_M_Index = -1;
+        for (WVOC_N03_k = BarCount-1; WVOC_N03_k >= 0; WVOC_N03_k--)
+        {
+            if (WVOC_N03_M_Index < 0 AND
+                WVOC_N03_M_SourceOrdinalArray[WVOC_N03_k] == WVOC_N03_ExpectedM)
+            {
+                WVOC_N03_M_Index = WVOC_N03_k;
+            }
+        }
+
+        WVOC_N03_M_Found = WVOC_N03_M_Index >= 0;
+        WVOC_N03_M_Safe = IIf(WVOC_N03_M_Found,WVOC_N03_M_Index,0);
+
+        WVOC_N03_M_SourceOrdinal = IIf(WVOC_N03_M_Found,WVOC_N03_M_SourceOrdinalArray[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_SourceDT = IIf(WVOC_N03_M_Found,WVOC_N03_M_SourceDTArray[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_Multiplicity = IIf(WVOC_N03_M_Found,WCI_ContextMultiplicityCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_Ambiguous = IIf(WVOC_N03_M_Found,WCI_ContextAmbiguous[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_LPresent = IIf(WVOC_N03_M_Found,WCI_L_ContextPresent[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_UPresent = IIf(WVOC_N03_M_Found,WCI_U_ContextPresent[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_LActive = IIf(WVOC_N03_M_Found,WCI_L_PublicActive[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_UActive = IIf(WVOC_N03_M_Found,WCI_U_PublicActive[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_RangeID = IIf(WVOC_N03_M_Found,WCI_CurrentRangeContextID[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_RangeStatus = IIf(WVOC_N03_M_Found,WCI_RangeStatusCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_RangePosition = IIf(WVOC_N03_M_Found,WCI_RangePosition[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_Phase = IIf(WVOC_N03_M_Found,WCI_PhaseStateCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_Structural = IIf(WVOC_N03_M_Found,WCI_StructuralDevelopmentCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_Family = IIf(WVOC_N03_M_Found,WCI_FamilyHypothesisCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_Directional = IIf(WVOC_N03_M_Found,WCI_DirectionalContextCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_Evidence = IIf(WVOC_N03_M_Found,WCI_EvidenceBalanceCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_HypAlign = IIf(WVOC_N03_M_Found,WCI_HypothesisAlignmentCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_EventMask = IIf(WVOC_N03_M_Found,WCI_CurrentEventMask[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_LRangeID = IIf(WVOC_N03_M_Found,WCI_L_RangeContextID[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_LRangeStatus = IIf(WVOC_N03_M_Found,WCI_L_RangeStatusCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_LPhase = IIf(WVOC_N03_M_Found,WCI_L_PhaseStateCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_LFamily = IIf(WVOC_N03_M_Found,WCI_L_FamilyHypothesisCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_URangeID = IIf(WVOC_N03_M_Found,WCI_U_RangeContextID[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_URangeStatus = IIf(WVOC_N03_M_Found,WCI_U_RangeStatusCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_UPhase = IIf(WVOC_N03_M_Found,WCI_U_PhaseStateCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_UFamily = IIf(WVOC_N03_M_Found,WCI_U_FamilyHypothesisCode[WVOC_N03_M_Safe],Null);
+        WVOC_N03_M_ms = WVOC_N03_Elapsed;
+    }
+
+    if (WVOC_N03_Context > 0)
+        TimeFrameRestore();
+}
+
+WVOC_N03_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = WVOC_N03_LastBar;
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of",formatDateTime);
+AddColumn(0*BarIndex()+WVRC_ConfigValid,"Config Valid",1.0);
+
+// Daily
+AddColumn(0*BarIndex()+WVOC_N03_D_Found,"D Found",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_SourceDT,"D Source DT",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N03_D_Multiplicity,"D Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_Ambiguous,"D Amb",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_LPresent,"D LPresent",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_UPresent,"D UPresent",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_LActive,"D LActive",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_UActive,"D UActive",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_RangeID,"D RangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_RangeStatus,"D RangeStatus",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_RangePosition,"D RangePos",1.4);
+AddColumn(0*BarIndex()+WVOC_N03_D_Phase,"D Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_Structural,"D Structural",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_Family,"D Family",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_Directional,"D Directional",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_Evidence,"D Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_HypAlign,"D HypAlign",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_EventMask,"D EventMask",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_LRangeID,"D LRangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_LRangeStatus,"D LRangeStatus",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_LPhase,"D LPhase",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_LFamily,"D LFamily",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_URangeID,"D URangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_URangeStatus,"D URangeStatus",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_UPhase,"D UPhase",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_UFamily,"D UFamily",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_D_ms,"D ms",1.3);
+
+// Weekly
+AddColumn(0*BarIndex()+WVOC_N03_W_Found,"W Found",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_ExpectedW,"W Expected Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_SourceOrdinal,"W Source Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_SourceDT,"W Source DT",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N03_W_Multiplicity,"W Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_Ambiguous,"W Amb",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_LPresent,"W LPresent",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_UPresent,"W UPresent",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_LActive,"W LActive",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_UActive,"W UActive",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_RangeID,"W RangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_RangeStatus,"W RangeStatus",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_RangePosition,"W RangePos",1.4);
+AddColumn(0*BarIndex()+WVOC_N03_W_Phase,"W Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_Structural,"W Structural",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_Family,"W Family",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_Directional,"W Directional",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_Evidence,"W Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_HypAlign,"W HypAlign",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_EventMask,"W EventMask",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_LRangeID,"W LRangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_LRangeStatus,"W LRangeStatus",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_LPhase,"W LPhase",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_LFamily,"W LFamily",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_URangeID,"W URangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_URangeStatus,"W URangeStatus",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_UPhase,"W UPhase",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_UFamily,"W UFamily",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_W_ms,"W ms",1.3);
+
+// Monthly
+AddColumn(0*BarIndex()+WVOC_N03_M_Found,"M Found",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_ExpectedM,"M Expected Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_SourceOrdinal,"M Source Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_SourceDT,"M Source DT",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N03_M_Multiplicity,"M Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_Ambiguous,"M Amb",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_LPresent,"M LPresent",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_UPresent,"M UPresent",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_LActive,"M LActive",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_UActive,"M UActive",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_RangeID,"M RangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_RangeStatus,"M RangeStatus",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_RangePosition,"M RangePos",1.4);
+AddColumn(0*BarIndex()+WVOC_N03_M_Phase,"M Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_Structural,"M Structural",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_Family,"M Family",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_Directional,"M Directional",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_Evidence,"M Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_HypAlign,"M HypAlign",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_EventMask,"M EventMask",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_LRangeID,"M LRangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_LRangeStatus,"M LRangeStatus",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_LPhase,"M LPhase",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_LFamily,"M LFamily",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_URangeID,"M URangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_URangeStatus,"M URangeStatus",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_UPhase,"M UPhase",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_UFamily,"M UFamily",1.0);
+AddColumn(0*BarIndex()+WVOC_N03_M_ms,"M ms",1.3);
+
+AddTextColumn("ONE_CLICK_N03_UNIFIED_DWM_CONTEXT_V01_20260918_A","Probe Version");
