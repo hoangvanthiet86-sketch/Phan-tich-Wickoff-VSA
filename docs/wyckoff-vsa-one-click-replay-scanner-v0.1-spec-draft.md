@@ -1,9 +1,9 @@
 # Wyckoff VSA One-Click Replay Scanner v0.1 — Đặc tả dự thảo
 
-**Trạng thái:** DRAFT FOR IMPLEMENTATION  
+**Trạng thái:** SUPERSEDED — yêu cầu đã hợp nhất vào Unified One-Click Scanner  
 **Nhánh:** `feature/one-click-scanner-v0.1`  
 **Baseline:** `c3b3b45bc3adb18b55d25abae07693c5b7e4df2b`  
-**Mục tiêu:** một AFL duy nhất, một lần Explore tại vị trí Bar Replay, trả danh sách cổ phiếu cuối cùng đúng point-in-time.
+**Mục tiêu cũ:** Replay point-in-time một-click. Không còn entrypoint riêng; toàn bộ yêu cầu trong tài liệu này được thực thi bởi `WyckoffVSA_OneClickScanner_v0.1.afl` unified.
 
 ---
 
