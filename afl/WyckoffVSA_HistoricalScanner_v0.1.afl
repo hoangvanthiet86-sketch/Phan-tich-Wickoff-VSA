@@ -25,29 +25,11 @@ SetBarsRequired(sbrAll,sbrAll);
 SetOption("NoDefaultColumns",True);
 
 #include_once <WyckoffVSA_HistoricalRuntimeDefaults_v0.1.afl>
+#include_once <WyckoffVSA_ScannerDecisionKernel_v0.1.afl>
 
 function H4_Finite(x)
 {
     return IIf(IsNull(x),0,IIf(IsFinite(x),1,0));
-}
-
-function H4_SelectionContext(valid,multiplicity,directional,evidence,hypAlign,mtfAlign)
-{
-    local mixed, bullish, bearish;
-    mixed = multiplicity==2 OR directional==4 OR evidence==3 OR hypAlign==3 OR
-            mtfAlign==4 OR mtfAlign==5 OR mtfAlign==6;
-    bullish = directional==2 AND mtfAlign==2 AND evidence!=2 AND evidence!=3 AND hypAlign!=3;
-    bearish = directional==3 AND mtfAlign==3 AND evidence!=1 AND evidence!=3 AND hypAlign!=3;
-    return IIf(NOT valid,0,IIf(mixed,4,IIf(bullish,2,IIf(bearish,3,1))));
-}
-
-function H4_StageFromPhase(phaseCode)
-{
-    return IIf(phaseCode==1 OR phaseCode==2,1,
-           IIf(phaseCode==3 OR phaseCode==4,2,
-           IIf(phaseCode==5,3,
-           IIf(phaseCode==6,4,
-           IIf(phaseCode==7,5,0)))));
 }
 
 _SECTION_BEGIN("01. CAU HINH H4");
@@ -158,13 +140,13 @@ H4_MarketEffectiveValid =
     H4_MarketReady AND H4_MarketExactDate AND H4_MarketNoFuture AND
     H4_MarketSourceValid==1 AND H4_MarketPayloadPresent;
 
-H4_MarketSelection = H4_SelectionContext(
+H4_MarketSelection = WVOC_SelectionContext(
     H4_MarketEffectiveValid,H4_MarketMult,H4_MarketDir,
     H4_MarketEvidence,H4_MarketHypAlign,H4_MarketMTFDir);
 _SECTION_END();
 
 _SECTION_BEGIN("04. DIEU KIEN DU LIEU LICH SU");
-H4_Stage = H4_StageFromPhase(H4_StockPhase);
+H4_Stage = WVOC_StageFromPhase(H4_StockPhase);
 H4_MarketConfigMatch =
     StrLen(WVRC_RSMarketSymbol)>0 AND
     WVRC_RSMarketSymbol==WVRC_SelectionMarketSymbol AND
@@ -268,20 +250,18 @@ H4_Watch = H4_DataEligible AND NOT H4_Review AND
     (H4_RSStructure==1 OR H4_RSStructure==2);
 
 // Full Top-Down Group deferred trong profile Historical v0.1.
-H4_CandidateClass = IIf(NOT H4_DataEligible,0,
-    IIf(H4_Review,9,
-    IIf(H4_BullishQualifiedMarket,4,
-    IIf(H4_BearishQualifiedMarket,7,
-    IIf(H4_BullishDeveloping,3,
-    IIf(H4_BearishDeveloping,6,
-    IIf(H4_Watch,2,1)))))));
+H4_CandidateClass = WVOC_CandidateClass(
+    H4_DataEligible,H4_Review,
+    0,H4_BullishQualifiedMarket,
+    0,H4_BearishQualifiedMarket,
+    H4_BullishDeveloping,H4_BearishDeveloping,H4_Watch);
 
-H4_CandidateSide = IIf(H4_CandidateClass==3 OR H4_CandidateClass==4,1,
-    IIf(H4_CandidateClass==6 OR H4_CandidateClass==7,2,
-    IIf(H4_CandidateClass==2 AND H4_StockDir==2 AND H4_RSStructure==1,1,
-    IIf(H4_CandidateClass==2 AND H4_StockDir==3 AND H4_RSStructure==2,2,0))));
+H4_CandidateSide = WVOC_CandidateSide(
+    H4_CandidateClass,H4_StockDir,H4_RSStructure);
 
-H4_WatchPlus = H4_CandidateClass>=2 AND H4_CandidateClass<=8;
+H4_WatchPlus = WVOC_Watch(H4_CandidateClass) OR
+    WVOC_Developing(H4_CandidateClass) OR
+    WVOC_Qualified(H4_CandidateClass);
 _SECTION_END();
 
 _SECTION_BEGIN("07. TRANG THAI VA KET QUA H4");
