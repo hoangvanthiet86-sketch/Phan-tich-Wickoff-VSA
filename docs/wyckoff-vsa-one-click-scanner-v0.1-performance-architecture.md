@@ -1,8 +1,7 @@
 # Wyckoff VSA One-Click Scanner v0.1 — Kiến trúc tối ưu hiệu năng
 
-**Mục tiêu:** hai entrypoint production, mỗi entrypoint một AFL + một Explore:
-- `WyckoffVSA_OneClickScanner_v0.1.afl` — current/EOD
-- `WyckoffVSA_OneClickReplayScanner_v0.1.afl` — Bar Replay/historical point-in-time
+**Mục tiêu:** một entrypoint production duy nhất cho cả current/EOD và Bar Replay:
+- `WyckoffVSA_OneClickScanner_v0.1.afl`
 
 ## 1. Nguyên tắc
 
@@ -18,8 +17,8 @@ Nếu chưa rollover, không tái tính higher timeframe.
 ### P03 — Current-state boundary
 Current scanner chỉ cần authoritative state ở last visible bar. Có thể giữ state/cache trước đó nhưng output phải tương đương full canonical calculation.
 
-### P04 — Replay visible-as-of cache
-Replay cache thêm visible DateTime/DateNum vào key. Cache thuộc playback position tương lai bị cấm.
+### P04 — Unified visible-as-of cache
+Current và Replay dùng cùng cache contract. Cache identity bắt buộc chứa visible DateTime/DateNum; cache của playback position khác hoặc tương lai tự fail validation.
 
 ### P05 — Shared decision kernel
 SelectionContext, StageFromPhase và Candidate Class mapping dùng kernel chung giữa current và replay để tránh drift.
@@ -104,10 +103,11 @@ Không đặt ngưỡng tốc độ tuyệt đối trước native benchmark. Ư
 1. Shared decision kernel.
 2. Benchmark/current-context runtime tách role.
 3. Higher-timeframe causal runtime không cần publisher thủ công.
-4. OneClick current entrypoint.
-5. OneClick Replay entrypoint.
-6. Static audit.
-7. Native single-symbol.
-8. Whole-universe equivalence.
-9. Bar Replay equivalence/no-lookahead.
-10. Performance benchmark.
+4. Unified OneClick entrypoint.
+5. Static builder audit.
+6. Native generated-body Daily compile/equivalence.
+7. Native cross-context isolation + W/M equivalence.
+8. Shared VNINDEX cache/runtime.
+9. Whole-universe decision equivalence.
+10. Bar Replay/no-lookahead.
+11. Performance benchmark.
