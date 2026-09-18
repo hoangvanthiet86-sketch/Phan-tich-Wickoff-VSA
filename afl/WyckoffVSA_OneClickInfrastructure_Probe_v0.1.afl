@@ -1,0 +1,80 @@
+/*
+    Wyckoff VSA One-Click Infrastructure Probe v0.1
+
+    Purpose:
+    - compile/syntax check cache contract + re-entrant MTF kernel;
+    - deterministic categorical MTF cases;
+    - no heavy analytical runtime;
+    - no cache writes.
+*/
+#pragma nocache
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_OneClickCacheContract_v0.1.afl>
+#include_once <WyckoffVSA_MTFRelationKernel_v0.1.afl>
+
+// Case A: fully bullish aligned.
+WVOC_TA = WVMTF_Run("TEST_A",1,1,1,1,2,2,2,1,1,1,5,5,5);
+WVOC_A_Dir = VarGet("WVMTF_TEST_A_DirectionalAlignment");
+WVOC_A_Evidence = VarGet("WVMTF_TEST_A_EvidenceAlignment");
+WVOC_A_Phase = VarGet("WVMTF_TEST_A_PhaseRelationship");
+WVOC_A_Conflict = VarGet("WVMTF_TEST_A_ConflictMask");
+WVOC_A_Pass = WVOC_A_Dir==2 AND WVOC_A_Evidence==1 AND WVOC_A_Phase==1 AND WVOC_A_Conflict==0;
+
+// Case B: fully bearish aligned.
+WVOC_TB = WVMTF_Run("TEST_B",1,1,1,1,3,3,3,2,2,2,5,5,5);
+WVOC_B_Dir = VarGet("WVMTF_TEST_B_DirectionalAlignment");
+WVOC_B_Evidence = VarGet("WVMTF_TEST_B_EvidenceAlignment");
+WVOC_B_Phase = VarGet("WVMTF_TEST_B_PhaseRelationship");
+WVOC_B_Conflict = VarGet("WVMTF_TEST_B_ConflictMask");
+WVOC_B_Pass = WVOC_B_Dir==3 AND WVOC_B_Evidence==2 AND WVOC_B_Phase==1 AND WVOC_B_Conflict==0;
+
+// Case C: Weekly/Monthly directional conflict.
+WVOC_TC = WVMTF_Run("TEST_C",1,1,1,1,2,2,3,1,1,2,5,5,5);
+WVOC_C_Dir = VarGet("WVMTF_TEST_C_DirectionalAlignment");
+WVOC_C_Evidence = VarGet("WVMTF_TEST_C_EvidenceAlignment");
+WVOC_C_Conflict = VarGet("WVMTF_TEST_C_ConflictMask");
+WVOC_C_Pass = WVOC_C_Dir==5 AND WVOC_C_Evidence==4 AND
+    BitAnd(WVOC_C_Conflict,8)==8 AND BitAnd(WVOC_C_Conflict,64)==64;
+
+// Case D: multiple context ambiguity.
+WVOC_TD = WVMTF_Run("TEST_D",1,2,1,1,2,2,2,1,1,1,5,5,5);
+WVOC_D_Dir = VarGet("WVMTF_TEST_D_DirectionalAlignment");
+WVOC_D_Phase = VarGet("WVMTF_TEST_D_PhaseRelationship");
+WVOC_D_Conflict = VarGet("WVMTF_TEST_D_ConflictMask");
+WVOC_D_Pass = WVOC_D_Dir==6 AND WVOC_D_Phase==5 AND
+    BitAnd(WVOC_D_Conflict,4)==4 AND BitAnd(WVOC_D_Conflict,1024)==1024;
+
+WVOC_AllPass = WVOC_A_Pass AND WVOC_B_Pass AND WVOC_C_Pass AND WVOC_D_Pass;
+
+Filter = BarIndex()==LastValue(BarIndex());
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of",formatDateTime);
+AddTextColumn(WVOC_AnalyticalFingerprint,"OC Fingerprint");
+AddTextColumn(WVOC_DecisionPrefix,"Decision Prefix");
+
+AddColumn(WVOC_A_Dir,"A Dir",1.0);
+AddColumn(WVOC_A_Evidence,"A Evidence",1.0);
+AddColumn(WVOC_A_Phase,"A Phase",1.0);
+AddColumn(WVOC_A_Conflict,"A Conflict",1.0);
+AddColumn(WVOC_A_Pass,"A PASS",1.0);
+
+AddColumn(WVOC_B_Dir,"B Dir",1.0);
+AddColumn(WVOC_B_Evidence,"B Evidence",1.0);
+AddColumn(WVOC_B_Phase,"B Phase",1.0);
+AddColumn(WVOC_B_Conflict,"B Conflict",1.0);
+AddColumn(WVOC_B_Pass,"B PASS",1.0);
+
+AddColumn(WVOC_C_Dir,"C Dir",1.0);
+AddColumn(WVOC_C_Evidence,"C Evidence",1.0);
+AddColumn(WVOC_C_Conflict,"C Conflict",1.0);
+AddColumn(WVOC_C_Pass,"C PASS",1.0);
+
+AddColumn(WVOC_D_Dir,"D Dir",1.0);
+AddColumn(WVOC_D_Phase,"D Phase",1.0);
+AddColumn(WVOC_D_Conflict,"D Conflict",1.0);
+AddColumn(WVOC_D_Pass,"D PASS",1.0);
+
+AddColumn(WVOC_AllPass,"ALL PASS",1.0);
+AddTextColumn("ONE_CLICK_INFRA_PROBE_V01_20260918_A","Probe Version");
