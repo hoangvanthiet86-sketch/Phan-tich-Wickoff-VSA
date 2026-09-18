@@ -1,0 +1,124 @@
+/*
+    Wyckoff VSA One-Click N05E Compact Single-Body Boundary Probe v0.1
+
+    VERIFY SYNTAX ONLY. DO NOT EXPLORE.
+
+    N05/N05.1/N05D are superseded after AmiBroker 6.20.01 32-bit terminated
+    during Verify Syntax.
+
+    This probe keeps exactly ONE generated-body include (same compile boundary
+    as passing N05C) and adds only a compact six-context orchestration shell.
+    No RS execution is performed yet; the goal is to prove that the compact
+    W/M + market switching shell itself is compiler-safe.
+
+    Context order:
+      0 stock W
+      1 stock M
+      2 market D
+      3 market W
+      4 market M
+      5 stock D
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_OneClickContextHelpers_Generated_v0.1.afl>
+#include_once <WyckoffVSA_MTFRelationKernel_v0.1.afl>
+#include_once <WyckoffVSA_ScannerDecisionKernel_v0.1.afl>
+
+function WVOC_N05E_FindW(expectedOrd)
+{
+    local dt, ord, i, idx;
+    dt = DateTime();
+    ord = Floor(DateTimeDiff(dt,WCLK_WeekEpoch)/604800);
+    idx = -1;
+    for(i=BarCount-1;i>=0;i--)
+        if(idx<0 AND ord[i]==expectedOrd) idx=i;
+    return idx;
+}
+
+function WVOC_N05E_FindM(expectedOrd)
+{
+    local ord, i, idx;
+    ord = Year()*12 + Month();
+    idx = -1;
+    for(i=BarCount-1;i>=0;i--)
+        if(idx<0 AND ord[i]==expectedOrd) idx=i;
+    return idx;
+}
+
+WVOC_N05E_EW = WCLK_ExpectedCompletedWeeklyOrdinal;
+WVOC_N05E_EM = WCLK_ExpectedCompletedMonthlyOrdinal;
+WVOC_N05E_MarketOK = 0;
+
+for(WVOC_N05E_C=0;WVOC_N05E_C<6;WVOC_N05E_C++)
+{
+    if(WVOC_N05E_C==2) WVOC_N05E_MarketOK=SetForeign(WVRC_SelectionMarketSymbol,1,0);
+    if(WVOC_N05E_C==5) RestorePriceArrays();
+
+    WVOC_N05E_Run = 1;
+    if(WVOC_N05E_C>=2 AND WVOC_N05E_C<=4) WVOC_N05E_Run=WVOC_N05E_MarketOK;
+
+    if(WVOC_N05E_Run)
+    {
+        if(WVOC_N05E_C==0 OR WVOC_N05E_C==3) TimeFrameSet(inWeekly);
+        if(WVOC_N05E_C==1 OR WVOC_N05E_C==4) TimeFrameSet(inMonthly);
+
+        #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
+
+        if(WVOC_N05E_C==0 OR WVOC_N05E_C==3)
+        {
+            WVOC_N05E_I = WVOC_N05E_FindW(WVOC_N05E_EW);
+            WVOC_N05E_Safe = IIf(WVOC_N05E_I>=0,WVOC_N05E_I,0);
+            if(WVOC_N05E_C==0)
+            {
+                WVOC_N05E_SWFound = WVOC_N05E_I>=0;
+                WVOC_N05E_SWDir = IIf(WVOC_N05E_SWFound,WCI_DirectionalContextCode[WVOC_N05E_Safe],Null);
+            }
+            else
+            {
+                WVOC_N05E_MWFound = WVOC_N05E_I>=0;
+                WVOC_N05E_MWDir = IIf(WVOC_N05E_MWFound,WCI_DirectionalContextCode[WVOC_N05E_Safe],Null);
+            }
+        }
+
+        if(WVOC_N05E_C==1 OR WVOC_N05E_C==4)
+        {
+            WVOC_N05E_I = WVOC_N05E_FindM(WVOC_N05E_EM);
+            WVOC_N05E_Safe = IIf(WVOC_N05E_I>=0,WVOC_N05E_I,0);
+            if(WVOC_N05E_C==1)
+            {
+                WVOC_N05E_SMFound = WVOC_N05E_I>=0;
+                WVOC_N05E_SMDir = IIf(WVOC_N05E_SMFound,WCI_DirectionalContextCode[WVOC_N05E_Safe],Null);
+            }
+            else
+            {
+                WVOC_N05E_MMFound = WVOC_N05E_I>=0;
+                WVOC_N05E_MMDir = IIf(WVOC_N05E_MMFound,WCI_DirectionalContextCode[WVOC_N05E_Safe],Null);
+            }
+        }
+
+        if(WVOC_N05E_C==2)
+        {
+            WVOC_N05E_MDFound=1;
+            WVOC_N05E_MDDir=LastValue(WCI_DirectionalContextCode);
+        }
+
+        if(WVOC_N05E_C==5)
+        {
+            WVOC_N05E_SDFound=1;
+            WVOC_N05E_SDDir=LastValue(WCI_DirectionalContextCode);
+        }
+
+        if(WVOC_N05E_C==0 OR WVOC_N05E_C==1 OR WVOC_N05E_C==3 OR WVOC_N05E_C==4)
+            TimeFrameRestore();
+    }
+}
+
+RestorePriceArrays();
+
+Filter=BarIndex()==LastValue(BarIndex());
+AddTextColumn("VERIFY_SYNTAX_ONLY","N05E");
+AddTextColumn("ONE_CLICK_N05E_COMPACT_SINGLE_BODY_V01_20260918_A","Probe Version");
