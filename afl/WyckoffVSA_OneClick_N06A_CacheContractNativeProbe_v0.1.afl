@@ -1,0 +1,203 @@
+/*
+    Wyckoff VSA One-Click N06A Cache Contract Native Probe v0.1
+
+    ARCHITECTURE PIVOT AFTER N05 FULL-RUNTIME TERMINATIONS.
+
+    Purpose:
+    - validate HYBRID_SELF_HEALING_CACHE infrastructure natively;
+    - no generated analytical body;
+    - no RS;
+    - no market scanner runtime;
+    - no candidate methodology;
+    - exercise metadata, atomic generation, as-of invalidation,
+      completed-period invalidation and market-context invalidation.
+
+    Safe native test:
+      Verify Syntax first.
+      Then Explore on SNZ / Daily / 1 Recent Bar.
+*/
+#pragma nocache
+SetBarsRequired(1,0);
+
+#include_once <WyckoffVSA_OneClickCacheContract_v0.1.afl>
+
+WVOC_N06A_TestRoot =
+    "WVSA_OC_N06A_TEST_" + Name() + "_" + NumToStr(WVOC_AsOfDateNum,1.0,False) + "_";
+
+WVOC_N06A_Dec = WVOC_N06A_TestRoot + "DEC_";
+WVOC_N06A_W = WVOC_N06A_TestRoot + "W_";
+WVOC_N06A_M = WVOC_N06A_TestRoot + "M_";
+WVOC_N06A_MKT = WVOC_N06A_TestRoot + "MKT_";
+
+// Force a deterministic clean metadata state for this dedicated test namespace.
+StaticVarSet(WVOC_N06A_Dec+"WriterLock",0);
+StaticVarSet(WVOC_N06A_W+"WriterLock",0);
+StaticVarSet(WVOC_N06A_M+"WriterLock",0);
+StaticVarSet(WVOC_N06A_MKT+"WriterLock",0);
+
+// ---------------- Decision cache ----------------
+WVOC_N06A_DecLock = WVOC_BeginWrite(WVOC_N06A_Dec);
+WVOC_N06A_DecCommit = 0;
+if (WVOC_N06A_DecLock)
+{
+    WVOC_WriteBaseMetadata(
+        WVOC_N06A_Dec,"DECISION",Name(),WVOC_AnalyticalFingerprint);
+
+    StaticVarSet(WVOC_N06A_Dec+"AsOfDateNum",WVOC_AsOfDateNum,True);
+    StaticVarSet(WVOC_N06A_Dec+"AsOfDateTime",WVOC_AsOfDateTime,True);
+    StaticVarSet(WVOC_N06A_Dec+"PayloadSentinel",601,True);
+
+    WVOC_N06A_DecCommit = WVOC_CommitWrite(WVOC_N06A_Dec);
+}
+
+WVOC_N06A_DecValidExact =
+    WVOC_DecisionMetadataValid(
+        WVOC_N06A_Dec,Name(),WVOC_AnalyticalFingerprint,
+        WVOC_AsOfDateNum,WVOC_AsOfDateTime);
+
+WVOC_N06A_DecRejectOtherDate =
+    NOT WVOC_DecisionMetadataValid(
+        WVOC_N06A_Dec,Name(),WVOC_AnalyticalFingerprint,
+        WVOC_AsOfDateNum+1,WVOC_AsOfDateTime);
+
+WVOC_N06A_DecSentinelOK =
+    StaticVarGet(WVOC_N06A_Dec+"PayloadSentinel")==601;
+
+// ---------------- Weekly cache ----------------
+WVOC_N06A_WLock = WVOC_BeginWrite(WVOC_N06A_W);
+WVOC_N06A_WCommit = 0;
+if (WVOC_N06A_WLock)
+{
+    WVOC_WriteBaseMetadata(
+        WVOC_N06A_W,"WEEKLY",Name(),WVOC_AnalyticalFingerprint);
+
+    StaticVarSet(
+        WVOC_N06A_W+"SourcePeriodOrdinal",
+        WVOC_ExpectedWeeklyOrdinal,True);
+    StaticVarSet(WVOC_N06A_W+"PayloadSentinel",602,True);
+
+    WVOC_N06A_WCommit = WVOC_CommitWrite(WVOC_N06A_W);
+}
+
+WVOC_N06A_WValidExact =
+    WVOC_PeriodMetadataValid(
+        WVOC_N06A_W,"WEEKLY",Name(),
+        WVOC_AnalyticalFingerprint,WVOC_ExpectedWeeklyOrdinal);
+
+WVOC_N06A_WRejectOtherOrdinal =
+    NOT WVOC_PeriodMetadataValid(
+        WVOC_N06A_W,"WEEKLY",Name(),
+        WVOC_AnalyticalFingerprint,WVOC_ExpectedWeeklyOrdinal+1);
+
+// ---------------- Monthly cache ----------------
+WVOC_N06A_MLock = WVOC_BeginWrite(WVOC_N06A_M);
+WVOC_N06A_MCommit = 0;
+if (WVOC_N06A_MLock)
+{
+    WVOC_WriteBaseMetadata(
+        WVOC_N06A_M,"MONTHLY",Name(),WVOC_AnalyticalFingerprint);
+
+    StaticVarSet(
+        WVOC_N06A_M+"SourcePeriodOrdinal",
+        WVOC_ExpectedMonthlyOrdinal,True);
+    StaticVarSet(WVOC_N06A_M+"PayloadSentinel",603,True);
+
+    WVOC_N06A_MCommit = WVOC_CommitWrite(WVOC_N06A_M);
+}
+
+WVOC_N06A_MValidExact =
+    WVOC_PeriodMetadataValid(
+        WVOC_N06A_M,"MONTHLY",Name(),
+        WVOC_AnalyticalFingerprint,WVOC_ExpectedMonthlyOrdinal);
+
+WVOC_N06A_MRejectOtherOrdinal =
+    NOT WVOC_PeriodMetadataValid(
+        WVOC_N06A_M,"MONTHLY",Name(),
+        WVOC_AnalyticalFingerprint,WVOC_ExpectedMonthlyOrdinal+1);
+
+// ---------------- Shared market cache ----------------
+WVOC_N06A_MarketSymbol = WVRC_SelectionMarketSymbol;
+WVOC_N06A_MKTLock = WVOC_BeginWrite(WVOC_N06A_MKT);
+WVOC_N06A_MKTCommit = 0;
+if (WVOC_N06A_MKTLock)
+{
+    WVOC_WriteBaseMetadata(
+        WVOC_N06A_MKT,"MARKET",
+        WVOC_N06A_MarketSymbol,WVOC_AnalyticalFingerprint);
+
+    StaticVarSet(WVOC_N06A_MKT+"AsOfDateNum",WVOC_AsOfDateNum,True);
+    StaticVarSet(WVOC_N06A_MKT+"AsOfDateTime",WVOC_AsOfDateTime,True);
+    StaticVarSet(
+        WVOC_N06A_MKT+"CompletedWeeklyOrdinal",
+        WVOC_ExpectedWeeklyOrdinal,True);
+    StaticVarSet(
+        WVOC_N06A_MKT+"CompletedMonthlyOrdinal",
+        WVOC_ExpectedMonthlyOrdinal,True);
+    StaticVarSet(WVOC_N06A_MKT+"PayloadSentinel",604,True);
+
+    WVOC_N06A_MKTCommit = WVOC_CommitWrite(WVOC_N06A_MKT);
+}
+
+WVOC_N06A_MKTValidExact =
+    WVOC_MarketMetadataValid(
+        WVOC_N06A_MKT,WVOC_N06A_MarketSymbol,
+        WVOC_AnalyticalFingerprint,
+        WVOC_AsOfDateNum,WVOC_AsOfDateTime,
+        WVOC_ExpectedWeeklyOrdinal,WVOC_ExpectedMonthlyOrdinal);
+
+WVOC_N06A_MKTRejectWrongW =
+    NOT WVOC_MarketMetadataValid(
+        WVOC_N06A_MKT,WVOC_N06A_MarketSymbol,
+        WVOC_AnalyticalFingerprint,
+        WVOC_AsOfDateNum,WVOC_AsOfDateTime,
+        WVOC_ExpectedWeeklyOrdinal+1,WVOC_ExpectedMonthlyOrdinal);
+
+WVOC_N06A_MKTRejectWrongM =
+    NOT WVOC_MarketMetadataValid(
+        WVOC_N06A_MKT,WVOC_N06A_MarketSymbol,
+        WVOC_AnalyticalFingerprint,
+        WVOC_AsOfDateNum,WVOC_AsOfDateTime,
+        WVOC_ExpectedWeeklyOrdinal,WVOC_ExpectedMonthlyOrdinal+1);
+
+// Generation must be positive after commit.
+WVOC_N06A_GenerationPass =
+    WVOC_N06A_DecCommit>0 AND
+    WVOC_N06A_WCommit>0 AND
+    WVOC_N06A_MCommit>0 AND
+    WVOC_N06A_MKTCommit>0;
+
+WVOC_N06A_AllPass =
+    WVOC_N06A_GenerationPass AND
+    WVOC_N06A_DecValidExact AND
+    WVOC_N06A_DecRejectOtherDate AND
+    WVOC_N06A_DecSentinelOK AND
+    WVOC_N06A_WValidExact AND
+    WVOC_N06A_WRejectOtherOrdinal AND
+    WVOC_N06A_MValidExact AND
+    WVOC_N06A_MRejectOtherOrdinal AND
+    WVOC_N06A_MKTValidExact AND
+    WVOC_N06A_MKTRejectWrongW AND
+    WVOC_N06A_MKTRejectWrongM;
+
+Filter = BarIndex()==LastValue(BarIndex());
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of",formatDateTime);
+AddTextColumn(WVOC_AnalyticalFingerprint,"Fingerprint");
+
+AddColumn(0*BarIndex()+WVOC_N06A_GenerationPass,"Generation PASS",1.0);
+AddColumn(0*BarIndex()+WVOC_N06A_DecValidExact,"Decision Exact",1.0);
+AddColumn(0*BarIndex()+WVOC_N06A_DecRejectOtherDate,"Decision Reject Other Date",1.0);
+AddColumn(0*BarIndex()+WVOC_N06A_DecSentinelOK,"Decision Payload",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N06A_WValidExact,"Weekly Exact",1.0);
+AddColumn(0*BarIndex()+WVOC_N06A_WRejectOtherOrdinal,"Weekly Reject Other Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N06A_MValidExact,"Monthly Exact",1.0);
+AddColumn(0*BarIndex()+WVOC_N06A_MRejectOtherOrdinal,"Monthly Reject Other Ord",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N06A_MKTValidExact,"Market Exact",1.0);
+AddColumn(0*BarIndex()+WVOC_N06A_MKTRejectWrongW,"Market Reject Wrong W",1.0);
+AddColumn(0*BarIndex()+WVOC_N06A_MKTRejectWrongM,"Market Reject Wrong M",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N06A_AllPass,"ALL PASS",1.0);
+AddTextColumn("ONE_CLICK_N06A_CACHE_CONTRACT_NATIVE_V01_20260918_A","Probe Version");
