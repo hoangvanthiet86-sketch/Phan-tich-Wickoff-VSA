@@ -1,0 +1,142 @@
+/*
+    Wyckoff VSA Unified One-Click Cache Contract v0.1
+
+    Infrastructure only.
+    No Wyckoff/VSA methodology.
+    No candidate classification.
+    No trading signals.
+
+    Design checkpoint:
+      UNIFIED_ONE_CLICK_ALGORITHM_DECISION_V01 = HYBRID_SELF_HEALING_CACHE
+
+    Notes:
+    - reuse the native-validated Runtime v0.2 analytical fingerprint;
+    - Production Filter is intentionally NOT part of the analytical fingerprint;
+    - active-slot namespaces are overwritten as as-of changes, avoiding unbounded
+      cache growth during Bar Replay;
+    - every consumer must perform generation A -> payload -> generation B reads.
+*/
+
+#include_once <WyckoffVSA_DailySnapshotContract_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+
+WVOC_CacheSchemaMajor = 1;
+WVOC_CacheSchemaMinor = 0;
+WVOC_CacheContractVersion = "0.1.0";
+WVOC_AlgorithmVersion = "HYBRID_SELF_HEALING_CACHE_V01";
+
+WVOC_AsOfDateNum = WCLK_AsOfDateNum;
+WVOC_AsOfDateTime = WCLK_AsOfDateTime;
+WVOC_ExpectedWeeklyOrdinal = WCLK_ExpectedCompletedWeeklyOrdinal;
+WVOC_ExpectedMonthlyOrdinal = WCLK_ExpectedCompletedMonthlyOrdinal;
+WVOC_Symbol = Name();
+
+WVOC_AnalyticalFingerprint =
+    "WVOC1.0;" +
+    WDS_ConfigFingerprint +
+    "ALG=" + WVOC_AlgorithmVersion + ";";
+
+WVOC_DecisionPrefix = "WVSA_OC_v01_DEC_" + WVOC_Symbol + "_";
+WVOC_WeeklyPrefix = "WVSA_OC_v01_W_" + WVOC_Symbol + "_";
+WVOC_MonthlyPrefix = "WVSA_OC_v01_M_" + WVOC_Symbol + "_";
+WVOC_MarketPrefix = "WVSA_OC_v01_MKT_" + WVRC_SelectionMarketSymbol + "_";
+
+function WVOC_BaseMetadataValid(prefix,roleText,symbolText,fingerprint)
+{
+    local ready,writeComplete,schemaMajor,schemaMinor,roleStored,symbolStored,fpStored,generation;
+    ready = Nz(StaticVarGet(prefix+"Ready"),0);
+    writeComplete = Nz(StaticVarGet(prefix+"WriteComplete"),0);
+    schemaMajor = Nz(StaticVarGet(prefix+"SchemaMajor"),-1);
+    schemaMinor = Nz(StaticVarGet(prefix+"SchemaMinor"),-1);
+    roleStored = StaticVarGetText(prefix+"Role");
+    symbolStored = StaticVarGetText(prefix+"Symbol");
+    fpStored = StaticVarGetText(prefix+"ConfigFingerprint");
+    generation = Nz(StaticVarGet(prefix+"CommittedGenerationID"),0);
+
+    return ready==1 AND writeComplete==1 AND generation>0 AND
+           schemaMajor==WVOC_CacheSchemaMajor AND
+           schemaMinor==WVOC_CacheSchemaMinor AND
+           roleStored==roleText AND
+           symbolStored==symbolText AND
+           fpStored==fingerprint;
+}
+
+function WVOC_DecisionMetadataValid(prefix,symbolText,fingerprint,asOfDN,asOfDT)
+{
+    local baseOK,storedDN,storedDT;
+    baseOK = WVOC_BaseMetadataValid(prefix,"DECISION",symbolText,fingerprint);
+    storedDN = StaticVarGet(prefix+"AsOfDateNum");
+    storedDT = StaticVarGet(prefix+"AsOfDateTime");
+    return baseOK AND
+           NOT IsNull(storedDN) AND NOT IsNull(storedDT) AND
+           storedDN==asOfDN AND storedDT==asOfDT;
+}
+
+function WVOC_PeriodMetadataValid(prefix,roleText,symbolText,fingerprint,periodOrdinal)
+{
+    local baseOK,storedOrdinal;
+    baseOK = WVOC_BaseMetadataValid(prefix,roleText,symbolText,fingerprint);
+    storedOrdinal = StaticVarGet(prefix+"SourcePeriodOrdinal");
+    return baseOK AND NOT IsNull(storedOrdinal) AND storedOrdinal==periodOrdinal;
+}
+
+function WVOC_MarketMetadataValid(prefix,symbolText,fingerprint,asOfDN,asOfDT,wOrd,mOrd)
+{
+    local baseOK,storedDN,storedDT,storedW,storedM;
+    baseOK = WVOC_BaseMetadataValid(prefix,"MARKET",symbolText,fingerprint);
+    storedDN = StaticVarGet(prefix+"AsOfDateNum");
+    storedDT = StaticVarGet(prefix+"AsOfDateTime");
+    storedW = StaticVarGet(prefix+"CompletedWeeklyOrdinal");
+    storedM = StaticVarGet(prefix+"CompletedMonthlyOrdinal");
+
+    return baseOK AND
+           NOT IsNull(storedDN) AND NOT IsNull(storedDT) AND
+           NOT IsNull(storedW) AND NOT IsNull(storedM) AND
+           storedDN==asOfDN AND storedDT==asOfDT AND
+           storedW==wOrd AND storedM==mOrd;
+}
+
+function WVOC_BeginWrite(prefix)
+{
+    local lockName,acquired;
+    lockName = prefix+"WriterLock";
+    acquired = StaticVarCompareExchange(lockName,1,0)==0;
+    if (acquired)
+    {
+        StaticVarSet(prefix+"Ready",0,True);
+        StaticVarSet(prefix+"WriteComplete",0,True);
+    }
+    return acquired;
+}
+
+function WVOC_CommitWrite(prefix)
+{
+    local previousGeneration,newGeneration;
+    previousGeneration = Nz(StaticVarGet(prefix+"CommittedGenerationID"),0);
+    newGeneration = previousGeneration+1;
+    StaticVarSet(prefix+"CommittedGenerationID",newGeneration,True);
+    StaticVarSet(prefix+"WriteComplete",1,True);
+    StaticVarSet(prefix+"Ready",1,True);
+    StaticVarSet(prefix+"WriterLock",0);
+    return newGeneration;
+}
+
+function WVOC_AbortWrite(prefix)
+{
+    StaticVarSet(prefix+"Ready",0,True);
+    StaticVarSet(prefix+"WriteComplete",0,True);
+    StaticVarSet(prefix+"WriterLock",0);
+    return 1;
+}
+
+function WVOC_WriteBaseMetadata(prefix,roleText,symbolText,fingerprint)
+{
+    StaticVarSet(prefix+"SchemaMajor",WVOC_CacheSchemaMajor,True);
+    StaticVarSet(prefix+"SchemaMinor",WVOC_CacheSchemaMinor,True);
+    StaticVarSetText(prefix+"ContractVersion",WVOC_CacheContractVersion,True);
+    StaticVarSetText(prefix+"AlgorithmVersion",WVOC_AlgorithmVersion,True);
+    StaticVarSetText(prefix+"Role",roleText,True);
+    StaticVarSetText(prefix+"Symbol",symbolText,True);
+    StaticVarSetText(prefix+"ConfigFingerprint",fingerprint,True);
+    return 1;
+}
