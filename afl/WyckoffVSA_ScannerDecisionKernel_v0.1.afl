@@ -1,0 +1,66 @@
+/*
+    Wyckoff VSA Shared Scanner Decision Kernel v0.1
+
+    Shared categorical helpers for current One-Click and Replay One-Click scanners.
+    No data access. No StaticVar. No Foreign. No methodology change.
+    Functions reproduce the approved Market Scanner categorical mappings.
+*/
+
+function WVOC_SelectionContext(valid,multiplicity,directional,evidence,hypAlign,mtfAlign)
+{
+    local mixed,bullish,bearish;
+    mixed = multiplicity==2 OR directional==4 OR evidence==3 OR hypAlign==3 OR
+            mtfAlign==4 OR mtfAlign==5 OR mtfAlign==6;
+    bullish = directional==2 AND mtfAlign==2 AND evidence!=2 AND evidence!=3 AND hypAlign!=3;
+    bearish = directional==3 AND mtfAlign==3 AND evidence!=1 AND evidence!=3 AND hypAlign!=3;
+    return IIf(NOT valid,0,IIf(mixed,4,IIf(bullish,2,IIf(bearish,3,1))));
+}
+
+function WVOC_StageFromPhase(phaseCode)
+{
+    return IIf(phaseCode==1 OR phaseCode==2,1,
+           IIf(phaseCode==3 OR phaseCode==4,2,
+           IIf(phaseCode==5,3,
+           IIf(phaseCode==6,4,
+           IIf(phaseCode==7,5,0)))));
+}
+
+function WVOC_CandidateClass(
+    dataEligible,reviewFlag,
+    bullishFullTopDown,bullishQualifiedMarket,
+    bearishFullTopDown,bearishQualifiedMarket,
+    bullishDeveloping,bearishDeveloping,watchFlag)
+{
+    return IIf(NOT dataEligible,0,
+        IIf(reviewFlag,9,
+        IIf(bullishFullTopDown,5,
+        IIf(bullishQualifiedMarket,4,
+        IIf(bearishFullTopDown,8,
+        IIf(bearishQualifiedMarket,7,
+        IIf(bullishDeveloping,3,
+        IIf(bearishDeveloping,6,
+        IIf(watchFlag,2,1)))))))));
+}
+
+function WVOC_CandidateSide(candidateClass,stockDirectional,stockVsMarketRSStructure)
+{
+    return IIf(candidateClass==3 OR candidateClass==4 OR candidateClass==5,1,
+        IIf(candidateClass==6 OR candidateClass==7 OR candidateClass==8,2,
+        IIf(candidateClass==2 AND stockDirectional==2 AND stockVsMarketRSStructure==1,1,
+        IIf(candidateClass==2 AND stockDirectional==3 AND stockVsMarketRSStructure==2,2,0))));
+}
+
+function WVOC_Qualified(candidateClass)
+{
+    return candidateClass==4 OR candidateClass==5 OR candidateClass==7 OR candidateClass==8;
+}
+
+function WVOC_Developing(candidateClass)
+{
+    return candidateClass==3 OR candidateClass==6;
+}
+
+function WVOC_Watch(candidateClass)
+{
+    return candidateClass==2;
+}
