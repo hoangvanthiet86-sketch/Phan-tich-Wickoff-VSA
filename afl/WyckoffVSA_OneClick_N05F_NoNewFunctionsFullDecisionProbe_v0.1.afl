@@ -1,0 +1,414 @@
+/*
+    Wyckoff VSA One-Click N05F No-New-Functions Full-Decision Probe v0.1
+
+    IMPORTANT DIAGNOSTIC CHANGE:
+    - N05/N05.1/N05D/N05E all added at least one new user-defined wrapper function
+      and all terminated AmiBroker 6.20.01 32-bit during Verify Syntax.
+    - N04A, N04B and N05C added no new wrapper user functions and were stable.
+    - This probe therefore defines ZERO new user functions.
+
+    Runtime order is also conservative:
+      1) VNINDEX D/W/M first
+      2) restore stock
+      3) stock W/M/D, with Daily LAST
+      4) RS last, after all generated-body executions
+      5) MTF + selection + candidate decision
+
+    No methodology, threshold or categorical rule change.
+
+    FIRST ACTION: Verify Syntax only.
+    Explore only after Verify Syntax returns zero errors and AmiBroker stays open.
+
+    Control:
+    Apply to = SNZ only
+    Periodicity = Daily
+    Range = 1 Recent Bar
+    RuntimeConfig defaults
+    1.3 last bar provisional = No
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_OneClickContextHelpers_Generated_v0.1.afl>
+#include_once <WyckoffVSA_MTFRelationKernel_v0.1.afl>
+#include_once <WyckoffVSA_ScannerDecisionKernel_v0.1.afl>
+
+WVOC_N05F_ExpectedW = WCLK_ExpectedCompletedWeeklyOrdinal;
+WVOC_N05F_ExpectedM = WCLK_ExpectedCompletedMonthlyOrdinal;
+
+// -----------------------------------------------------------------------------
+// 1) MARKET FIRST: VNINDEX D/W/M — exact N04A-style loop, no RS yet.
+// -----------------------------------------------------------------------------
+WVOC_N05F_MKT_ForeignOK = SetForeign(WVRC_SelectionMarketSymbol,1,0);
+WVOC_N05F_MD_Found = 0;
+WVOC_N05F_MW_Found = 0;
+WVOC_N05F_MM_Found = 0;
+
+if (WVOC_N05F_MKT_ForeignOK)
+{
+    for (WVOC_N05F_mctx=0; WVOC_N05F_mctx<3; WVOC_N05F_mctx++)
+    {
+        if (WVOC_N05F_mctx==1) TimeFrameSet(inWeekly);
+        if (WVOC_N05F_mctx==2) TimeFrameSet(inMonthly);
+
+        GetPerformanceCounter(1);
+        #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
+        WVOC_N05F_melapsed = GetPerformanceCounter();
+
+        if (WVOC_N05F_mctx==0)
+        {
+            WVOC_N05F_MD_Found = 1;
+            WVOC_N05F_MD_Mult = LastValue(WCI_ContextMultiplicityCode);
+            WVOC_N05F_MD_Dir = LastValue(WCI_DirectionalContextCode);
+            WVOC_N05F_MD_Evidence = LastValue(WCI_EvidenceBalanceCode);
+            WVOC_N05F_MD_Phase = LastValue(WCI_PhaseStateCode);
+            WVOC_N05F_MD_Hyp = LastValue(WCI_HypothesisAlignmentCode);
+            WVOC_N05F_MD_ms = WVOC_N05F_melapsed;
+        }
+
+        if (WVOC_N05F_mctx==1)
+        {
+            WVOC_N05F_MW_DTArr = DateTime();
+            WVOC_N05F_MW_OrdArr = Floor(DateTimeDiff(WVOC_N05F_MW_DTArr,WCLK_WeekEpoch)/604800);
+            WVOC_N05F_MW_idx = -1;
+            for (WVOC_N05F_mj=BarCount-1; WVOC_N05F_mj>=0; WVOC_N05F_mj--)
+            {
+                if (WVOC_N05F_MW_idx<0 AND WVOC_N05F_MW_OrdArr[WVOC_N05F_mj]==WVOC_N05F_ExpectedW)
+                    WVOC_N05F_MW_idx = WVOC_N05F_mj;
+            }
+            WVOC_N05F_MW_Found = WVOC_N05F_MW_idx>=0;
+            WVOC_N05F_MW_safe = IIf(WVOC_N05F_MW_Found,WVOC_N05F_MW_idx,0);
+            WVOC_N05F_MW_Ord = IIf(WVOC_N05F_MW_Found,WVOC_N05F_MW_OrdArr[WVOC_N05F_MW_safe],Null);
+            WVOC_N05F_MW_Mult = IIf(WVOC_N05F_MW_Found,WCI_ContextMultiplicityCode[WVOC_N05F_MW_safe],Null);
+            WVOC_N05F_MW_Dir = IIf(WVOC_N05F_MW_Found,WCI_DirectionalContextCode[WVOC_N05F_MW_safe],Null);
+            WVOC_N05F_MW_Evidence = IIf(WVOC_N05F_MW_Found,WCI_EvidenceBalanceCode[WVOC_N05F_MW_safe],Null);
+            WVOC_N05F_MW_Phase = IIf(WVOC_N05F_MW_Found,WCI_PhaseStateCode[WVOC_N05F_MW_safe],Null);
+            WVOC_N05F_MW_ms = WVOC_N05F_melapsed;
+        }
+
+        if (WVOC_N05F_mctx==2)
+        {
+            WVOC_N05F_MM_DTArr = DateTime();
+            WVOC_N05F_MM_OrdArr = Year()*12 + Month();
+            WVOC_N05F_MM_idx = -1;
+            for (WVOC_N05F_mk=BarCount-1; WVOC_N05F_mk>=0; WVOC_N05F_mk--)
+            {
+                if (WVOC_N05F_MM_idx<0 AND WVOC_N05F_MM_OrdArr[WVOC_N05F_mk]==WVOC_N05F_ExpectedM)
+                    WVOC_N05F_MM_idx = WVOC_N05F_mk;
+            }
+            WVOC_N05F_MM_Found = WVOC_N05F_MM_idx>=0;
+            WVOC_N05F_MM_safe = IIf(WVOC_N05F_MM_Found,WVOC_N05F_MM_idx,0);
+            WVOC_N05F_MM_Ord = IIf(WVOC_N05F_MM_Found,WVOC_N05F_MM_OrdArr[WVOC_N05F_MM_safe],Null);
+            WVOC_N05F_MM_Mult = IIf(WVOC_N05F_MM_Found,WCI_ContextMultiplicityCode[WVOC_N05F_MM_safe],Null);
+            WVOC_N05F_MM_Dir = IIf(WVOC_N05F_MM_Found,WCI_DirectionalContextCode[WVOC_N05F_MM_safe],Null);
+            WVOC_N05F_MM_Evidence = IIf(WVOC_N05F_MM_Found,WCI_EvidenceBalanceCode[WVOC_N05F_MM_safe],Null);
+            WVOC_N05F_MM_Phase = IIf(WVOC_N05F_MM_Found,WCI_PhaseStateCode[WVOC_N05F_MM_safe],Null);
+            WVOC_N05F_MM_ms = WVOC_N05F_melapsed;
+        }
+
+        if (WVOC_N05F_mctx>0) TimeFrameRestore();
+    }
+}
+RestorePriceArrays();
+
+// -----------------------------------------------------------------------------
+// 2) STOCK LAST: W/M/D — Daily LAST so its SL_*/WCI_* remain live for RS.
+// -----------------------------------------------------------------------------
+WVOC_N05F_SD_Found = 0;
+WVOC_N05F_SW_Found = 0;
+WVOC_N05F_SM_Found = 0;
+
+for (WVOC_N05F_ctx=0; WVOC_N05F_ctx<3; WVOC_N05F_ctx++)
+{
+    if (WVOC_N05F_ctx==0) TimeFrameSet(inWeekly);
+    if (WVOC_N05F_ctx==1) TimeFrameSet(inMonthly);
+
+    GetPerformanceCounter(1);
+    #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
+    WVOC_N05F_elapsed = GetPerformanceCounter();
+
+    if (WVOC_N05F_ctx==0)
+    {
+        WVOC_N05F_SW_DTArr = DateTime();
+        WVOC_N05F_SW_OrdArr = Floor(DateTimeDiff(WVOC_N05F_SW_DTArr,WCLK_WeekEpoch)/604800);
+        WVOC_N05F_SW_idx = -1;
+        for (WVOC_N05F_j=BarCount-1; WVOC_N05F_j>=0; WVOC_N05F_j--)
+        {
+            if (WVOC_N05F_SW_idx<0 AND WVOC_N05F_SW_OrdArr[WVOC_N05F_j]==WVOC_N05F_ExpectedW)
+                WVOC_N05F_SW_idx = WVOC_N05F_j;
+        }
+        WVOC_N05F_SW_Found = WVOC_N05F_SW_idx>=0;
+        WVOC_N05F_SW_safe = IIf(WVOC_N05F_SW_Found,WVOC_N05F_SW_idx,0);
+        WVOC_N05F_SW_Ord = IIf(WVOC_N05F_SW_Found,WVOC_N05F_SW_OrdArr[WVOC_N05F_SW_safe],Null);
+        WVOC_N05F_SW_Mult = IIf(WVOC_N05F_SW_Found,WCI_ContextMultiplicityCode[WVOC_N05F_SW_safe],Null);
+        WVOC_N05F_SW_Dir = IIf(WVOC_N05F_SW_Found,WCI_DirectionalContextCode[WVOC_N05F_SW_safe],Null);
+        WVOC_N05F_SW_Evidence = IIf(WVOC_N05F_SW_Found,WCI_EvidenceBalanceCode[WVOC_N05F_SW_safe],Null);
+        WVOC_N05F_SW_Phase = IIf(WVOC_N05F_SW_Found,WCI_PhaseStateCode[WVOC_N05F_SW_safe],Null);
+        WVOC_N05F_SW_ms = WVOC_N05F_elapsed;
+    }
+
+    if (WVOC_N05F_ctx==1)
+    {
+        WVOC_N05F_SM_DTArr = DateTime();
+        WVOC_N05F_SM_OrdArr = Year()*12 + Month();
+        WVOC_N05F_SM_idx = -1;
+        for (WVOC_N05F_k=BarCount-1; WVOC_N05F_k>=0; WVOC_N05F_k--)
+        {
+            if (WVOC_N05F_SM_idx<0 AND WVOC_N05F_SM_OrdArr[WVOC_N05F_k]==WVOC_N05F_ExpectedM)
+                WVOC_N05F_SM_idx = WVOC_N05F_k;
+        }
+        WVOC_N05F_SM_Found = WVOC_N05F_SM_idx>=0;
+        WVOC_N05F_SM_safe = IIf(WVOC_N05F_SM_Found,WVOC_N05F_SM_idx,0);
+        WVOC_N05F_SM_Ord = IIf(WVOC_N05F_SM_Found,WVOC_N05F_SM_OrdArr[WVOC_N05F_SM_safe],Null);
+        WVOC_N05F_SM_Mult = IIf(WVOC_N05F_SM_Found,WCI_ContextMultiplicityCode[WVOC_N05F_SM_safe],Null);
+        WVOC_N05F_SM_Dir = IIf(WVOC_N05F_SM_Found,WCI_DirectionalContextCode[WVOC_N05F_SM_safe],Null);
+        WVOC_N05F_SM_Evidence = IIf(WVOC_N05F_SM_Found,WCI_EvidenceBalanceCode[WVOC_N05F_SM_safe],Null);
+        WVOC_N05F_SM_Phase = IIf(WVOC_N05F_SM_Found,WCI_PhaseStateCode[WVOC_N05F_SM_safe],Null);
+        WVOC_N05F_SM_ms = WVOC_N05F_elapsed;
+    }
+
+    if (WVOC_N05F_ctx==2)
+    {
+        WVOC_N05F_SD_Found = 1;
+        WVOC_N05F_SD_DT = LastValue(WCI_SourceDateTime);
+        WVOC_N05F_SD_Close = LastValue(Close);
+        WVOC_N05F_SD_Provisional = LastValue(WCI_ProvisionalFlag);
+        WVOC_N05F_SD_Mult = LastValue(WCI_ContextMultiplicityCode);
+        WVOC_N05F_SD_Dir = LastValue(WCI_DirectionalContextCode);
+        WVOC_N05F_SD_Phase = LastValue(WCI_PhaseStateCode);
+        WVOC_N05F_SD_Evidence = LastValue(WCI_EvidenceBalanceCode);
+        WVOC_N05F_SD_Hyp = LastValue(WCI_HypothesisAlignmentCode);
+        WVOC_N05F_SD_RangeStatus = LastValue(WCI_RangeStatusCode);
+        WVOC_N05F_SD_RangePos = LastValue(WCI_RangePosition);
+        WVOC_N05F_SD_ms = WVOC_N05F_elapsed;
+    }
+
+    if (WVOC_N05F_ctx<2) TimeFrameRestore();
+}
+
+// -----------------------------------------------------------------------------
+// 3) RS AFTER ALL GENERATED-BODY EXECUTIONS.
+// -----------------------------------------------------------------------------
+GetPerformanceCounter(1);
+#include_once <WyckoffVSA_OneClickRSKernel_v0.1.2.afl>
+WVOC_N05F_RS_ms = GetPerformanceCounter();
+
+WVOC_N05F_RS_Valid = LastValue(WRS_ContextValid)==1;
+WVOC_N05F_RS_Status = LastValue(WRS_ContextStatusCode);
+WVOC_N05F_RS_MarketStatus = LastValue(WRS_MarketBenchmarkStatusCode);
+WVOC_N05F_RS_Structure = LastValue(WRS_StockVsMarketRSStructureCode);
+WVOC_N05F_RS_PriceRelationship = LastValue(WRS_PriceRSRelationshipCode);
+WVOC_N05F_RS_Provisional = LastValue(WRS_CurrentDescriptorProvisional);
+WVOC_N05F_RS_Ratio = LastValue(WRS_StockVsMarketRatio);
+
+// -----------------------------------------------------------------------------
+// 4) MTF + MARKET SELECTION.
+// -----------------------------------------------------------------------------
+WVOC_N05F_S_MTFValid =
+    WVRC_ConfigValid AND WVOC_N05F_SD_Found AND WVOC_N05F_SW_Found AND WVOC_N05F_SM_Found;
+
+WVMTF_Run(
+    "N05FS",
+    WVOC_N05F_S_MTFValid,
+    WVOC_N05F_SD_Mult,WVOC_N05F_SW_Mult,WVOC_N05F_SM_Mult,
+    WVOC_N05F_SD_Dir,WVOC_N05F_SW_Dir,WVOC_N05F_SM_Dir,
+    WVOC_N05F_SD_Evidence,WVOC_N05F_SW_Evidence,WVOC_N05F_SM_Evidence,
+    WVOC_N05F_SD_Phase,WVOC_N05F_SW_Phase,WVOC_N05F_SM_Phase);
+
+WVOC_N05F_S_MTFDir = VarGet("WVMTF_N05FS_DirectionalAlignment");
+
+WVOC_N05F_M_MTFValid =
+    WVRC_ConfigValid AND WVOC_N05F_MKT_ForeignOK AND
+    WVOC_N05F_MD_Found AND WVOC_N05F_MW_Found AND WVOC_N05F_MM_Found;
+
+WVMTF_Run(
+    "N05FM",
+    WVOC_N05F_M_MTFValid,
+    WVOC_N05F_MD_Mult,WVOC_N05F_MW_Mult,WVOC_N05F_MM_Mult,
+    WVOC_N05F_MD_Dir,WVOC_N05F_MW_Dir,WVOC_N05F_MM_Dir,
+    WVOC_N05F_MD_Evidence,WVOC_N05F_MW_Evidence,WVOC_N05F_MM_Evidence,
+    WVOC_N05F_MD_Phase,WVOC_N05F_MW_Phase,WVOC_N05F_MM_Phase);
+
+WVOC_N05F_M_MTFDir = VarGet("WVMTF_N05FM_DirectionalAlignment");
+
+WVOC_N05F_MarketSelection = WVOC_SelectionContext(
+    WVOC_N05F_M_MTFValid,
+    WVOC_N05F_MD_Mult,
+    WVOC_N05F_MD_Dir,
+    WVOC_N05F_MD_Evidence,
+    WVOC_N05F_MD_Hyp,
+    WVOC_N05F_M_MTFDir);
+
+// -----------------------------------------------------------------------------
+// 5) COMPACT DEFAULT-PROFILE DECISION. ZERO new user functions.
+// -----------------------------------------------------------------------------
+WVOC_N05F_Stage = WVOC_StageFromPhase(WVOC_N05F_SD_Phase);
+
+WVOC_N05F_MarketConfigMatch =
+    StrLen(WVRC_SelectionMarketSymbol)>0 AND
+    WVRC_SelectionMarketSymbol==WVRC_RSMarketSymbol;
+
+WVOC_N05F_RangeValid =
+    WVOC_N05F_SD_Mult==1 AND WVOC_N05F_SD_RangeStatus==1 AND
+    NOT IsNull(WVOC_N05F_SD_RangePos) AND IsFinite(WVOC_N05F_SD_RangePos);
+
+WVOC_N05F_RangeConflict =
+    WVOC_N05F_Stage==1 AND WVOC_N05F_RangeValid AND
+    (WVOC_N05F_SD_RangePos<0 OR WVOC_N05F_SD_RangePos>1);
+
+WVOC_N05F_RangeCoherent =
+    WVOC_N05F_Stage!=1 OR
+    (WVOC_N05F_RangeValid AND WVOC_N05F_SD_RangePos>=0 AND WVOC_N05F_SD_RangePos<=1);
+
+WVOC_N05F_RequiredFinite =
+    NOT IsNull(WVOC_N05F_SD_Close) AND IsFinite(WVOC_N05F_SD_Close) AND WVOC_N05F_SD_Close>0 AND
+    NOT IsNull(WVOC_N05F_SD_DT) AND IsFinite(WVOC_N05F_SD_DT) AND
+    NOT IsNull(WVOC_N05F_SD_Mult) AND IsFinite(WVOC_N05F_SD_Mult) AND
+    NOT IsNull(WVOC_N05F_SD_Dir) AND IsFinite(WVOC_N05F_SD_Dir) AND
+    NOT IsNull(WVOC_N05F_SD_Phase) AND IsFinite(WVOC_N05F_SD_Phase) AND
+    NOT IsNull(WVOC_N05F_SD_Evidence) AND IsFinite(WVOC_N05F_SD_Evidence) AND
+    NOT IsNull(WVOC_N05F_SD_Hyp) AND IsFinite(WVOC_N05F_SD_Hyp) AND
+    NOT IsNull(WVOC_N05F_S_MTFDir) AND IsFinite(WVOC_N05F_S_MTFDir) AND
+    NOT IsNull(WVOC_N05F_RS_Structure) AND IsFinite(WVOC_N05F_RS_Structure);
+
+WVOC_N05F_ExclusionMask =
+      IIf(WVOC_N05F_SD_Provisional==1 OR WVOC_N05F_RS_Provisional==1,1,0)
+    + IIf(NOT WVRC_ConfigValid,2,0)
+    + IIf(NOT (WVOC_N05F_RS_MarketStatus==3 AND WVOC_N05F_RS_Valid),4,0)
+    + IIf(WVRC_RSAdjustmentBasisStatus!=1,8,0)
+    + IIf(NOT WVOC_N05F_S_MTFValid,16,0)
+    + IIf(NOT WVOC_N05F_M_MTFValid,32,0)
+    + IIf(NOT WVOC_N05F_RequiredFinite,128,0)
+    + IIf(Interval()!=inDaily,256,0)
+    + IIf(NOT WVOC_N05F_MarketConfigMatch,512,0);
+
+WVOC_N05F_DataEligible = WVOC_N05F_ExclusionMask==0;
+
+WVOC_N05F_PriceRSNC =
+    WVOC_N05F_RS_PriceRelationship==2 OR WVOC_N05F_RS_PriceRelationship==3;
+WVOC_N05F_StockConflict =
+    WVOC_N05F_SD_Evidence==3 OR WVOC_N05F_SD_Hyp==3;
+WVOC_N05F_MTFConflict =
+    WVOC_N05F_S_MTFDir==4 OR WVOC_N05F_S_MTFDir==5 OR WVOC_N05F_S_MTFDir==6;
+WVOC_N05F_RSMixed = WVOC_N05F_RS_Structure==3;
+WVOC_N05F_MultiRange = WVOC_N05F_SD_Mult==2;
+WVOC_N05F_MarketStockConflict =
+    (WVOC_N05F_MarketSelection==2 AND WVOC_N05F_SD_Dir==3) OR
+    (WVOC_N05F_MarketSelection==3 AND WVOC_N05F_SD_Dir==2);
+
+WVOC_N05F_Review =
+    WVOC_N05F_DataEligible AND (
+      WVOC_N05F_MultiRange OR WVOC_N05F_PriceRSNC OR
+      WVOC_N05F_StockConflict OR WVOC_N05F_MTFConflict OR
+      WVOC_N05F_RSMixed OR WVOC_N05F_MarketStockConflict OR
+      WVOC_N05F_RangeConflict);
+
+WVOC_N05F_BullEvidence =
+    WVOC_N05F_SD_Evidence!=2 AND WVOC_N05F_SD_Evidence!=3 AND WVOC_N05F_SD_Hyp!=3;
+WVOC_N05F_BearEvidence =
+    WVOC_N05F_SD_Evidence!=1 AND WVOC_N05F_SD_Evidence!=3 AND WVOC_N05F_SD_Hyp!=3;
+
+WVOC_N05F_BullQual =
+    WVOC_N05F_DataEligible AND NOT WVOC_N05F_Review AND
+    WVOC_N05F_MarketSelection==2 AND WVOC_N05F_SD_Dir==2 AND
+    (WVOC_N05F_Stage==3 OR WVOC_N05F_Stage==4) AND
+    WVOC_N05F_S_MTFDir==2 AND WVOC_N05F_RS_Structure==1 AND
+    WVOC_N05F_BullEvidence AND NOT WVOC_N05F_PriceRSNC AND WVOC_N05F_SD_Mult==1;
+
+WVOC_N05F_BearQual =
+    WVOC_N05F_DataEligible AND NOT WVOC_N05F_Review AND
+    WVOC_N05F_MarketSelection==3 AND WVOC_N05F_SD_Dir==3 AND
+    (WVOC_N05F_Stage==3 OR WVOC_N05F_Stage==4) AND
+    WVOC_N05F_S_MTFDir==3 AND WVOC_N05F_RS_Structure==2 AND
+    WVOC_N05F_BearEvidence AND NOT WVOC_N05F_PriceRSNC AND WVOC_N05F_SD_Mult==1;
+
+WVOC_N05F_BullDev =
+    WVOC_N05F_DataEligible AND NOT WVOC_N05F_Review AND
+    WVOC_N05F_Stage==2 AND WVOC_N05F_MarketSelection==2 AND
+    WVOC_N05F_SD_Dir==2 AND WVOC_N05F_RS_Structure==1 AND
+    WVOC_N05F_BullEvidence AND
+    (WVOC_N05F_S_MTFDir==1 OR WVOC_N05F_S_MTFDir==2);
+
+WVOC_N05F_BearDev =
+    WVOC_N05F_DataEligible AND NOT WVOC_N05F_Review AND
+    WVOC_N05F_Stage==2 AND WVOC_N05F_MarketSelection==3 AND
+    WVOC_N05F_SD_Dir==3 AND WVOC_N05F_RS_Structure==2 AND
+    WVOC_N05F_BearEvidence AND
+    (WVOC_N05F_S_MTFDir==1 OR WVOC_N05F_S_MTFDir==3);
+
+WVOC_N05F_Watch =
+    WVOC_N05F_DataEligible AND NOT WVOC_N05F_Review AND
+    WVOC_N05F_Stage==1 AND WVOC_N05F_RangeCoherent AND
+    (WVOC_N05F_RS_Structure==1 OR WVOC_N05F_RS_Structure==2);
+
+WVOC_N05F_Class = WVOC_CandidateClass(
+    WVOC_N05F_DataEligible,WVOC_N05F_Review,
+    0,WVOC_N05F_BullQual,0,WVOC_N05F_BearQual,
+    WVOC_N05F_BullDev,WVOC_N05F_BearDev,WVOC_N05F_Watch);
+
+WVOC_N05F_Side =
+    WVOC_CandidateSide(WVOC_N05F_Class,WVOC_N05F_SD_Dir,WVOC_N05F_RS_Structure);
+
+WVOC_N05F_Qualified = WVOC_Qualified(WVOC_N05F_Class);
+WVOC_N05F_Developing = WVOC_Developing(WVOC_N05F_Class);
+WVOC_N05F_WatchFlag = WVOC_Watch(WVOC_N05F_Class);
+
+WVOC_N05F_ReferenceClass =
+    IIf(NOT WVOC_N05F_DataEligible,0,
+    IIf(WVOC_N05F_Review,9,
+    IIf(WVOC_N05F_BullQual,4,
+    IIf(WVOC_N05F_BearQual,7,
+    IIf(WVOC_N05F_BullDev,3,
+    IIf(WVOC_N05F_BearDev,6,
+    IIf(WVOC_N05F_Watch,2,1)))))));
+
+WVOC_N05F_KernelMatch = WVOC_N05F_Class==WVOC_N05F_ReferenceClass;
+
+// -----------------------------------------------------------------------------
+// OUTPUT
+// -----------------------------------------------------------------------------
+Filter = BarIndex()==LastValue(BarIndex());
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of",formatDateTime);
+AddColumn(0*BarIndex()+WVRC_ConfigValid,"Config Valid",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N05F_SW_Ord,"W Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_SM_Ord,"M Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_S_MTFValid,"Stock MTF Valid",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_S_MTFDir,"Stock MTF Dir",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N05F_RS_Valid,"RS Valid",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_RS_Status,"RS Status",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_RS_Ratio,"RS Ratio",1.6);
+AddColumn(0*BarIndex()+WVOC_N05F_RS_Structure,"RS Structure",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_RS_PriceRelationship,"Price RS Relationship",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N05F_MKT_ForeignOK,"Market Foreign OK",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_M_MTFValid,"Market MTF Valid",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_M_MTFDir,"Market MTF Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_MarketSelection,"Market Selection",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N05F_DataEligible,"Data Eligible",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_ExclusionMask,"Exclusion Mask",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_Stage,"Candidate Stage",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_Review,"Review",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_Class,"Candidate Class",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_ReferenceClass,"Reference Class",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_KernelMatch,"Kernel Class Match",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_Side,"Candidate Side",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_Qualified,"Qualified",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_Developing,"Developing",1.0);
+AddColumn(0*BarIndex()+WVOC_N05F_WatchFlag,"Watch",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N05F_SD_ms,"D ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N05F_RS_ms,"RS ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N05F_SW_ms,"W ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N05F_SM_ms,"M ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N05F_MD_ms,"MKT D ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N05F_MW_ms,"MKT W ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N05F_MM_ms,"MKT M ms",1.3);
+
+AddTextColumn("ONE_CLICK_N05F_NO_NEW_FUNCTIONS_FULL_DECISION_V01_20260918_A","Probe Version");
