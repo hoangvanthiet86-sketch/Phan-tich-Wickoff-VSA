@@ -1,0 +1,67 @@
+/*
+    Wyckoff VSA One-Click N01 Canonical Daily Oracle v0.1
+
+    Purpose:
+    - run the already validated Runtime v0.2 canonical stack on one Daily symbol;
+    - expose the exact Composite/PublicActive fields used by the generated-body probe;
+    - no methodology change; no publisher/cache writes.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+
+WVOC_ORACLE_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = WVOC_ORACLE_LastBar;
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of",formatDateTime);
+AddColumn(0*BarIndex()+WVRC_ConfigValid,"Config Valid",1.0);
+
+AddColumn(WCI_ContextMultiplicityCode,"Composite Multiplicity",1.0);
+AddColumn(WCI_ContextAmbiguous,"Composite Ambiguous",1.0);
+AddColumn(WCI_L_ContextPresent,"L Present",1.0);
+AddColumn(WCI_U_ContextPresent,"U Present",1.0);
+AddColumn(WCI_L_PublicActive,"L PublicActive",1.0);
+AddColumn(WCI_U_PublicActive,"U PublicActive",1.0);
+
+AddColumn(WCI_CurrentRangeContextID,"Current Range ID",1.0);
+AddColumn(WCI_RangeStatusCode,"Range Status",1.0);
+AddColumn(WCI_RangePosition,"Range Position",1.4);
+
+AddColumn(WCI_PhaseStateCode,"Phase",1.0);
+AddColumn(WCI_StructuralDevelopmentCode,"Structural Development",1.0);
+AddColumn(WCI_FamilyHypothesisCode,"Family",1.0);
+AddColumn(WCI_DirectionalContextCode,"Directional",1.0);
+AddColumn(WCI_EvidenceBalanceCode,"Evidence",1.0);
+AddColumn(WCI_HypothesisAlignmentCode,"Hyp Alignment",1.0);
+AddColumn(WCI_CurrentEventMask,"Event Mask",1.0);
+
+AddColumn(WCI_L_RangeContextID,"L Range ID",1.0);
+AddColumn(WCI_L_RangeStatusCode,"L Range Status",1.0);
+AddColumn(WCI_L_PhaseStateCode,"L Phase",1.0);
+AddColumn(WCI_L_FamilyHypothesisCode,"L Family",1.0);
+
+AddColumn(WCI_U_RangeContextID,"U Range ID",1.0);
+AddColumn(WCI_U_RangeStatusCode,"U Range Status",1.0);
+AddColumn(WCI_U_PhaseStateCode,"U Phase",1.0);
+AddColumn(WCI_U_FamilyHypothesisCode,"U Family",1.0);
+
+AddTextColumn("ONE_CLICK_N01_CANONICAL_DAILY_ORACLE_V01_20260918_A","Oracle Version");
