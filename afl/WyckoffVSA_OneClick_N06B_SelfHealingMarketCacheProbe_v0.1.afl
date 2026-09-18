@@ -1,0 +1,371 @@
+/*
+    Wyckoff VSA One-Click N06B Self-Healing Market Cache Probe v0.1
+
+    Purpose:
+    - validate the first REAL self-healing cache domain;
+    - canonical market cache prefix: WVOC_MarketPrefix;
+    - cold path: compute VNINDEX D/W/M + MTF + Market Selection, then publish;
+    - warm path: skip heavy analytical runtime and read the stable cache;
+    - no stock analytical runtime;
+    - no RS;
+    - no candidate classification.
+
+    This probe intentionally uses the same market D/W/M analytical path already
+    proven in N04A, but only on cache miss.
+
+    Native protocol:
+    1) Verify Syntax.
+    2) Explore SNZ / Daily / 1 Recent Bar.
+    3) Explore a SECOND time without changing data/config.
+       The second run should report Cache Hit Before = 1 and Rebuilt = 0.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_OneClickCacheContract_v0.1.afl>
+#include_once <WyckoffVSA_OneClickContextHelpers_Generated_v0.1.afl>
+#include_once <WyckoffVSA_MTFRelationKernel_v0.1.afl>
+#include_once <WyckoffVSA_ScannerDecisionKernel_v0.1.afl>
+
+WVOC_N06B_Prefix = WVOC_MarketPrefix;
+WVOC_N06B_MarketSymbol = WVRC_SelectionMarketSymbol;
+
+WVOC_N06B_HitBefore =
+    WVOC_MarketMetadataValid(
+        WVOC_N06B_Prefix,
+        WVOC_N06B_MarketSymbol,
+        WVOC_AnalyticalFingerprint,
+        WVOC_AsOfDateNum,
+        WVOC_AsOfDateTime,
+        WVOC_ExpectedWeeklyOrdinal,
+        WVOC_ExpectedMonthlyOrdinal);
+
+WVOC_N06B_Rebuilt = 0;
+WVOC_N06B_WriterAcquired = 0;
+WVOC_N06B_CommitGeneration = 0;
+WVOC_N06B_ForeignOK = 0;
+WVOC_N06B_HeavyMs = 0;
+
+WVOC_N06B_CD_Mult = Null;
+WVOC_N06B_CD_Dir = Null;
+WVOC_N06B_CD_Evidence = Null;
+WVOC_N06B_CD_Phase = Null;
+WVOC_N06B_CD_Hyp = Null;
+
+WVOC_N06B_CW_Ord = Null;
+WVOC_N06B_CW_Mult = Null;
+WVOC_N06B_CW_Dir = Null;
+WVOC_N06B_CW_Evidence = Null;
+WVOC_N06B_CW_Phase = Null;
+
+WVOC_N06B_CM_Ord = Null;
+WVOC_N06B_CM_Mult = Null;
+WVOC_N06B_CM_Dir = Null;
+WVOC_N06B_CM_Evidence = Null;
+WVOC_N06B_CM_Phase = Null;
+
+WVOC_N06B_CMTFValid = 0;
+WVOC_N06B_CMTFDir = Null;
+WVOC_N06B_CMTFEvidence = Null;
+WVOC_N06B_CMTFPhase = Null;
+WVOC_N06B_CMTFConflict = Null;
+WVOC_N06B_CSelection = Null;
+
+if (NOT WVOC_N06B_HitBefore)
+{
+    GetPerformanceCounter(1);
+
+    WVOC_N06B_ForeignOK = SetForeign(WVOC_N06B_MarketSymbol,1,0);
+
+    WVOC_N06B_DFound = 0;
+    WVOC_N06B_WFound = 0;
+    WVOC_N06B_MFound = 0;
+
+    if (WVOC_N06B_ForeignOK)
+    {
+        for (WVOC_N06B_ctx=0; WVOC_N06B_ctx<3; WVOC_N06B_ctx++)
+        {
+            if (WVOC_N06B_ctx==1) TimeFrameSet(inWeekly);
+            if (WVOC_N06B_ctx==2) TimeFrameSet(inMonthly);
+
+            #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
+
+            if (WVOC_N06B_ctx==0)
+            {
+                WVOC_N06B_DFound = 1;
+                WVOC_N06B_CD_Mult = LastValue(WCI_ContextMultiplicityCode);
+                WVOC_N06B_CD_Dir = LastValue(WCI_DirectionalContextCode);
+                WVOC_N06B_CD_Evidence = LastValue(WCI_EvidenceBalanceCode);
+                WVOC_N06B_CD_Phase = LastValue(WCI_PhaseStateCode);
+                WVOC_N06B_CD_Hyp = LastValue(WCI_HypothesisAlignmentCode);
+            }
+
+            if (WVOC_N06B_ctx==1)
+            {
+                WVOC_N06B_W_DTArr = DateTime();
+                WVOC_N06B_W_OrdArr =
+                    Floor(DateTimeDiff(WVOC_N06B_W_DTArr,WCLK_WeekEpoch)/604800);
+
+                WVOC_N06B_W_idx = -1;
+                for (WVOC_N06B_j=BarCount-1; WVOC_N06B_j>=0; WVOC_N06B_j--)
+                {
+                    if (WVOC_N06B_W_idx<0 AND
+                        WVOC_N06B_W_OrdArr[WVOC_N06B_j]==WVOC_ExpectedWeeklyOrdinal)
+                        WVOC_N06B_W_idx = WVOC_N06B_j;
+                }
+
+                WVOC_N06B_WFound = WVOC_N06B_W_idx>=0;
+                WVOC_N06B_W_safe = IIf(WVOC_N06B_WFound,WVOC_N06B_W_idx,0);
+
+                WVOC_N06B_CW_Ord =
+                    IIf(WVOC_N06B_WFound,WVOC_N06B_W_OrdArr[WVOC_N06B_W_safe],Null);
+                WVOC_N06B_CW_Mult =
+                    IIf(WVOC_N06B_WFound,WCI_ContextMultiplicityCode[WVOC_N06B_W_safe],Null);
+                WVOC_N06B_CW_Dir =
+                    IIf(WVOC_N06B_WFound,WCI_DirectionalContextCode[WVOC_N06B_W_safe],Null);
+                WVOC_N06B_CW_Evidence =
+                    IIf(WVOC_N06B_WFound,WCI_EvidenceBalanceCode[WVOC_N06B_W_safe],Null);
+                WVOC_N06B_CW_Phase =
+                    IIf(WVOC_N06B_WFound,WCI_PhaseStateCode[WVOC_N06B_W_safe],Null);
+            }
+
+            if (WVOC_N06B_ctx==2)
+            {
+                WVOC_N06B_M_OrdArr = Year()*12 + Month();
+
+                WVOC_N06B_M_idx = -1;
+                for (WVOC_N06B_k=BarCount-1; WVOC_N06B_k>=0; WVOC_N06B_k--)
+                {
+                    if (WVOC_N06B_M_idx<0 AND
+                        WVOC_N06B_M_OrdArr[WVOC_N06B_k]==WVOC_ExpectedMonthlyOrdinal)
+                        WVOC_N06B_M_idx = WVOC_N06B_k;
+                }
+
+                WVOC_N06B_MFound = WVOC_N06B_M_idx>=0;
+                WVOC_N06B_M_safe = IIf(WVOC_N06B_MFound,WVOC_N06B_M_idx,0);
+
+                WVOC_N06B_CM_Ord =
+                    IIf(WVOC_N06B_MFound,WVOC_N06B_M_OrdArr[WVOC_N06B_M_safe],Null);
+                WVOC_N06B_CM_Mult =
+                    IIf(WVOC_N06B_MFound,WCI_ContextMultiplicityCode[WVOC_N06B_M_safe],Null);
+                WVOC_N06B_CM_Dir =
+                    IIf(WVOC_N06B_MFound,WCI_DirectionalContextCode[WVOC_N06B_M_safe],Null);
+                WVOC_N06B_CM_Evidence =
+                    IIf(WVOC_N06B_MFound,WCI_EvidenceBalanceCode[WVOC_N06B_M_safe],Null);
+                WVOC_N06B_CM_Phase =
+                    IIf(WVOC_N06B_MFound,WCI_PhaseStateCode[WVOC_N06B_M_safe],Null);
+            }
+
+            if (WVOC_N06B_ctx>0) TimeFrameRestore();
+        }
+    }
+
+    RestorePriceArrays();
+
+    WVOC_N06B_CMTFValid =
+        WVRC_ConfigValid AND
+        WVOC_N06B_ForeignOK AND
+        WVOC_N06B_DFound AND
+        WVOC_N06B_WFound AND
+        WVOC_N06B_MFound;
+
+    WVMTF_Run(
+        "N06BM",
+        WVOC_N06B_CMTFValid,
+        WVOC_N06B_CD_Mult,WVOC_N06B_CW_Mult,WVOC_N06B_CM_Mult,
+        WVOC_N06B_CD_Dir,WVOC_N06B_CW_Dir,WVOC_N06B_CM_Dir,
+        WVOC_N06B_CD_Evidence,WVOC_N06B_CW_Evidence,WVOC_N06B_CM_Evidence,
+        WVOC_N06B_CD_Phase,WVOC_N06B_CW_Phase,WVOC_N06B_CM_Phase);
+
+    WVOC_N06B_CMTFDir =
+        VarGet("WVMTF_N06BM_DirectionalAlignment");
+    WVOC_N06B_CMTFEvidence =
+        VarGet("WVMTF_N06BM_EvidenceAlignment");
+    WVOC_N06B_CMTFPhase =
+        VarGet("WVMTF_N06BM_PhaseRelationship");
+    WVOC_N06B_CMTFConflict =
+        VarGet("WVMTF_N06BM_ConflictMask");
+
+    WVOC_N06B_CSelection = WVOC_SelectionContext(
+        WVOC_N06B_CMTFValid,
+        WVOC_N06B_CD_Mult,
+        WVOC_N06B_CD_Dir,
+        WVOC_N06B_CD_Evidence,
+        WVOC_N06B_CD_Hyp,
+        WVOC_N06B_CMTFDir);
+
+    WVOC_N06B_HeavyMs = GetPerformanceCounter();
+
+    if (WVOC_N06B_CMTFValid)
+    {
+        WVOC_N06B_WriterAcquired = WVOC_BeginWrite(WVOC_N06B_Prefix);
+
+        if (WVOC_N06B_WriterAcquired)
+        {
+            WVOC_WriteBaseMetadata(
+                WVOC_N06B_Prefix,
+                "MARKET",
+                WVOC_N06B_MarketSymbol,
+                WVOC_AnalyticalFingerprint);
+
+            StaticVarSet(WVOC_N06B_Prefix+"AsOfDateNum",WVOC_AsOfDateNum,True);
+            StaticVarSet(WVOC_N06B_Prefix+"AsOfDateTime",WVOC_AsOfDateTime,True);
+            StaticVarSet(
+                WVOC_N06B_Prefix+"CompletedWeeklyOrdinal",
+                WVOC_ExpectedWeeklyOrdinal,True);
+            StaticVarSet(
+                WVOC_N06B_Prefix+"CompletedMonthlyOrdinal",
+                WVOC_ExpectedMonthlyOrdinal,True);
+
+            StaticVarSet(WVOC_N06B_Prefix+"D_Multiplicity",WVOC_N06B_CD_Mult,True);
+            StaticVarSet(WVOC_N06B_Prefix+"D_Directional",WVOC_N06B_CD_Dir,True);
+            StaticVarSet(WVOC_N06B_Prefix+"D_Evidence",WVOC_N06B_CD_Evidence,True);
+            StaticVarSet(WVOC_N06B_Prefix+"D_Phase",WVOC_N06B_CD_Phase,True);
+            StaticVarSet(WVOC_N06B_Prefix+"D_HypothesisAlignment",WVOC_N06B_CD_Hyp,True);
+
+            StaticVarSet(WVOC_N06B_Prefix+"W_Ordinal",WVOC_N06B_CW_Ord,True);
+            StaticVarSet(WVOC_N06B_Prefix+"W_Multiplicity",WVOC_N06B_CW_Mult,True);
+            StaticVarSet(WVOC_N06B_Prefix+"W_Directional",WVOC_N06B_CW_Dir,True);
+            StaticVarSet(WVOC_N06B_Prefix+"W_Evidence",WVOC_N06B_CW_Evidence,True);
+            StaticVarSet(WVOC_N06B_Prefix+"W_Phase",WVOC_N06B_CW_Phase,True);
+
+            StaticVarSet(WVOC_N06B_Prefix+"M_Ordinal",WVOC_N06B_CM_Ord,True);
+            StaticVarSet(WVOC_N06B_Prefix+"M_Multiplicity",WVOC_N06B_CM_Mult,True);
+            StaticVarSet(WVOC_N06B_Prefix+"M_Directional",WVOC_N06B_CM_Dir,True);
+            StaticVarSet(WVOC_N06B_Prefix+"M_Evidence",WVOC_N06B_CM_Evidence,True);
+            StaticVarSet(WVOC_N06B_Prefix+"M_Phase",WVOC_N06B_CM_Phase,True);
+
+            StaticVarSet(WVOC_N06B_Prefix+"MTF_Valid",WVOC_N06B_CMTFValid,True);
+            StaticVarSet(WVOC_N06B_Prefix+"MTF_Directional",WVOC_N06B_CMTFDir,True);
+            StaticVarSet(WVOC_N06B_Prefix+"MTF_Evidence",WVOC_N06B_CMTFEvidence,True);
+            StaticVarSet(WVOC_N06B_Prefix+"MTF_Phase",WVOC_N06B_CMTFPhase,True);
+            StaticVarSet(WVOC_N06B_Prefix+"MTF_ConflictMask",WVOC_N06B_CMTFConflict,True);
+            StaticVarSet(WVOC_N06B_Prefix+"SelectionContext",WVOC_N06B_CSelection,True);
+
+            WVOC_N06B_CommitGeneration =
+                WVOC_CommitWrite(WVOC_N06B_Prefix);
+
+            WVOC_N06B_Rebuilt = 1;
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// STABLE CONSUMER READ: generation A -> payload -> generation B.
+// -----------------------------------------------------------------------------
+WVOC_N06B_GenA =
+    Nz(StaticVarGet(WVOC_N06B_Prefix+"CommittedGenerationID"),0);
+
+WVOC_N06B_MetadataAfter =
+    WVOC_MarketMetadataValid(
+        WVOC_N06B_Prefix,
+        WVOC_N06B_MarketSymbol,
+        WVOC_AnalyticalFingerprint,
+        WVOC_AsOfDateNum,
+        WVOC_AsOfDateTime,
+        WVOC_ExpectedWeeklyOrdinal,
+        WVOC_ExpectedMonthlyOrdinal);
+
+WVOC_N06B_R_DMult =
+    StaticVarGet(WVOC_N06B_Prefix+"D_Multiplicity");
+WVOC_N06B_R_DDir =
+    StaticVarGet(WVOC_N06B_Prefix+"D_Directional");
+WVOC_N06B_R_DEvidence =
+    StaticVarGet(WVOC_N06B_Prefix+"D_Evidence");
+WVOC_N06B_R_DPhase =
+    StaticVarGet(WVOC_N06B_Prefix+"D_Phase");
+WVOC_N06B_R_DHyp =
+    StaticVarGet(WVOC_N06B_Prefix+"D_HypothesisAlignment");
+
+WVOC_N06B_R_WOrd =
+    StaticVarGet(WVOC_N06B_Prefix+"W_Ordinal");
+WVOC_N06B_R_WDir =
+    StaticVarGet(WVOC_N06B_Prefix+"W_Directional");
+WVOC_N06B_R_MOrd =
+    StaticVarGet(WVOC_N06B_Prefix+"M_Ordinal");
+WVOC_N06B_R_MDir =
+    StaticVarGet(WVOC_N06B_Prefix+"M_Directional");
+
+WVOC_N06B_R_MTFValid =
+    StaticVarGet(WVOC_N06B_Prefix+"MTF_Valid");
+WVOC_N06B_R_MTFDir =
+    StaticVarGet(WVOC_N06B_Prefix+"MTF_Directional");
+WVOC_N06B_R_MTFEvidence =
+    StaticVarGet(WVOC_N06B_Prefix+"MTF_Evidence");
+WVOC_N06B_R_MTFPhase =
+    StaticVarGet(WVOC_N06B_Prefix+"MTF_Phase");
+WVOC_N06B_R_MTFConflict =
+    StaticVarGet(WVOC_N06B_Prefix+"MTF_ConflictMask");
+WVOC_N06B_R_Selection =
+    StaticVarGet(WVOC_N06B_Prefix+"SelectionContext");
+
+WVOC_N06B_GenB =
+    Nz(StaticVarGet(WVOC_N06B_Prefix+"CommittedGenerationID"),0);
+
+WVOC_N06B_StableRead =
+    WVOC_N06B_MetadataAfter AND
+    WVOC_N06B_GenA>0 AND
+    WVOC_N06B_GenA==WVOC_N06B_GenB;
+
+WVOC_N06B_RebuildExact =
+    IIf(
+        WVOC_N06B_Rebuilt,
+        WVOC_N06B_R_DMult==WVOC_N06B_CD_Mult AND
+        WVOC_N06B_R_DDir==WVOC_N06B_CD_Dir AND
+        WVOC_N06B_R_DEvidence==WVOC_N06B_CD_Evidence AND
+        WVOC_N06B_R_DPhase==WVOC_N06B_CD_Phase AND
+        WVOC_N06B_R_DHyp==WVOC_N06B_CD_Hyp AND
+        WVOC_N06B_R_WOrd==WVOC_N06B_CW_Ord AND
+        WVOC_N06B_R_WDir==WVOC_N06B_CW_Dir AND
+        WVOC_N06B_R_MOrd==WVOC_N06B_CM_Ord AND
+        WVOC_N06B_R_MDir==WVOC_N06B_CM_Dir AND
+        WVOC_N06B_R_MTFValid==WVOC_N06B_CMTFValid AND
+        WVOC_N06B_R_MTFDir==WVOC_N06B_CMTFDir AND
+        WVOC_N06B_R_MTFEvidence==WVOC_N06B_CMTFEvidence AND
+        WVOC_N06B_R_MTFPhase==WVOC_N06B_CMTFPhase AND
+        WVOC_N06B_R_MTFConflict==WVOC_N06B_CMTFConflict AND
+        WVOC_N06B_R_Selection==WVOC_N06B_CSelection,
+        1);
+
+WVOC_N06B_AllPass =
+    WVOC_N06B_StableRead AND
+    WVOC_N06B_RebuildExact AND
+    WVOC_N06B_R_WOrd==WVOC_ExpectedWeeklyOrdinal AND
+    WVOC_N06B_R_MOrd==WVOC_ExpectedMonthlyOrdinal;
+
+Filter = BarIndex()==LastValue(BarIndex());
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of",formatDateTime);
+AddTextColumn(WVOC_N06B_MarketSymbol,"Market");
+
+AddColumn(0*BarIndex()+WVOC_N06B_HitBefore,"Cache Hit Before",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_Rebuilt,"Rebuilt",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_WriterAcquired,"Writer Acquired",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_CommitGeneration,"Commit Generation",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_GenA,"Generation A",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_GenB,"Generation B",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_StableRead,"Stable Read",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_RebuildExact,"Rebuild Exact",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N06B_R_DMult,"D Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_DDir,"D Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_DEvidence,"D Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_DPhase,"D Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_DHyp,"D Hyp",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N06B_R_WOrd,"W Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_WDir,"W Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_MOrd,"M Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_MDir,"M Dir",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N06B_R_MTFValid,"MTF Valid",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_MTFDir,"MTF Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_MTFEvidence,"MTF Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_MTFPhase,"MTF Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_MTFConflict,"MTF Conflict",1.0);
+AddColumn(0*BarIndex()+WVOC_N06B_R_Selection,"Market Selection",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N06B_HeavyMs,"Heavy Runtime ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N06B_AllPass,"ALL PASS",1.0);
+AddTextColumn("ONE_CLICK_N06B_SELF_HEALING_MARKET_CACHE_V01_20260918_A","Probe Version");
