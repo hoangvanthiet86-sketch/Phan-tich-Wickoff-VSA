@@ -44,7 +44,7 @@ WVOC_N04B_PivotConfig = LastValue(SL_PivotConfigValid);
 // Execute immediately before any timeframe/foreign context can overwrite
 // stock Daily SL_* / WCI_* arrays.
 GetPerformanceCounter(1);
-#include_once <WyckoffVSA_OneClickRSKernel_v0.1.1.afl>
+#include_once <WyckoffVSA_OneClickRSKernel_v0.1.2.afl>
 WVOC_N04B_RSMs = GetPerformanceCounter();
 
 WVOC_N04B_RS_ContextValid = LastValue(WRS_ContextValid);
@@ -87,4 +87,4 @@ AddColumn(0*BarIndex()+WVOC_N04B_RS_Provisional,"RS Provisional",1.0);
 
 AddColumn(0*BarIndex()+WVOC_N04B_DailyMs,"Daily Body ms",1.3);
 AddColumn(0*BarIndex()+WVOC_N04B_RSMs,"RS Runtime ms",1.3);
-AddTextColumn("ONE_CLICK_N04B_RS_INTEGRATION_V01_20260918_D","Probe Version");
+AddTextColumn("ONE_CLICK_N04B_RS_INTEGRATION_V01_20260918_E","Probe Version");
