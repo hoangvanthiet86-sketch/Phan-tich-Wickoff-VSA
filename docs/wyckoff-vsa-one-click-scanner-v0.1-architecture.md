@@ -58,16 +58,18 @@ Fast snapshot cũ có thể được dùng làm optional warm cache nếu finger
 - recompute body không chứa Param, output hoặc publisher logic;
 - capture facade lưu các output cần thiết ngay sau mỗi context run.
 
-Context order đề nghị:
+Context execution dùng **một analytical body include duy nhất** bên trong context loop để không nhân kích thước công thức. Mỗi iteration chỉ chạy khi cache tương ứng miss.
 
-1. stock Daily canonical run;
-2. capture stock D;
-3. stock Weekly recompute nếu cache miss;
-4. stock Monthly recompute nếu cache miss;
-5. shared VNINDEX preprocessing trước parallel stock run;
-6. compute stock RS với benchmark;
-7. lightweight MTF relation;
-8. lightweight Market Scanner decision facade;
+Thứ tự logic:
+
+1. resolve/build shared VNINDEX context;
+2. stock Daily canonical run nếu final decision cache miss;
+3. stock Weekly recompute nếu completed-week cache miss;
+4. stock Monthly recompute nếu completed-month cache miss;
+5. compute stock RS với benchmark;
+6. lightweight MTF relation;
+7. shared Scanner Decision Kernel;
+8. commit final decision cache;
 9. filter/output.
 
 ## 5. Threading
@@ -82,12 +84,7 @@ Chỉ shared market cache cần exclusive initialization. Top-level `Status("sto
 
 ## 6. Replay
 
-Cùng kernel, khác cache namespace:
-
-- LIVE: `WVSA_OC_LIVE_...`
-- REPLAY: `WVSA_OC_REPLAY_<AsOfDateNum>_...`
-
-Replay cache phải key theo as-of để tuyệt đối không tái sử dụng payload tương lai.
+Cùng một kernel và cùng active-slot namespace. Current/Replay không tách namespace theo mode; identity được khóa bằng `AsOfDateNum + AsOfDateTime + ConfigFingerprint + schema`. Khi playback thay đổi, cache cũ tự miss. Điều này tránh tích lũy cache vô hạn theo hàng nghìn replay date và vẫn tuyệt đối không tái sử dụng payload tương lai.
 
 ## 7. Đo thời gian
 
