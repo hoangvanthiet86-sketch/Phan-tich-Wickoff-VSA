@@ -177,7 +177,7 @@ function Normalize-Source([string]$name) {
         }
     }
 
-    // Mixed analytical/presentation sections are retained, then only output calls are removed.
+    # Mixed analytical/presentation sections are retained, then only output calls are removed.
     $text = Remove-OutputStatements $text
     $text = Strip-DirectivesAndSections $text
 
@@ -220,6 +220,20 @@ foreach ($source in $sources) {
     $allBody.Add("/* Analytical body from $source */")
     $allBody.Add($split.Body)
     $allBody.Add("")
+}
+
+
+# Fail closed on duplicate helper function names across the flattened stack.
+$helperCombinedForAudit = ($allHelpers -join [Environment]::NewLine)
+$functionNames = [regex]::Matches(
+    $helperCombinedForAudit,
+    '(?m)^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\('
+) | ForEach-Object { $_.Groups[1].Value }
+
+$duplicates = $functionNames | Group-Object | Where-Object { $_.Count -gt 1 }
+if ($duplicates) {
+    $names = ($duplicates | ForEach-Object { $_.Name }) -join ", "
+    throw "Duplicate helper function names detected: $names"
 }
 
 $helperHeader = @"
