@@ -1,0 +1,77 @@
+/*
+    Wyckoff VSA One-Click N04C Canonical RS Oracle v0.1
+
+    Purpose:
+    - run the explicit-order Runtime v0.2 canonical path through Relative Strength;
+    - expose the same Daily/RS fields as N04B;
+    - compare at the SAME visible as-of date.
+
+    Control:
+    Apply to = SNZ only
+    Periodicity = Daily
+    Range = 1 Recent Bar
+    RuntimeConfig defaults
+    1.3 last bar provisional = No
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_CompositeIndicator_SnapshotPublic_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_TimeframeSnapshot_Consumer_v0.1.afl>
+#include_once <WyckoffVSA_MultiTimeframeContext_Runtime_v0.2.afl>
+#include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
+
+GetPerformanceCounter(1);
+#include_once <WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl>
+WVOC_N04C_RSMs = GetPerformanceCounter();
+
+WVOC_N04C_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = WVOC_N04C_LastBar;
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of",formatDateTime);
+AddColumn(0*BarIndex()+WVRC_ConfigValid,"Config Valid",1.0);
+AddTextColumn(WVRC_RSMarketSymbol,"RS Market");
+AddColumn(0*BarIndex()+WVRC_RSAdjustmentBasisStatus,"RS Adjustment Status",1.0);
+
+AddColumn(WCI_ContextMultiplicityCode,"D Mult",1.0);
+AddColumn(WCI_DirectionalContextCode,"D Dir",1.0);
+AddColumn(WCI_EvidenceBalanceCode,"D Evidence",1.0);
+AddColumn(WCI_PhaseStateCode,"D Phase",1.0);
+AddColumn(WCI_FamilyHypothesisCode,"D Family",1.0);
+AddColumn(WCI_CurrentRangeContextID,"D Range ID",1.0);
+AddColumn(WCI_RangeStatusCode,"D Range Status",1.0);
+AddColumn(WCI_RangePosition,"D Range Position",1.4);
+AddColumn(WCI_ProvisionalFlag,"D Provisional",1.0);
+AddColumn(SL_PivotConfigValid,"Pivot Config Valid",1.0);
+
+AddColumn(WRS_ContextValid,"RS Context Valid",1.0);
+AddColumn(WRS_ContextStatusCode,"RS Context Status",1.0);
+AddColumn(WRS_MarketBenchmarkStatusCode,"RS Market Status",1.0);
+AddColumn(WRS_StockVsMarketRatioValid,"RS Ratio Valid",1.0);
+AddColumn(WRS_StockVsMarketRatio,"RS Ratio",1.6);
+AddColumn(WRS_StockVsMarketRSStructureCode,"RS Structure",1.0);
+AddColumn(WRS_PriceRSRelationshipCode,"Price RS Relationship",1.0);
+AddColumn(WRS_CurrentDescriptorProvisional,"RS Provisional",1.0);
+
+AddColumn(0*BarIndex()+WVOC_N04C_RSMs,"RS Runtime ms",1.3);
+AddTextColumn("ONE_CLICK_N04C_CANONICAL_RS_ORACLE_V01_20260918_A","Oracle Version");
