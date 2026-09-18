@@ -1,0 +1,55 @@
+/*
+    Wyckoff VSA One-Click N05C Compile Boundary Probe v0.1
+
+    VERIFY SYNTAX ONLY. DO NOT EXPLORE.
+
+    Purpose:
+    Start from the native-passing N04B shape and add only the two small kernels
+    required by N05:
+      - MTFRelationKernel
+      - ScannerDecisionKernel
+
+    If this verifies successfully, the N05 v0.1.1 crash is attributable to the
+    large orchestration wrapper rather than the analytical body / RS / MTF /
+    decision include set.
+
+    Control: AmiBroker 6.20.01 32-bit.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_OneClickContextHelpers_Generated_v0.1.afl>
+#include_once <WyckoffVSA_MTFRelationKernel_v0.1.afl>
+#include_once <WyckoffVSA_ScannerDecisionKernel_v0.1.afl>
+
+GetPerformanceCounter(1);
+#include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
+WVOC_N05C_DailyMs = GetPerformanceCounter();
+
+WVOC_N05C_D_Mult = LastValue(WCI_ContextMultiplicityCode);
+WVOC_N05C_D_Dir = LastValue(WCI_DirectionalContextCode);
+WVOC_N05C_D_Evidence = LastValue(WCI_EvidenceBalanceCode);
+WVOC_N05C_D_Phase = LastValue(WCI_PhaseStateCode);
+
+GetPerformanceCounter(1);
+#include_once <WyckoffVSA_OneClickRSKernel_v0.1.2.afl>
+WVOC_N05C_RSMs = GetPerformanceCounter();
+
+WVOC_N05C_RSValid = LastValue(WRS_ContextValid);
+WVOC_N05C_RSStructure = LastValue(WRS_StockVsMarketRSStructureCode);
+
+WVOC_N05C_MTFSmoke = WVMTF_Run(
+    "N05C",
+    0,
+    WVOC_N05C_D_Mult,0,0,
+    WVOC_N05C_D_Dir,0,0,
+    WVOC_N05C_D_Evidence,0,0,
+    WVOC_N05C_D_Phase,0,0);
+
+WVOC_N05C_StageSmoke = WVOC_StageFromPhase(WVOC_N05C_D_Phase);
+
+Filter = BarIndex()==LastValue(BarIndex());
+AddTextColumn("VERIFY_SYNTAX_ONLY","N05C");
+AddTextColumn("ONE_CLICK_N05C_COMPILE_BOUNDARY_V01_20260918_A","Probe Version");
