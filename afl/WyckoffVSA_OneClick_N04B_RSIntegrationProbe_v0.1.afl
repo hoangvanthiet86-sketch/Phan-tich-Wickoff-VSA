@@ -1,23 +1,20 @@
 /*
     Wyckoff VSA One-Click N04B Relative Strength Integration Probe v0.1
 
-    Purpose:
-    - one Daily AFL;
-    - execute stock Daily canonical generated body;
-    - immediately consume its Daily SL/WCI arrays with the native-validated
-      RelativeStrengthContext Runtime v0.2;
-    - then execute stock W/M and VNINDEX D/W/M plus lightweight MTF/Selection;
-    - prove RS no longer requires a publisher warm-up.
+    Scope intentionally isolated to RS after N04A passed Stock + VNINDEX + MTF.
 
-    IMPORTANT:
-    RS executes BEFORE any timeframe/foreign context overwrites the stock Daily
-    analytical arrays. This ordering is intentional.
+    Purpose:
+    - run stock Daily generated analytical body;
+    - while stock Daily SL/WCI arrays are still live, consume them with the
+      native-validated RelativeStrengthContext Runtime v0.2;
+    - prove RS can run directly in the one-click path without DailyPublisher
+      or snapshot warm-up.
 
     Control:
     Apply to = SNZ only
     Periodicity = Daily
     Range = 1 Recent Bar
-    defaults from RuntimeConfig v0.2
+    RuntimeConfig defaults
     1.3 last bar provisional = No
 */
 #pragma nocache
@@ -26,38 +23,30 @@ SetBarsRequired(sbrAll,sbrAll);
 #include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
 #include_once <WyckoffVSA_OperationalClock_v0.1.afl>
 #include_once <WyckoffVSA_OneClickContextHelpers_Generated_v0.1.afl>
-#include_once <WyckoffVSA_MTFRelationKernel_v0.1.afl>
-#include_once <WyckoffVSA_ScannerDecisionKernel_v0.1.afl>
 #include_once <WyckoffVSA_DerivedSeriesPivotKernel_v0.1.afl>
 
-WVOC_N04B_ExpectedW = WCLK_ExpectedCompletedWeeklyOrdinal;
-WVOC_N04B_ExpectedM = WCLK_ExpectedCompletedMonthlyOrdinal;
-
-// -----------------------------------------------------------------------------
-// 1. STOCK DAILY — must remain live while RS Runtime consumes SL/WCI arrays.
-// -----------------------------------------------------------------------------
+// Stock Daily analytical context.
 GetPerformanceCounter(1);
 #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
-WVOC_N04B_SD_ms = GetPerformanceCounter();
+WVOC_N04B_DailyMs = GetPerformanceCounter();
 
-WVOC_N04B_SD_DT = LastValue(DateTime());
-WVOC_N04B_SD_Mult = LastValue(WCI_ContextMultiplicityCode);
-WVOC_N04B_SD_Dir = LastValue(WCI_DirectionalContextCode);
-WVOC_N04B_SD_Evidence = LastValue(WCI_EvidenceBalanceCode);
-WVOC_N04B_SD_Phase = LastValue(WCI_PhaseStateCode);
-WVOC_N04B_SD_Hyp = LastValue(WCI_HypothesisAlignmentCode);
-WVOC_N04B_SD_Structural = LastValue(WCI_StructuralDevelopmentCode);
-WVOC_N04B_SD_Family = LastValue(WCI_FamilyHypothesisCode);
-WVOC_N04B_SD_RangeID = LastValue(WCI_CurrentRangeContextID);
-WVOC_N04B_SD_RangeStatus = LastValue(WCI_RangeStatusCode);
-WVOC_N04B_SD_RangePos = LastValue(WCI_RangePosition);
-WVOC_N04B_SD_Provisional = LastValue(WCI_ProvisionalFlag);
+WVOC_N04B_D_Mult = LastValue(WCI_ContextMultiplicityCode);
+WVOC_N04B_D_Dir = LastValue(WCI_DirectionalContextCode);
+WVOC_N04B_D_Evidence = LastValue(WCI_EvidenceBalanceCode);
+WVOC_N04B_D_Phase = LastValue(WCI_PhaseStateCode);
+WVOC_N04B_D_Family = LastValue(WCI_FamilyHypothesisCode);
+WVOC_N04B_D_RangeID = LastValue(WCI_CurrentRangeContextID);
+WVOC_N04B_D_RangeStatus = LastValue(WCI_RangeStatusCode);
+WVOC_N04B_D_RangePos = LastValue(WCI_RangePosition);
+WVOC_N04B_D_Provisional = LastValue(WCI_ProvisionalFlag);
+WVOC_N04B_PivotConfig = LastValue(SL_PivotConfigValid);
 
-// Canonical Runtime v0.2 RS implementation already used by DailyPublisher.
-// It consumes the stock Daily SL/WCI arrays above and central RuntimeConfig.
+// Canonical Runtime v0.2 RS implementation used by DailyPublisher.
+// Execute immediately before any timeframe/foreign context can overwrite
+// stock Daily SL_* / WCI_* arrays.
 GetPerformanceCounter(1);
 #include_once <WyckoffVSA_RelativeStrengthContext_Runtime_v0.2.afl>
-WVOC_N04B_RS_ms = GetPerformanceCounter();
+WVOC_N04B_RSMs = GetPerformanceCounter();
 
 WVOC_N04B_RS_ContextValid = LastValue(WRS_ContextValid);
 WVOC_N04B_RS_Status = LastValue(WRS_ContextStatusCode);
@@ -68,161 +57,6 @@ WVOC_N04B_RS_Structure = LastValue(WRS_StockVsMarketRSStructureCode);
 WVOC_N04B_RS_PriceRelationship = LastValue(WRS_PriceRSRelationshipCode);
 WVOC_N04B_RS_Provisional = LastValue(WRS_CurrentDescriptorProvisional);
 
-// -----------------------------------------------------------------------------
-// 2. STOCK COMPLETED WEEKLY / MONTHLY.
-// -----------------------------------------------------------------------------
-WVOC_N04B_SW_Found = 0;
-WVOC_N04B_SM_Found = 0;
-
-TimeFrameSet(inWeekly);
-GetPerformanceCounter(1);
-#include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
-WVOC_N04B_SW_ms = GetPerformanceCounter();
-WVOC_N04B_SW_DTArr = DateTime();
-WVOC_N04B_SW_OrdArr = Floor(DateTimeDiff(WVOC_N04B_SW_DTArr,WCLK_WeekEpoch)/604800);
-WVOC_N04B_SW_idx = -1;
-for (WVOC_N04B_j=BarCount-1; WVOC_N04B_j>=0; WVOC_N04B_j--)
-{
-    if (WVOC_N04B_SW_idx<0 AND WVOC_N04B_SW_OrdArr[WVOC_N04B_j]==WVOC_N04B_ExpectedW)
-        WVOC_N04B_SW_idx = WVOC_N04B_j;
-}
-WVOC_N04B_SW_Found = WVOC_N04B_SW_idx>=0;
-WVOC_N04B_SW_safe = IIf(WVOC_N04B_SW_Found,WVOC_N04B_SW_idx,0);
-WVOC_N04B_SW_Ord = IIf(WVOC_N04B_SW_Found,WVOC_N04B_SW_OrdArr[WVOC_N04B_SW_safe],Null);
-WVOC_N04B_SW_DT = IIf(WVOC_N04B_SW_Found,WVOC_N04B_SW_DTArr[WVOC_N04B_SW_safe],Null);
-WVOC_N04B_SW_Mult = IIf(WVOC_N04B_SW_Found,WCI_ContextMultiplicityCode[WVOC_N04B_SW_safe],Null);
-WVOC_N04B_SW_Dir = IIf(WVOC_N04B_SW_Found,WCI_DirectionalContextCode[WVOC_N04B_SW_safe],Null);
-WVOC_N04B_SW_Evidence = IIf(WVOC_N04B_SW_Found,WCI_EvidenceBalanceCode[WVOC_N04B_SW_safe],Null);
-WVOC_N04B_SW_Phase = IIf(WVOC_N04B_SW_Found,WCI_PhaseStateCode[WVOC_N04B_SW_safe],Null);
-TimeFrameRestore();
-
-TimeFrameSet(inMonthly);
-GetPerformanceCounter(1);
-#include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
-WVOC_N04B_SM_ms = GetPerformanceCounter();
-WVOC_N04B_SM_DTArr = DateTime();
-WVOC_N04B_SM_OrdArr = Year()*12 + Month();
-WVOC_N04B_SM_idx = -1;
-for (WVOC_N04B_k=BarCount-1; WVOC_N04B_k>=0; WVOC_N04B_k--)
-{
-    if (WVOC_N04B_SM_idx<0 AND WVOC_N04B_SM_OrdArr[WVOC_N04B_k]==WVOC_N04B_ExpectedM)
-        WVOC_N04B_SM_idx = WVOC_N04B_k;
-}
-WVOC_N04B_SM_Found = WVOC_N04B_SM_idx>=0;
-WVOC_N04B_SM_safe = IIf(WVOC_N04B_SM_Found,WVOC_N04B_SM_idx,0);
-WVOC_N04B_SM_Ord = IIf(WVOC_N04B_SM_Found,WVOC_N04B_SM_OrdArr[WVOC_N04B_SM_safe],Null);
-WVOC_N04B_SM_DT = IIf(WVOC_N04B_SM_Found,WVOC_N04B_SM_DTArr[WVOC_N04B_SM_safe],Null);
-WVOC_N04B_SM_Mult = IIf(WVOC_N04B_SM_Found,WCI_ContextMultiplicityCode[WVOC_N04B_SM_safe],Null);
-WVOC_N04B_SM_Dir = IIf(WVOC_N04B_SM_Found,WCI_DirectionalContextCode[WVOC_N04B_SM_safe],Null);
-WVOC_N04B_SM_Evidence = IIf(WVOC_N04B_SM_Found,WCI_EvidenceBalanceCode[WVOC_N04B_SM_safe],Null);
-WVOC_N04B_SM_Phase = IIf(WVOC_N04B_SM_Found,WCI_PhaseStateCode[WVOC_N04B_SM_safe],Null);
-TimeFrameRestore();
-
-WVOC_N04B_S_MTFValid = WVRC_ConfigValid AND WVOC_N04B_SW_Found AND WVOC_N04B_SM_Found;
-WVMTF_Run(
-    "N04BS",
-    WVOC_N04B_S_MTFValid,
-    WVOC_N04B_SD_Mult,WVOC_N04B_SW_Mult,WVOC_N04B_SM_Mult,
-    WVOC_N04B_SD_Dir,WVOC_N04B_SW_Dir,WVOC_N04B_SM_Dir,
-    WVOC_N04B_SD_Evidence,WVOC_N04B_SW_Evidence,WVOC_N04B_SM_Evidence,
-    WVOC_N04B_SD_Phase,WVOC_N04B_SW_Phase,WVOC_N04B_SM_Phase);
-WVOC_N04B_S_MTFDir = VarGet("WVMTF_N04BS_DirectionalAlignment");
-WVOC_N04B_S_MTFEvidence = VarGet("WVMTF_N04BS_EvidenceAlignment");
-WVOC_N04B_S_MTFPhase = VarGet("WVMTF_N04BS_PhaseRelationship");
-WVOC_N04B_S_MTFConflict = VarGet("WVMTF_N04BS_ConflictMask");
-
-// -----------------------------------------------------------------------------
-// 3. VNINDEX D/W/M — same self-contained market path accepted in N04A.
-// -----------------------------------------------------------------------------
-WVOC_N04B_MKT_ForeignOK = SetForeign(WVRC_SelectionMarketSymbol,1,0);
-WVOC_N04B_MD_Found = 0;
-WVOC_N04B_MW_Found = 0;
-WVOC_N04B_MM_Found = 0;
-
-if (WVOC_N04B_MKT_ForeignOK)
-{
-    GetPerformanceCounter(1);
-    #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
-    WVOC_N04B_MD_ms = GetPerformanceCounter();
-    WVOC_N04B_MD_Found = 1;
-    WVOC_N04B_MD_DT = LastValue(DateTime());
-    WVOC_N04B_MD_Mult = LastValue(WCI_ContextMultiplicityCode);
-    WVOC_N04B_MD_Dir = LastValue(WCI_DirectionalContextCode);
-    WVOC_N04B_MD_Evidence = LastValue(WCI_EvidenceBalanceCode);
-    WVOC_N04B_MD_Phase = LastValue(WCI_PhaseStateCode);
-    WVOC_N04B_MD_Hyp = LastValue(WCI_HypothesisAlignmentCode);
-
-    TimeFrameSet(inWeekly);
-    GetPerformanceCounter(1);
-    #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
-    WVOC_N04B_MW_ms = GetPerformanceCounter();
-    WVOC_N04B_MW_DTArr = DateTime();
-    WVOC_N04B_MW_OrdArr = Floor(DateTimeDiff(WVOC_N04B_MW_DTArr,WCLK_WeekEpoch)/604800);
-    WVOC_N04B_MW_idx = -1;
-    for (WVOC_N04B_mj=BarCount-1; WVOC_N04B_mj>=0; WVOC_N04B_mj--)
-    {
-        if (WVOC_N04B_MW_idx<0 AND WVOC_N04B_MW_OrdArr[WVOC_N04B_mj]==WVOC_N04B_ExpectedW)
-            WVOC_N04B_MW_idx = WVOC_N04B_mj;
-    }
-    WVOC_N04B_MW_Found = WVOC_N04B_MW_idx>=0;
-    WVOC_N04B_MW_safe = IIf(WVOC_N04B_MW_Found,WVOC_N04B_MW_idx,0);
-    WVOC_N04B_MW_Ord = IIf(WVOC_N04B_MW_Found,WVOC_N04B_MW_OrdArr[WVOC_N04B_MW_safe],Null);
-    WVOC_N04B_MW_DT = IIf(WVOC_N04B_MW_Found,WVOC_N04B_MW_DTArr[WVOC_N04B_MW_safe],Null);
-    WVOC_N04B_MW_Mult = IIf(WVOC_N04B_MW_Found,WCI_ContextMultiplicityCode[WVOC_N04B_MW_safe],Null);
-    WVOC_N04B_MW_Dir = IIf(WVOC_N04B_MW_Found,WCI_DirectionalContextCode[WVOC_N04B_MW_safe],Null);
-    WVOC_N04B_MW_Evidence = IIf(WVOC_N04B_MW_Found,WCI_EvidenceBalanceCode[WVOC_N04B_MW_safe],Null);
-    WVOC_N04B_MW_Phase = IIf(WVOC_N04B_MW_Found,WCI_PhaseStateCode[WVOC_N04B_MW_safe],Null);
-    TimeFrameRestore();
-
-    TimeFrameSet(inMonthly);
-    GetPerformanceCounter(1);
-    #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
-    WVOC_N04B_MM_ms = GetPerformanceCounter();
-    WVOC_N04B_MM_DTArr = DateTime();
-    WVOC_N04B_MM_OrdArr = Year()*12 + Month();
-    WVOC_N04B_MM_idx = -1;
-    for (WVOC_N04B_mk=BarCount-1; WVOC_N04B_mk>=0; WVOC_N04B_mk--)
-    {
-        if (WVOC_N04B_MM_idx<0 AND WVOC_N04B_MM_OrdArr[WVOC_N04B_mk]==WVOC_N04B_ExpectedM)
-            WVOC_N04B_MM_idx = WVOC_N04B_mk;
-    }
-    WVOC_N04B_MM_Found = WVOC_N04B_MM_idx>=0;
-    WVOC_N04B_MM_safe = IIf(WVOC_N04B_MM_Found,WVOC_N04B_MM_idx,0);
-    WVOC_N04B_MM_Ord = IIf(WVOC_N04B_MM_Found,WVOC_N04B_MM_OrdArr[WVOC_N04B_MM_safe],Null);
-    WVOC_N04B_MM_DT = IIf(WVOC_N04B_MM_Found,WVOC_N04B_MM_DTArr[WVOC_N04B_MM_safe],Null);
-    WVOC_N04B_MM_Mult = IIf(WVOC_N04B_MM_Found,WCI_ContextMultiplicityCode[WVOC_N04B_MM_safe],Null);
-    WVOC_N04B_MM_Dir = IIf(WVOC_N04B_MM_Found,WCI_DirectionalContextCode[WVOC_N04B_MM_safe],Null);
-    WVOC_N04B_MM_Evidence = IIf(WVOC_N04B_MM_Found,WCI_EvidenceBalanceCode[WVOC_N04B_MM_safe],Null);
-    WVOC_N04B_MM_Phase = IIf(WVOC_N04B_MM_Found,WCI_PhaseStateCode[WVOC_N04B_MM_safe],Null);
-    TimeFrameRestore();
-}
-RestorePriceArrays();
-
-WVOC_N04B_M_MTFValid = WVRC_ConfigValid AND WVOC_N04B_MKT_ForeignOK AND
-                        WVOC_N04B_MD_Found AND WVOC_N04B_MW_Found AND WVOC_N04B_MM_Found;
-WVMTF_Run(
-    "N04BM",
-    WVOC_N04B_M_MTFValid,
-    WVOC_N04B_MD_Mult,WVOC_N04B_MW_Mult,WVOC_N04B_MM_Mult,
-    WVOC_N04B_MD_Dir,WVOC_N04B_MW_Dir,WVOC_N04B_MM_Dir,
-    WVOC_N04B_MD_Evidence,WVOC_N04B_MW_Evidence,WVOC_N04B_MM_Evidence,
-    WVOC_N04B_MD_Phase,WVOC_N04B_MW_Phase,WVOC_N04B_MM_Phase);
-WVOC_N04B_M_MTFDir = VarGet("WVMTF_N04BM_DirectionalAlignment");
-WVOC_N04B_M_MTFEvidence = VarGet("WVMTF_N04BM_EvidenceAlignment");
-WVOC_N04B_M_MTFPhase = VarGet("WVMTF_N04BM_PhaseRelationship");
-WVOC_N04B_M_MTFConflict = VarGet("WVMTF_N04BM_ConflictMask");
-
-WVOC_N04B_MarketSelection = WVOC_SelectionContext(
-    WVOC_N04B_M_MTFValid,
-    WVOC_N04B_MD_Mult,
-    WVOC_N04B_MD_Dir,
-    WVOC_N04B_MD_Evidence,
-    WVOC_N04B_MD_Hyp,
-    WVOC_N04B_M_MTFDir);
-
-// -----------------------------------------------------------------------------
-// 4. Exploration.
-// -----------------------------------------------------------------------------
 WVOC_N04B_LastBar = BarIndex()==LastValue(BarIndex());
 Filter = WVOC_N04B_LastBar;
 
@@ -232,21 +66,16 @@ AddColumn(0*BarIndex()+WVRC_ConfigValid,"Config Valid",1.0);
 AddTextColumn(WVRC_RSMarketSymbol,"RS Market");
 AddColumn(0*BarIndex()+WVRC_RSAdjustmentBasisStatus,"RS Adjustment Status",1.0);
 
-AddColumn(0*BarIndex()+WVOC_N04B_SD_Mult,"S D Mult",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_SD_Dir,"S D Dir",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_SD_Evidence,"S D Evidence",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_SD_Phase,"S D Phase",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_SW_Found,"S W Found",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_SW_Ord,"S W Ord",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_SW_Dir,"S W Dir",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_SM_Found,"S M Found",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_SM_Ord,"S M Ord",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_SM_Dir,"S M Dir",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_S_MTFValid,"S MTF Valid",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_S_MTFDir,"S MTF DirAlign",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_S_MTFEvidence,"S MTF EvidenceAlign",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_S_MTFPhase,"S MTF PhaseRel",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_S_MTFConflict,"S MTF Conflict",1.0);
+AddColumn(0*BarIndex()+WVOC_N04B_D_Mult,"D Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N04B_D_Dir,"D Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N04B_D_Evidence,"D Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N04B_D_Phase,"D Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N04B_D_Family,"D Family",1.0);
+AddColumn(0*BarIndex()+WVOC_N04B_D_RangeID,"D Range ID",1.0);
+AddColumn(0*BarIndex()+WVOC_N04B_D_RangeStatus,"D Range Status",1.0);
+AddColumn(0*BarIndex()+WVOC_N04B_D_RangePos,"D Range Position",1.4);
+AddColumn(0*BarIndex()+WVOC_N04B_D_Provisional,"D Provisional",1.0);
+AddColumn(0*BarIndex()+WVOC_N04B_PivotConfig,"Pivot Config Valid",1.0);
 
 AddColumn(0*BarIndex()+WVOC_N04B_RS_ContextValid,"RS Context Valid",1.0);
 AddColumn(0*BarIndex()+WVOC_N04B_RS_Status,"RS Context Status",1.0);
@@ -257,22 +86,6 @@ AddColumn(0*BarIndex()+WVOC_N04B_RS_Structure,"RS Structure",1.0);
 AddColumn(0*BarIndex()+WVOC_N04B_RS_PriceRelationship,"Price RS Relationship",1.0);
 AddColumn(0*BarIndex()+WVOC_N04B_RS_Provisional,"RS Provisional",1.0);
 
-AddColumn(0*BarIndex()+WVOC_N04B_MKT_ForeignOK,"MKT Foreign OK",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_MD_Found,"MKT D Found",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_MW_Found,"MKT W Found",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_MW_Ord,"MKT W Ord",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_MM_Found,"MKT M Found",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_MM_Ord,"MKT M Ord",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_M_MTFValid,"MKT MTF Valid",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_M_MTFDir,"MKT MTF DirAlign",1.0);
-AddColumn(0*BarIndex()+WVOC_N04B_MarketSelection,"Market Selection Context",1.0);
-
-AddColumn(0*BarIndex()+WVOC_N04B_SD_ms,"S D ms",1.3);
-AddColumn(0*BarIndex()+WVOC_N04B_RS_ms,"RS ms",1.3);
-AddColumn(0*BarIndex()+WVOC_N04B_SW_ms,"S W ms",1.3);
-AddColumn(0*BarIndex()+WVOC_N04B_SM_ms,"S M ms",1.3);
-AddColumn(0*BarIndex()+WVOC_N04B_MD_ms,"MKT D ms",1.3);
-AddColumn(0*BarIndex()+WVOC_N04B_MW_ms,"MKT W ms",1.3);
-AddColumn(0*BarIndex()+WVOC_N04B_MM_ms,"MKT M ms",1.3);
-
-AddTextColumn("ONE_CLICK_N04B_RS_INTEGRATION_V01_20260918_A","Probe Version");
+AddColumn(0*BarIndex()+WVOC_N04B_DailyMs,"Daily Body ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N04B_RSMs,"RS Runtime ms",1.3);
+AddTextColumn("ONE_CLICK_N04B_RS_INTEGRATION_V01_20260918_B","Probe Version");
