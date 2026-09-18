@@ -1,0 +1,36 @@
+/*
+    Wyckoff VSA One-Click Batch Launcher v0.1
+    AmiBroker 6.20.01 compatible.
+
+    Presentation/orchestration only.
+    No analytical methodology.
+    No scanner decision logic.
+
+    Expected batch path:
+      E:\\WyckoffVSA\\batch\\WVSA_OneClick_v0.1.abb
+
+    The .ABB file must be created once using AmiBroker's native Batch window
+    after the seven APX projects have been saved.
+*/
+SetBarsRequired(1,0);
+
+WVOC_BL_BatchPath =
+    "E:\\WyckoffVSA\\batch\\WVSA_OneClick_v0.1.abb";
+
+WVOC_BL_Trigger =
+    ParamTrigger("Wyckoff VSA One-Click","RUN BATCH");
+
+WVOC_BL_Result = 0;
+
+if (WVOC_BL_Trigger)
+{
+    WVOC_BL_Result =
+        ShellExecute("runbatch",WVOC_BL_BatchPath,"");
+}
+
+Filter = BarIndex()==LastValue(BarIndex());
+
+AddTextColumn("BATCH LAUNCHER","Mode");
+AddTextColumn(WVOC_BL_BatchPath,"Batch Path");
+AddColumn(0*BarIndex()+WVOC_BL_Result,"ShellExecute Result",1.0);
+AddTextColumn("ONE_CLICK_BATCH_LAUNCHER_V01_20260918_A","Version");
