@@ -1,0 +1,302 @@
+/*
+    Wyckoff VSA One-Click N04A Stock + VNINDEX D/W/M + MTF Probe v0.1
+
+    Purpose:
+    - one Daily AFL, one stock thread;
+    - calculate stock D/W/M contexts directly;
+    - switch to VNINDEX with SetForeign and calculate VNINDEX D/W/M directly;
+    - derive stock and market MTF relationships with the re-entrant kernel;
+    - derive current Market Selection Context without any publisher/snapshot.
+
+    No RS in this gate. RS is isolated to N04B so failures are attributable.
+
+    Control:
+    Apply to = SNZ only
+    Periodicity = Daily
+    Range = 1 Recent Bar
+    1.3 last bar provisional = No
+*/
+#pragma nocache
+SetBarsRequired(sbrAll,sbrAll);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+#include_once <WyckoffVSA_OneClickContextHelpers_Generated_v0.1.afl>
+#include_once <WyckoffVSA_MTFRelationKernel_v0.1.afl>
+#include_once <WyckoffVSA_ScannerDecisionKernel_v0.1.afl>
+
+WVOC_N04_AsOfDT = WCLK_AsOfDateTime;
+WVOC_N04_ExpectedW = WCLK_ExpectedCompletedWeeklyOrdinal;
+WVOC_N04_ExpectedM = WCLK_ExpectedCompletedMonthlyOrdinal;
+
+// ---------------- STOCK D/W/M ----------------
+WVOC_N04_S_D_Found = 0;
+WVOC_N04_S_W_Found = 0;
+WVOC_N04_S_M_Found = 0;
+
+for (WVOC_N04_ctx = 0; WVOC_N04_ctx < 3; WVOC_N04_ctx++)
+{
+    if (WVOC_N04_ctx == 1) TimeFrameSet(inWeekly);
+    if (WVOC_N04_ctx == 2) TimeFrameSet(inMonthly);
+
+    GetPerformanceCounter(1);
+    #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
+    WVOC_N04_elapsed = GetPerformanceCounter();
+
+    if (WVOC_N04_ctx == 0)
+    {
+        WVOC_N04_S_D_Found = 1;
+        WVOC_N04_S_D_DT = LastValue(DateTime());
+        WVOC_N04_S_D_Mult = LastValue(WCI_ContextMultiplicityCode);
+        WVOC_N04_S_D_Dir = LastValue(WCI_DirectionalContextCode);
+        WVOC_N04_S_D_Evidence = LastValue(WCI_EvidenceBalanceCode);
+        WVOC_N04_S_D_Phase = LastValue(WCI_PhaseStateCode);
+        WVOC_N04_S_D_Hyp = LastValue(WCI_HypothesisAlignmentCode);
+        WVOC_N04_S_D_Structural = LastValue(WCI_StructuralDevelopmentCode);
+        WVOC_N04_S_D_Family = LastValue(WCI_FamilyHypothesisCode);
+        WVOC_N04_S_D_RangeID = LastValue(WCI_CurrentRangeContextID);
+        WVOC_N04_S_D_RangePos = LastValue(WCI_RangePosition);
+        WVOC_N04_S_D_ms = WVOC_N04_elapsed;
+    }
+
+    if (WVOC_N04_ctx == 1)
+    {
+        WVOC_N04_W_DTArr = DateTime();
+        WVOC_N04_W_OrdArr = Floor(DateTimeDiff(WVOC_N04_W_DTArr,WCLK_WeekEpoch)/604800);
+        WVOC_N04_W_idx = -1;
+        for (WVOC_N04_j=BarCount-1; WVOC_N04_j>=0; WVOC_N04_j--)
+        {
+            if (WVOC_N04_W_idx<0 AND WVOC_N04_W_OrdArr[WVOC_N04_j]==WVOC_N04_ExpectedW)
+                WVOC_N04_W_idx = WVOC_N04_j;
+        }
+        WVOC_N04_S_W_Found = WVOC_N04_W_idx>=0;
+        WVOC_N04_W_safe = IIf(WVOC_N04_S_W_Found,WVOC_N04_W_idx,0);
+        WVOC_N04_S_W_Ord = IIf(WVOC_N04_S_W_Found,WVOC_N04_W_OrdArr[WVOC_N04_W_safe],Null);
+        WVOC_N04_S_W_DT = IIf(WVOC_N04_S_W_Found,WVOC_N04_W_DTArr[WVOC_N04_W_safe],Null);
+        WVOC_N04_S_W_Mult = IIf(WVOC_N04_S_W_Found,WCI_ContextMultiplicityCode[WVOC_N04_W_safe],Null);
+        WVOC_N04_S_W_Dir = IIf(WVOC_N04_S_W_Found,WCI_DirectionalContextCode[WVOC_N04_W_safe],Null);
+        WVOC_N04_S_W_Evidence = IIf(WVOC_N04_S_W_Found,WCI_EvidenceBalanceCode[WVOC_N04_W_safe],Null);
+        WVOC_N04_S_W_Phase = IIf(WVOC_N04_S_W_Found,WCI_PhaseStateCode[WVOC_N04_W_safe],Null);
+        WVOC_N04_S_W_ms = WVOC_N04_elapsed;
+    }
+
+    if (WVOC_N04_ctx == 2)
+    {
+        WVOC_N04_M_DTArr = DateTime();
+        WVOC_N04_M_OrdArr = Year()*12 + Month();
+        WVOC_N04_M_idx = -1;
+        for (WVOC_N04_k=BarCount-1; WVOC_N04_k>=0; WVOC_N04_k--)
+        {
+            if (WVOC_N04_M_idx<0 AND WVOC_N04_M_OrdArr[WVOC_N04_k]==WVOC_N04_ExpectedM)
+                WVOC_N04_M_idx = WVOC_N04_k;
+        }
+        WVOC_N04_S_M_Found = WVOC_N04_M_idx>=0;
+        WVOC_N04_M_safe = IIf(WVOC_N04_S_M_Found,WVOC_N04_M_idx,0);
+        WVOC_N04_S_M_Ord = IIf(WVOC_N04_S_M_Found,WVOC_N04_M_OrdArr[WVOC_N04_M_safe],Null);
+        WVOC_N04_S_M_DT = IIf(WVOC_N04_S_M_Found,WVOC_N04_M_DTArr[WVOC_N04_M_safe],Null);
+        WVOC_N04_S_M_Mult = IIf(WVOC_N04_S_M_Found,WCI_ContextMultiplicityCode[WVOC_N04_M_safe],Null);
+        WVOC_N04_S_M_Dir = IIf(WVOC_N04_S_M_Found,WCI_DirectionalContextCode[WVOC_N04_M_safe],Null);
+        WVOC_N04_S_M_Evidence = IIf(WVOC_N04_S_M_Found,WCI_EvidenceBalanceCode[WVOC_N04_M_safe],Null);
+        WVOC_N04_S_M_Phase = IIf(WVOC_N04_S_M_Found,WCI_PhaseStateCode[WVOC_N04_M_safe],Null);
+        WVOC_N04_S_M_ms = WVOC_N04_elapsed;
+    }
+
+    if (WVOC_N04_ctx > 0) TimeFrameRestore();
+}
+
+WVOC_N04_S_MTFValid = WVRC_ConfigValid AND WVOC_N04_S_D_Found AND WVOC_N04_S_W_Found AND WVOC_N04_S_M_Found;
+WVMTF_Run(
+    "N04S",
+    WVOC_N04_S_MTFValid,
+    WVOC_N04_S_D_Mult,WVOC_N04_S_W_Mult,WVOC_N04_S_M_Mult,
+    WVOC_N04_S_D_Dir,WVOC_N04_S_W_Dir,WVOC_N04_S_M_Dir,
+    WVOC_N04_S_D_Evidence,WVOC_N04_S_W_Evidence,WVOC_N04_S_M_Evidence,
+    WVOC_N04_S_D_Phase,WVOC_N04_S_W_Phase,WVOC_N04_S_M_Phase);
+
+WVOC_N04_S_MTFDir = VarGet("WVMTF_N04S_DirectionalAlignment");
+WVOC_N04_S_MTFEvidence = VarGet("WVMTF_N04S_EvidenceAlignment");
+WVOC_N04_S_MTFPhase = VarGet("WVMTF_N04S_PhaseRelationship");
+WVOC_N04_S_MTFConflict = VarGet("WVMTF_N04S_ConflictMask");
+
+// ---------------- VNINDEX D/W/M ----------------
+WVOC_N04_MKT_ForeignOK = SetForeign("VNINDEX",1,0);
+WVOC_N04_MKT_D_Found = 0;
+WVOC_N04_MKT_W_Found = 0;
+WVOC_N04_MKT_M_Found = 0;
+
+if (WVOC_N04_MKT_ForeignOK)
+{
+    for (WVOC_N04_mctx = 0; WVOC_N04_mctx < 3; WVOC_N04_mctx++)
+    {
+        if (WVOC_N04_mctx == 1) TimeFrameSet(inWeekly);
+        if (WVOC_N04_mctx == 2) TimeFrameSet(inMonthly);
+
+        GetPerformanceCounter(1);
+        #include <WyckoffVSA_OneClickContextBody_Generated_v0.1.afl>
+        WVOC_N04_melapsed = GetPerformanceCounter();
+
+        if (WVOC_N04_mctx == 0)
+        {
+            WVOC_N04_MKT_D_Found = 1;
+            WVOC_N04_MKT_D_DT = LastValue(DateTime());
+            WVOC_N04_MKT_D_Mult = LastValue(WCI_ContextMultiplicityCode);
+            WVOC_N04_MKT_D_Dir = LastValue(WCI_DirectionalContextCode);
+            WVOC_N04_MKT_D_Evidence = LastValue(WCI_EvidenceBalanceCode);
+            WVOC_N04_MKT_D_Phase = LastValue(WCI_PhaseStateCode);
+            WVOC_N04_MKT_D_Hyp = LastValue(WCI_HypothesisAlignmentCode);
+            WVOC_N04_MKT_D_Structural = LastValue(WCI_StructuralDevelopmentCode);
+            WVOC_N04_MKT_D_Family = LastValue(WCI_FamilyHypothesisCode);
+            WVOC_N04_MKT_D_RangeID = LastValue(WCI_CurrentRangeContextID);
+            WVOC_N04_MKT_D_RangePos = LastValue(WCI_RangePosition);
+            WVOC_N04_MKT_D_ms = WVOC_N04_melapsed;
+        }
+
+        if (WVOC_N04_mctx == 1)
+        {
+            WVOC_N04_MW_DTArr = DateTime();
+            WVOC_N04_MW_OrdArr = Floor(DateTimeDiff(WVOC_N04_MW_DTArr,WCLK_WeekEpoch)/604800);
+            WVOC_N04_MW_idx = -1;
+            for (WVOC_N04_mj=BarCount-1; WVOC_N04_mj>=0; WVOC_N04_mj--)
+            {
+                if (WVOC_N04_MW_idx<0 AND WVOC_N04_MW_OrdArr[WVOC_N04_mj]==WVOC_N04_ExpectedW)
+                    WVOC_N04_MW_idx = WVOC_N04_mj;
+            }
+            WVOC_N04_MKT_W_Found = WVOC_N04_MW_idx>=0;
+            WVOC_N04_MW_safe = IIf(WVOC_N04_MKT_W_Found,WVOC_N04_MW_idx,0);
+            WVOC_N04_MKT_W_Ord = IIf(WVOC_N04_MKT_W_Found,WVOC_N04_MW_OrdArr[WVOC_N04_MW_safe],Null);
+            WVOC_N04_MKT_W_DT = IIf(WVOC_N04_MKT_W_Found,WVOC_N04_MW_DTArr[WVOC_N04_MW_safe],Null);
+            WVOC_N04_MKT_W_Mult = IIf(WVOC_N04_MKT_W_Found,WCI_ContextMultiplicityCode[WVOC_N04_MW_safe],Null);
+            WVOC_N04_MKT_W_Dir = IIf(WVOC_N04_MKT_W_Found,WCI_DirectionalContextCode[WVOC_N04_MW_safe],Null);
+            WVOC_N04_MKT_W_Evidence = IIf(WVOC_N04_MKT_W_Found,WCI_EvidenceBalanceCode[WVOC_N04_MW_safe],Null);
+            WVOC_N04_MKT_W_Phase = IIf(WVOC_N04_MKT_W_Found,WCI_PhaseStateCode[WVOC_N04_MW_safe],Null);
+            WVOC_N04_MKT_W_ms = WVOC_N04_melapsed;
+        }
+
+        if (WVOC_N04_mctx == 2)
+        {
+            WVOC_N04_MM_DTArr = DateTime();
+            WVOC_N04_MM_OrdArr = Year()*12 + Month();
+            WVOC_N04_MM_idx = -1;
+            for (WVOC_N04_mk=BarCount-1; WVOC_N04_mk>=0; WVOC_N04_mk--)
+            {
+                if (WVOC_N04_MM_idx<0 AND WVOC_N04_MM_OrdArr[WVOC_N04_mk]==WVOC_N04_ExpectedM)
+                    WVOC_N04_MM_idx = WVOC_N04_mk;
+            }
+            WVOC_N04_MKT_M_Found = WVOC_N04_MM_idx>=0;
+            WVOC_N04_MM_safe = IIf(WVOC_N04_MKT_M_Found,WVOC_N04_MM_idx,0);
+            WVOC_N04_MKT_M_Ord = IIf(WVOC_N04_MKT_M_Found,WVOC_N04_MM_OrdArr[WVOC_N04_MM_safe],Null);
+            WVOC_N04_MKT_M_DT = IIf(WVOC_N04_MKT_M_Found,WVOC_N04_MM_DTArr[WVOC_N04_MM_safe],Null);
+            WVOC_N04_MKT_M_Mult = IIf(WVOC_N04_MKT_M_Found,WCI_ContextMultiplicityCode[WVOC_N04_MM_safe],Null);
+            WVOC_N04_MKT_M_Dir = IIf(WVOC_N04_MKT_M_Found,WCI_DirectionalContextCode[WVOC_N04_MM_safe],Null);
+            WVOC_N04_MKT_M_Evidence = IIf(WVOC_N04_MKT_M_Found,WCI_EvidenceBalanceCode[WVOC_N04_MM_safe],Null);
+            WVOC_N04_MKT_M_Phase = IIf(WVOC_N04_MKT_M_Found,WCI_PhaseStateCode[WVOC_N04_MM_safe],Null);
+            WVOC_N04_MKT_M_ms = WVOC_N04_melapsed;
+        }
+
+        if (WVOC_N04_mctx > 0) TimeFrameRestore();
+    }
+}
+
+RestorePriceArrays();
+
+WVOC_N04_MKT_MTFValid = WVRC_ConfigValid AND WVOC_N04_MKT_ForeignOK AND
+                         WVOC_N04_MKT_D_Found AND WVOC_N04_MKT_W_Found AND WVOC_N04_MKT_M_Found;
+
+WVMTF_Run(
+    "N04M",
+    WVOC_N04_MKT_MTFValid,
+    WVOC_N04_MKT_D_Mult,WVOC_N04_MKT_W_Mult,WVOC_N04_MKT_M_Mult,
+    WVOC_N04_MKT_D_Dir,WVOC_N04_MKT_W_Dir,WVOC_N04_MKT_M_Dir,
+    WVOC_N04_MKT_D_Evidence,WVOC_N04_MKT_W_Evidence,WVOC_N04_MKT_M_Evidence,
+    WVOC_N04_MKT_D_Phase,WVOC_N04_MKT_W_Phase,WVOC_N04_MKT_M_Phase);
+
+WVOC_N04_MKT_MTFDir = VarGet("WVMTF_N04M_DirectionalAlignment");
+WVOC_N04_MKT_MTFEvidence = VarGet("WVMTF_N04M_EvidenceAlignment");
+WVOC_N04_MKT_MTFPhase = VarGet("WVMTF_N04M_PhaseRelationship");
+WVOC_N04_MKT_MTFConflict = VarGet("WVMTF_N04M_ConflictMask");
+
+WVOC_N04_MarketSelection = WVOC_SelectionContext(
+    WVOC_N04_MKT_MTFValid,
+    WVOC_N04_MKT_D_Mult,
+    WVOC_N04_MKT_D_Dir,
+    WVOC_N04_MKT_D_Evidence,
+    WVOC_N04_MKT_D_Hyp,
+    WVOC_N04_MKT_MTFDir);
+
+WVOC_N04_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = WVOC_N04_LastBar;
+
+AddTextColumn(Name(),"Symbol");
+AddColumn(DateTime(),"As-Of",formatDateTime);
+AddColumn(0*BarIndex()+WVRC_ConfigValid,"Config Valid",1.0);
+
+// Stock provenance + MTF
+AddColumn(0*BarIndex()+WVOC_N04_S_D_Found,"S D Found",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_D_DT,"S D DT",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N04_S_W_Found,"S W Found",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_W_Ord,"S W Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_W_DT,"S W DT",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N04_S_M_Found,"S M Found",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_M_Ord,"S M Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_M_DT,"S M DT",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N04_S_D_Mult,"S D Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_W_Mult,"S W Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_M_Mult,"S M Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_D_Dir,"S D Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_W_Dir,"S W Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_M_Dir,"S M Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_D_Evidence,"S D Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_W_Evidence,"S W Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_M_Evidence,"S M Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_D_Phase,"S D Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_W_Phase,"S W Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_M_Phase,"S M Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_MTFValid,"S MTF Valid",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_MTFDir,"S MTF DirAlign",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_MTFEvidence,"S MTF EvidenceAlign",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_MTFPhase,"S MTF PhaseRel",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_S_MTFConflict,"S MTF Conflict",1.0);
+
+// Market provenance + current context + MTF
+AddColumn(0*BarIndex()+WVOC_N04_MKT_ForeignOK,"MKT Foreign OK",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_Found,"MKT D Found",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_DT,"MKT D DT",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_W_Found,"MKT W Found",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_W_Ord,"MKT W Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_W_DT,"MKT W DT",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_M_Found,"MKT M Found",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_M_Ord,"MKT M Ord",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_M_DT,"MKT M DT",formatDateTime);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_Mult,"MKT D Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_W_Mult,"MKT W Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_M_Mult,"MKT M Mult",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_Dir,"MKT D Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_W_Dir,"MKT W Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_M_Dir,"MKT M Dir",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_Evidence,"MKT D Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_W_Evidence,"MKT W Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_M_Evidence,"MKT M Evidence",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_Phase,"MKT D Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_W_Phase,"MKT W Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_M_Phase,"MKT M Phase",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_Hyp,"MKT D HypAlign",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_Structural,"MKT D Structural",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_Family,"MKT D Family",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_RangeID,"MKT D RangeID",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_RangePos,"MKT D RangePos",1.4);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_MTFValid,"MKT MTF Valid",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_MTFDir,"MKT MTF DirAlign",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_MTFEvidence,"MKT MTF EvidenceAlign",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_MTFPhase,"MKT MTF PhaseRel",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_MTFConflict,"MKT MTF Conflict",1.0);
+AddColumn(0*BarIndex()+WVOC_N04_MarketSelection,"Market Selection Context",1.0);
+
+// Performance diagnostics
+AddColumn(0*BarIndex()+WVOC_N04_S_D_ms,"S D ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N04_S_W_ms,"S W ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N04_S_M_ms,"S M ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_D_ms,"MKT D ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_W_ms,"MKT W ms",1.3);
+AddColumn(0*BarIndex()+WVOC_N04_MKT_M_ms,"MKT M ms",1.3);
+
+AddTextColumn("ONE_CLICK_N04A_STOCK_MARKET_MTF_V01_20260918_A","Probe Version");
