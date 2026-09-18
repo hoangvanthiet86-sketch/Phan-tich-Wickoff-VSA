@@ -1,0 +1,85 @@
+/*
+    Wyckoff VSA Re-entrant MTF Relation Kernel v0.1
+
+    Pure categorical relationship kernel.
+    No StaticVar reads/writes.
+    No timeframe switching.
+    No methodology change.
+
+    Results are written to dynamic normal-variable names:
+      WVMTF_<channel>_ContractValid
+      WVMTF_<channel>_DirectionalAlignment
+      WVMTF_<channel>_EvidenceAlignment
+      WVMTF_<channel>_PhaseRelationship
+      WVMTF_<channel>_ConflictMask
+*/
+
+function WVMTF_Run(
+    channel,
+    contractValid,
+    dMult,wMult,mMult,
+    dDir,wDir,mDir,
+    dEvidence,wEvidence,mEvidence,
+    dPhase,wPhase,mPhase )
+{
+    local pfx,anyMultiplicityAmbiguous,anyDirectionalMixed;
+    local wmDirectional,wmSameDirectional,wmOppositeDirectional,dDirectional;
+    local directionalAlignment,evidenceAlignment,phaseRelationship,conflictMask;
+
+    pfx = "WVMTF_"+channel+"_";
+
+    anyMultiplicityAmbiguous = dMult==2 OR wMult==2 OR mMult==2;
+    anyDirectionalMixed = dDir==4 OR wDir==4 OR mDir==4;
+    wmDirectional = (wDir==2 OR wDir==3) AND (mDir==2 OR mDir==3);
+    wmSameDirectional = wmDirectional AND wDir==mDir;
+    wmOppositeDirectional = wmDirectional AND wDir!=mDir;
+    dDirectional = dDir==2 OR dDir==3;
+
+    directionalAlignment = IIf(
+        NOT contractValid,0,
+        IIf(anyMultiplicityAmbiguous OR anyDirectionalMixed,6,
+        IIf(wmOppositeDirectional,5,
+        IIf(wmSameDirectional AND dDirectional AND dDir!=wDir,4,
+        IIf(dDir==2 AND wDir==2 AND mDir==2,2,
+        IIf(dDir==3 AND wDir==3 AND mDir==3,3,
+        IIf(dDir==0 OR wDir==0 OR mDir==0,0,
+        IIf(dDir==1 OR wDir==1 OR mDir==1,1,6))))))));
+
+    evidenceAlignment = IIf(
+        NOT contractValid,0,
+        IIf(dEvidence==0 OR wEvidence==0 OR mEvidence==0,0,
+        IIf(dEvidence==3 OR wEvidence==3 OR mEvidence==3,5,
+        IIf(wEvidence!=mEvidence,4,
+        IIf(dEvidence!=wEvidence,3,
+        IIf(dEvidence==1 AND wEvidence==1 AND mEvidence==1,1,
+        IIf(dEvidence==2 AND wEvidence==2 AND mEvidence==2,2,5)))))));
+
+    phaseRelationship = IIf(
+        NOT contractValid,0,
+        IIf(anyMultiplicityAmbiguous,5,
+        IIf(dPhase==0 OR wPhase==0 OR mPhase==0,0,
+        IIf(dPhase==wPhase AND dPhase==mPhase,1,
+        IIf(dPhase==7 OR wPhase==7 OR mPhase==7,4,
+        IIf(dPhase<wPhase AND dPhase<mPhase,2,
+        IIf(dPhase>wPhase AND dPhase>mPhase,3,4)))))));
+
+    conflictMask =
+          IIf(NOT contractValid,1,0)
+        + IIf(contractValid AND directionalAlignment==1,2,0)
+        + IIf(contractValid AND (anyMultiplicityAmbiguous OR anyDirectionalMixed),4,0)
+        + IIf(directionalAlignment==5,8,0)
+        + IIf(directionalAlignment==4,16,0)
+        + IIf(directionalAlignment==6 AND NOT (anyMultiplicityAmbiguous OR anyDirectionalMixed),32,0)
+        + IIf(evidenceAlignment==4,64,0)
+        + IIf(evidenceAlignment==3,128,0)
+        + IIf(evidenceAlignment==5,256,0)
+        + IIf(phaseRelationship==4,512,0)
+        + IIf(phaseRelationship==5,1024,0);
+
+    VarSet(pfx+"ContractValid",IIf(contractValid,1,0));
+    VarSet(pfx+"DirectionalAlignment",directionalAlignment);
+    VarSet(pfx+"EvidenceAlignment",evidenceAlignment);
+    VarSet(pfx+"PhaseRelationship",phaseRelationship);
+    VarSet(pfx+"ConflictMask",conflictMask);
+    return 1;
+}
