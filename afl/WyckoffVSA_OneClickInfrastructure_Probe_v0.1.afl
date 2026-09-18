@@ -34,16 +34,14 @@ WVOC_TC = WVMTF_Run("TEST_C",1,1,1,1,2,2,3,1,1,2,5,5,5);
 WVOC_C_Dir = VarGet("WVMTF_TEST_C_DirectionalAlignment");
 WVOC_C_Evidence = VarGet("WVMTF_TEST_C_EvidenceAlignment");
 WVOC_C_Conflict = VarGet("WVMTF_TEST_C_ConflictMask");
-WVOC_C_Pass = WVOC_C_Dir==5 AND WVOC_C_Evidence==4 AND
-    BitAnd(WVOC_C_Conflict,8)==8 AND BitAnd(WVOC_C_Conflict,64)==64;
+WVOC_C_Pass = WVOC_C_Dir==5 AND WVOC_C_Evidence==4 AND WVOC_C_Conflict==72;
 
 // Case D: multiple context ambiguity.
 WVOC_TD = WVMTF_Run("TEST_D",1,2,1,1,2,2,2,1,1,1,5,5,5);
 WVOC_D_Dir = VarGet("WVMTF_TEST_D_DirectionalAlignment");
 WVOC_D_Phase = VarGet("WVMTF_TEST_D_PhaseRelationship");
 WVOC_D_Conflict = VarGet("WVMTF_TEST_D_ConflictMask");
-WVOC_D_Pass = WVOC_D_Dir==6 AND WVOC_D_Phase==5 AND
-    BitAnd(WVOC_D_Conflict,4)==4 AND BitAnd(WVOC_D_Conflict,1024)==1024;
+WVOC_D_Pass = WVOC_D_Dir==6 AND WVOC_D_Phase==5 AND WVOC_D_Conflict==1028;
 
 WVOC_AllPass = WVOC_A_Pass AND WVOC_B_Pass AND WVOC_C_Pass AND WVOC_D_Pass;
 
