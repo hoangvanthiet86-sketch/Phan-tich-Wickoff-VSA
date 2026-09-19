@@ -1,0 +1,374 @@
+/*
+    Wyckoff VSA Adaptive One-Click Controller v0.1
+    AmiBroker 6.20.01 compatible.
+
+    PURPOSE
+    -------
+    Lightweight orchestration only. It does NOT execute the heavy Wyckoff/VSA
+    analytical stack.
+
+    The controller chooses the shortest valid batch from persisted completion
+    markers and the visible-data operational clock:
+
+      1 FAST_ONLY
+      2 DAILY_REFRESH
+      3 WEEKLY_REFRESH
+      4 MONTHLY_REFRESH
+      5 FULL_RECOVERY
+
+    The batch itself remains the native AmiBroker Batch processor. A separate
+    lightweight commit-marker APX must be the LAST project in each adaptive
+    batch so completion markers are written only after preceding batch steps
+    have completed.
+
+    Bar Replay safety:
+    - route selection uses WCLK visible-data as-of;
+    - a future/current-live marker never matches an older replay as-of;
+    - stale Weekly/Monthly ordinals force the appropriate refresh;
+    - same-day stale Daily/Selection markers force Daily refresh.
+
+    IMPORTANT:
+    - run this controller from the same database used by the APX projects;
+    - VN STOCKS ONLY and WVSA ONECLICK MARKET watchlists are canonical;
+    - batch paths below are fixed for v0.1.
+*/
+#pragma nocache
+SetBarsRequired(1,0);
+SetOption("StaticVarAutoSave",60);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+
+// Use the market benchmark's visible quotation stream as the controller clock.
+WVCTRL_MarketSymbol = WVRC_SelectionMarketSymbol;
+if (StrLen(WVCTRL_MarketSymbol)==0)
+    WVCTRL_MarketSymbol = WVRC_RSMarketSymbol;
+if (StrLen(WVCTRL_MarketSymbol)==0)
+    WVCTRL_MarketSymbol = "VNINDEX";
+
+WVCTRL_ForeignOK = SetForeign(WVCTRL_MarketSymbol,1,0);
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+RestorePriceArrays();
+
+// Re-use the exact analytical configuration fingerprint used by Daily Snapshot.
+#include_once <WyckoffVSA_DailySnapshotContract_v0.2.afl>
+
+WVCTRL_StatePrefix = "WVSA_AOC_v01_";
+WVCTRL_StateSchemaMajor = 1;
+WVCTRL_StateSchemaMinor = 0;
+WVCTRL_UniverseName = "VN STOCKS ONLY";
+
+WVCTRL_WLIndex = CategoryFind(WVCTRL_UniverseName,categoryWatchlist);
+WVCTRL_UniverseList = "";
+WVCTRL_UniverseCount = 0;
+if (WVCTRL_WLIndex>=0)
+{
+    WVCTRL_UniverseList =
+        CategoryGetSymbols(categoryWatchlist,WVCTRL_WLIndex);
+    WVCTRL_UniverseCount =
+        IIf(WVCTRL_UniverseList=="",0,StrCount(WVCTRL_UniverseList,",")+1);
+}
+
+WVCTRL_ClockValid =
+    WVCTRL_ForeignOK AND
+    WCLK_ClockValid AND
+    WVCTRL_WLIndex>=0 AND
+    WVCTRL_UniverseCount>0;
+
+WVCTRL_AsOfDateNum = WCLK_AsOfBusinessDateKey;
+WVCTRL_AsOfDateTime = WCLK_AsOfDateTime;
+WVCTRL_ExpectedW = WCLK_ExpectedCompletedWeeklyOrdinal;
+WVCTRL_ExpectedM = WCLK_ExpectedCompletedMonthlyOrdinal;
+WVCTRL_ConfigFingerprint = WDS_ConfigFingerprint;
+
+// -----------------------------------------------------------------------------
+// BOOTSTRAP VALIDATION
+// Used once after the already-verified FULL_RECOVERY baseline.
+// This avoids re-running the expensive full chain just to initialize markers.
+// -----------------------------------------------------------------------------
+WVCTRL_MWPrefix = "WVSA_MTF_v01_" + WVCTRL_MarketSymbol + "_W_";
+WVCTRL_MMPrefix = "WVSA_MTF_v01_" + WVCTRL_MarketSymbol + "_M_";
+WVCTRL_SelPrefix = "WVSA_SELCTX_v01_" + WVCTRL_MarketSymbol + "_";
+
+WVCTRL_MarketWValid =
+    Nz(StaticVarGet(WVCTRL_MWPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(WVCTRL_MWPrefix+"CommittedGenerationID"),0)>0 AND
+    Nz(StaticVarGet(WVCTRL_MWPrefix+"SchemaMajor"),-1)==1 AND
+    Nz(StaticVarGet(WVCTRL_MWPrefix+"SchemaMinor"),-1)==1 AND
+    StaticVarGetText(WVCTRL_MWPrefix+"Symbol")==WVCTRL_MarketSymbol AND
+    StaticVarGetText(WVCTRL_MWPrefix+"TimeframeCode")=="W" AND
+    StaticVarGetText(WVCTRL_MWPrefix+"ProducerCompositeVersion")=="0.1.1" AND
+    StaticVarGetText(WVCTRL_MWPrefix+"ProducerContractVersion")=="0.1.1" AND
+    StaticVarGet(WVCTRL_MWPrefix+"SourcePeriodOrdinal")==WVCTRL_ExpectedW AND
+    Nz(StaticVarGet(WVCTRL_MWPrefix+"ProvisionalFlag"),1)==0 AND
+    StaticVarGet(WVCTRL_MWPrefix+"ClockBasisCode")==WCLK_ClockBasisCode;
+
+WVCTRL_MarketMValid =
+    Nz(StaticVarGet(WVCTRL_MMPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(WVCTRL_MMPrefix+"CommittedGenerationID"),0)>0 AND
+    Nz(StaticVarGet(WVCTRL_MMPrefix+"SchemaMajor"),-1)==1 AND
+    Nz(StaticVarGet(WVCTRL_MMPrefix+"SchemaMinor"),-1)==1 AND
+    StaticVarGetText(WVCTRL_MMPrefix+"Symbol")==WVCTRL_MarketSymbol AND
+    StaticVarGetText(WVCTRL_MMPrefix+"TimeframeCode")=="M" AND
+    StaticVarGetText(WVCTRL_MMPrefix+"ProducerCompositeVersion")=="0.1.1" AND
+    StaticVarGetText(WVCTRL_MMPrefix+"ProducerContractVersion")=="0.1.1" AND
+    StaticVarGet(WVCTRL_MMPrefix+"SourcePeriodOrdinal")==WVCTRL_ExpectedM AND
+    Nz(StaticVarGet(WVCTRL_MMPrefix+"ProvisionalFlag"),1)==0 AND
+    StaticVarGet(WVCTRL_MMPrefix+"ClockBasisCode")==WCLK_ClockBasisCode;
+
+WVCTRL_SelectionValid =
+    Nz(StaticVarGet(WVCTRL_SelPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(WVCTRL_SelPrefix+"CommittedGenerationID"),0)>0 AND
+    Nz(StaticVarGet(WVCTRL_SelPrefix+"SchemaMajor"),-1)==1 AND
+    Nz(StaticVarGet(WVCTRL_SelPrefix+"SchemaMinor"),-1)==0 AND
+    StaticVarGetText(WVCTRL_SelPrefix+"SourceSymbol")==WVCTRL_MarketSymbol AND
+    StaticVarGet(WVCTRL_SelPrefix+"SourceInterval")==inDaily AND
+    StaticVarGet(WVCTRL_SelPrefix+"SourceBusinessDateKey")==WVCTRL_AsOfDateNum AND
+    Nz(StaticVarGet(WVCTRL_SelPrefix+"CompositePayloadValid"),0)==1 AND
+    Nz(StaticVarGet(WVCTRL_SelPrefix+"MTFPayloadValid"),0)==1 AND
+    Nz(StaticVarGet(WVCTRL_SelPrefix+"ProvisionalFlag"),1)==0 AND
+    StaticVarGet(WVCTRL_SelPrefix+"ClockBasisCode")==WCLK_ClockBasisCode;
+
+// Validate current Daily snapshots for the complete production watchlist.
+// This is static-variable metadata only; it does not run analytical modules.
+WVCTRL_DailyFreshCount = 0;
+WVCTRL_DailyCheckedCount = 0;
+for (WVCTRL_i=0;
+     (WVCTRL_sym=StrExtract(WVCTRL_UniverseList,WVCTRL_i))!="";
+     WVCTRL_i++)
+{
+    WVCTRL_DPrefix = "WVSA_DAILY_v02_" + WVCTRL_sym + "_";
+    WVCTRL_DailyCheckedCount++;
+
+    WVCTRL_DGenA =
+        Nz(StaticVarGet(WVCTRL_DPrefix+"CommittedGenerationID"),0);
+    WVCTRL_DReady =
+        Nz(StaticVarGet(WVCTRL_DPrefix+"Ready"),0);
+    WVCTRL_DWriteComplete =
+        Nz(StaticVarGet(WVCTRL_DPrefix+"WriteComplete"),0);
+    WVCTRL_DSchemaMajor =
+        Nz(StaticVarGet(WVCTRL_DPrefix+"SchemaMajor"),-1);
+    WVCTRL_DSchemaMinor =
+        Nz(StaticVarGet(WVCTRL_DPrefix+"SchemaMinor"),-1);
+    WVCTRL_DBusinessDate =
+        StaticVarGet(WVCTRL_DPrefix+"BusinessDateKey");
+    WVCTRL_DSymbol =
+        StaticVarGetText(WVCTRL_DPrefix+"Symbol");
+    WVCTRL_DFingerprint =
+        StaticVarGetText(WVCTRL_DPrefix+"ConfigFingerprint");
+    WVCTRL_DGenB =
+        Nz(StaticVarGet(WVCTRL_DPrefix+"CommittedGenerationID"),0);
+
+    WVCTRL_DValid =
+        WVCTRL_DReady==1 AND
+        WVCTRL_DWriteComplete==1 AND
+        WVCTRL_DGenA>0 AND
+        WVCTRL_DGenA==WVCTRL_DGenB AND
+        WVCTRL_DSchemaMajor==2 AND
+        WVCTRL_DSchemaMinor==1 AND
+        WVCTRL_DSymbol==WVCTRL_sym AND
+        WVCTRL_DFingerprint==WVCTRL_ConfigFingerprint AND
+        WVCTRL_DBusinessDate==WVCTRL_AsOfDateNum;
+
+    if (WVCTRL_DValid)
+        WVCTRL_DailyFreshCount++;
+}
+
+WVCTRL_DailyAllFresh =
+    WVCTRL_DailyCheckedCount==WVCTRL_UniverseCount AND
+    WVCTRL_DailyFreshCount==WVCTRL_UniverseCount AND
+    WVCTRL_UniverseCount>0;
+
+WVCTRL_BootstrapReady =
+    WVCTRL_ClockValid AND
+    WVCTRL_MarketWValid AND
+    WVCTRL_MarketMValid AND
+    WVCTRL_SelectionValid AND
+    WVCTRL_DailyAllFresh;
+
+WVCTRL_BootstrapTrigger =
+    ParamTrigger("Khoi tao tu FULL_RECOVERY da xac minh","BOOTSTRAP");
+
+if (WVCTRL_BootstrapTrigger AND WVCTRL_BootstrapReady)
+{
+    StaticVarSet(WVCTRL_StatePrefix+"SchemaMajor",WVCTRL_StateSchemaMajor,True);
+    StaticVarSet(WVCTRL_StatePrefix+"SchemaMinor",WVCTRL_StateSchemaMinor,True);
+    StaticVarSetText(WVCTRL_StatePrefix+"UniverseName",WVCTRL_UniverseName,True);
+    StaticVarSetText(WVCTRL_StatePrefix+"UniverseList",WVCTRL_UniverseList,True);
+    StaticVarSetText(WVCTRL_StatePrefix+"ConfigFingerprint",WVCTRL_ConfigFingerprint,True);
+    StaticVarSetText(WVCTRL_StatePrefix+"MarketSymbol",WVCTRL_MarketSymbol,True);
+    StaticVarSet(WVCTRL_StatePrefix+"WeeklyOrdinal",WVCTRL_ExpectedW,True);
+    StaticVarSet(WVCTRL_StatePrefix+"MonthlyOrdinal",WVCTRL_ExpectedM,True);
+    StaticVarSet(WVCTRL_StatePrefix+"SelectionBusinessDateKey",WVCTRL_AsOfDateNum,True);
+    StaticVarSet(WVCTRL_StatePrefix+"DailyBusinessDateKey",WVCTRL_AsOfDateNum,True);
+    StaticVarSet(WVCTRL_StatePrefix+"LastCommitMode",5,True);
+    StaticVarSet(WVCTRL_StatePrefix+"LastCommitAsOfDateTime",WVCTRL_AsOfDateTime,True);
+    StaticVarSet(WVCTRL_StatePrefix+"LastCommitOK",1,True);
+}
+
+// -----------------------------------------------------------------------------
+// READ COMMITTED ADAPTIVE STATE
+// -----------------------------------------------------------------------------
+WVCTRL_StoredSchemaMajor =
+    Nz(StaticVarGet(WVCTRL_StatePrefix+"SchemaMajor"),-1);
+WVCTRL_StoredSchemaMinor =
+    Nz(StaticVarGet(WVCTRL_StatePrefix+"SchemaMinor"),-1);
+WVCTRL_StoredUniverseName =
+    StaticVarGetText(WVCTRL_StatePrefix+"UniverseName");
+WVCTRL_StoredUniverseList =
+    StaticVarGetText(WVCTRL_StatePrefix+"UniverseList");
+WVCTRL_StoredFingerprint =
+    StaticVarGetText(WVCTRL_StatePrefix+"ConfigFingerprint");
+WVCTRL_StoredMarketSymbol =
+    StaticVarGetText(WVCTRL_StatePrefix+"MarketSymbol");
+WVCTRL_StoredW =
+    StaticVarGet(WVCTRL_StatePrefix+"WeeklyOrdinal");
+WVCTRL_StoredM =
+    StaticVarGet(WVCTRL_StatePrefix+"MonthlyOrdinal");
+WVCTRL_StoredSelectionDate =
+    StaticVarGet(WVCTRL_StatePrefix+"SelectionBusinessDateKey");
+WVCTRL_StoredDailyDate =
+    StaticVarGet(WVCTRL_StatePrefix+"DailyBusinessDateKey");
+WVCTRL_LastCommitOK =
+    Nz(StaticVarGet(WVCTRL_StatePrefix+"LastCommitOK"),0);
+
+WVCTRL_StateIdentityValid =
+    WVCTRL_StoredSchemaMajor==WVCTRL_StateSchemaMajor AND
+    WVCTRL_StoredSchemaMinor==WVCTRL_StateSchemaMinor AND
+    WVCTRL_StoredUniverseName==WVCTRL_UniverseName AND
+    WVCTRL_StoredUniverseList==WVCTRL_UniverseList AND
+    WVCTRL_StoredFingerprint==WVCTRL_ConfigFingerprint AND
+    WVCTRL_StoredMarketSymbol==WVCTRL_MarketSymbol AND
+    WVCTRL_LastCommitOK==1;
+
+WVCTRL_WFresh =
+    WVCTRL_StateIdentityValid AND
+    NOT IsNull(WVCTRL_StoredW) AND
+    WVCTRL_StoredW==WVCTRL_ExpectedW;
+
+WVCTRL_MFresh =
+    WVCTRL_StateIdentityValid AND
+    NOT IsNull(WVCTRL_StoredM) AND
+    WVCTRL_StoredM==WVCTRL_ExpectedM;
+
+WVCTRL_SelectionFresh =
+    WVCTRL_StateIdentityValid AND
+    NOT IsNull(WVCTRL_StoredSelectionDate) AND
+    WVCTRL_StoredSelectionDate==WVCTRL_AsOfDateNum;
+
+WVCTRL_DailyFresh =
+    WVCTRL_StateIdentityValid AND
+    NOT IsNull(WVCTRL_StoredDailyDate) AND
+    WVCTRL_StoredDailyDate==WVCTRL_AsOfDateNum;
+
+// Route codes:
+// 1 FAST_ONLY
+// 2 DAILY_REFRESH
+// 3 WEEKLY_REFRESH
+// 4 MONTHLY_REFRESH
+// 5 FULL_RECOVERY
+WVCTRL_RouteCode = 5;
+
+if (WVCTRL_ClockValid)
+{
+    if (NOT WVCTRL_StateIdentityValid)
+        WVCTRL_RouteCode = 5;
+    else
+    if (NOT WVCTRL_WFresh AND NOT WVCTRL_MFresh)
+        WVCTRL_RouteCode = 5;
+    else
+    if (NOT WVCTRL_WFresh)
+        WVCTRL_RouteCode = 3;
+    else
+    if (NOT WVCTRL_MFresh)
+        WVCTRL_RouteCode = 4;
+    else
+    if (NOT WVCTRL_SelectionFresh OR NOT WVCTRL_DailyFresh)
+        WVCTRL_RouteCode = 2;
+    else
+        WVCTRL_RouteCode = 1;
+}
+
+WVCTRL_RouteText =
+    WriteIf(WVCTRL_RouteCode==1,"FAST_ONLY",
+    WriteIf(WVCTRL_RouteCode==2,"DAILY_REFRESH",
+    WriteIf(WVCTRL_RouteCode==3,"WEEKLY_REFRESH",
+    WriteIf(WVCTRL_RouteCode==4,"MONTHLY_REFRESH",
+    "FULL_RECOVERY"))));
+
+WVCTRL_BatchFast =
+    "E:\\WyckoffVSA\\batch\\WVSA_OC_FAST_ONLY_v0.1.abb";
+WVCTRL_BatchDaily =
+    "E:\\WyckoffVSA\\batch\\WVSA_OC_DAILY_REFRESH_v0.1.abb";
+WVCTRL_BatchWeekly =
+    "E:\\WyckoffVSA\\batch\\WVSA_OC_WEEKLY_REFRESH_v0.1.abb";
+WVCTRL_BatchMonthly =
+    "E:\\WyckoffVSA\\batch\\WVSA_OC_MONTHLY_REFRESH_v0.1.abb";
+WVCTRL_BatchFull =
+    "E:\\WyckoffVSA\\batch\\WVSA_OC_FULL_RECOVERY_v0.1.abb";
+
+WVCTRL_SelectedBatch =
+    WriteIf(WVCTRL_RouteCode==1,WVCTRL_BatchFast,
+    WriteIf(WVCTRL_RouteCode==2,WVCTRL_BatchDaily,
+    WriteIf(WVCTRL_RouteCode==3,WVCTRL_BatchWeekly,
+    WriteIf(WVCTRL_RouteCode==4,WVCTRL_BatchMonthly,
+    WVCTRL_BatchFull))));
+
+WVCTRL_RunAdaptive =
+    ParamTrigger("Wyckoff VSA Adaptive One-Click","RUN");
+WVCTRL_ForceFull =
+    ParamTrigger("Buoc chay FULL_RECOVERY","RUN FULL");
+
+WVCTRL_LaunchRequested = WVCTRL_RunAdaptive OR WVCTRL_ForceFull;
+WVCTRL_LaunchMode =
+    IIf(WVCTRL_ForceFull,5,WVCTRL_RouteCode);
+WVCTRL_LaunchBatch =
+    WriteIf(WVCTRL_LaunchMode==1,WVCTRL_BatchFast,
+    WriteIf(WVCTRL_LaunchMode==2,WVCTRL_BatchDaily,
+    WriteIf(WVCTRL_LaunchMode==3,WVCTRL_BatchWeekly,
+    WriteIf(WVCTRL_LaunchMode==4,WVCTRL_BatchMonthly,
+    WVCTRL_BatchFull))));
+
+WVCTRL_ShellResult = 0;
+
+if (WVCTRL_LaunchRequested AND WVCTRL_ClockValid)
+{
+    // Pending metadata is consumed by the final AdaptiveCommitMarker APX.
+    StaticVarSet(WVCTRL_StatePrefix+"PendingValid",1,True);
+    StaticVarSet(WVCTRL_StatePrefix+"PendingMode",WVCTRL_LaunchMode,True);
+    StaticVarSet(WVCTRL_StatePrefix+"PendingAsOfDateNum",WVCTRL_AsOfDateNum,True);
+    StaticVarSet(WVCTRL_StatePrefix+"PendingAsOfDateTime",WVCTRL_AsOfDateTime,True);
+    StaticVarSet(WVCTRL_StatePrefix+"PendingWeeklyOrdinal",WVCTRL_ExpectedW,True);
+    StaticVarSet(WVCTRL_StatePrefix+"PendingMonthlyOrdinal",WVCTRL_ExpectedM,True);
+    StaticVarSetText(WVCTRL_StatePrefix+"PendingUniverseName",WVCTRL_UniverseName,True);
+    StaticVarSetText(WVCTRL_StatePrefix+"PendingUniverseList",WVCTRL_UniverseList,True);
+    StaticVarSetText(WVCTRL_StatePrefix+"PendingConfigFingerprint",WVCTRL_ConfigFingerprint,True);
+    StaticVarSetText(WVCTRL_StatePrefix+"PendingMarketSymbol",WVCTRL_MarketSymbol,True);
+
+    WVCTRL_ShellResult =
+        ShellExecute("runbatch",WVCTRL_LaunchBatch,"");
+}
+
+// -----------------------------------------------------------------------------
+// DIAGNOSTIC SURFACE
+// -----------------------------------------------------------------------------
+WVCTRL_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = WVCTRL_LastBar;
+
+AddTextColumn(WVCTRL_MarketSymbol,"Market");
+AddColumn(0*BarIndex()+WVCTRL_AsOfDateTime,"Visible As-Of",formatDateTime);
+AddColumn(0*BarIndex()+WVCTRL_AsOfDateNum,"Business DateNum",1.0);
+AddColumn(0*BarIndex()+WVCTRL_ExpectedW,"Expected W Ordinal",1.0);
+AddColumn(0*BarIndex()+WVCTRL_ExpectedM,"Expected M Ordinal",1.0);
+AddColumn(0*BarIndex()+WVCTRL_UniverseCount,"Universe Count",1.0);
+AddColumn(0*BarIndex()+WVCTRL_StateIdentityValid,"State Identity Valid",1.0);
+AddColumn(0*BarIndex()+WVCTRL_WFresh,"Weekly Fresh",1.0);
+AddColumn(0*BarIndex()+WVCTRL_MFresh,"Monthly Fresh",1.0);
+AddColumn(0*BarIndex()+WVCTRL_SelectionFresh,"Selection Fresh",1.0);
+AddColumn(0*BarIndex()+WVCTRL_DailyFresh,"Daily Fresh",1.0);
+AddTextColumn(WVCTRL_RouteText,"Adaptive Route");
+AddTextColumn(WVCTRL_SelectedBatch,"Selected Batch");
+AddColumn(0*BarIndex()+WVCTRL_BootstrapReady,"Bootstrap Ready",1.0);
+AddColumn(0*BarIndex()+WVCTRL_DailyFreshCount,"Bootstrap Daily Fresh",1.0);
+AddColumn(0*BarIndex()+WVCTRL_DailyCheckedCount,"Bootstrap Daily Checked",1.0);
+AddColumn(0*BarIndex()+WVCTRL_ShellResult,"ShellExecute Result",1.0);
+AddTextColumn("ADAPTIVE_ONE_CLICK_CONTROLLER_V01_20260919_A","Controller Version");
