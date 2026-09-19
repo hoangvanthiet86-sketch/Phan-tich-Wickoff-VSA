@@ -1,0 +1,22 @@
+LOC ALL IN ONE + WYCKOFF/VSA — FINAL v1.0 NATIVE SMOKE TEST
+
+ROWS = 7
+CANDIDATE_ORDER = 2353, HDB, BAF, 1737, 7500, VTZ, 7000
+LEGACY_BASELINE_ORDER_MATCH = PASS
+LEGACY_FIRST_20_COLUMNS_EXACT = PASS
+CANONICAL_RC2_ALL_COLUMNS_EXACT = PASS
+
+READINESS:
+- VSA Gate: 7/7
+- Core VSA Ready: 7/7
+- Behaviour Ready: 7/7
+- Structure Ready: 7/7
+- Event Ready: 7/7
+- Final Analysis Ready: 7/7
+
+FINAL STATUS:
+FINAL_V1_0_NATIVE_SMOKE_TEST = PASS
+
+NOTE:
+- This smoke test verifies the production-named AFL output against the previously accepted RC2 canonical output for the same selected symbols.
+- It also verifies the first 20 legacy Loc All in one columns against the original 7-symbol baseline.

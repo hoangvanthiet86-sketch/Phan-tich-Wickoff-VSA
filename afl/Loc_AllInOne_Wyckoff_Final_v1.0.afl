@@ -1,0 +1,678 @@
+/*
+    LOC ALL IN ONE + WYCKOFF/VSA — FINAL SINGLE-AFL v1.0 PRODUCTION
+
+    Selection:
+    - the legacy "Loc All in one" filter remains the sole Selection Authority.
+
+    Analysis:
+    - canonical/headless Wyckoff VSA Runtime v0.2 stack is loaded in explicit
+      topological order;
+    - public Composite outputs are used for Range / Events / Phase / Family;
+    - Stage 2 never reassigns Filter and never changes the 20 legacy columns.
+
+    IMPORTANT PERFORMANCE NOTE:
+    AmiBroker preprocesses #include before per-symbol scalar gating. Therefore
+    this correctness-first RC2 computes the canonical headless analytical stack
+    for the Analysis universe, while only Stage-1 candidates are displayed.
+    It is one AFL / one Explore, but it is not yet the final performance
+    optimization where the heavy stack runs only on selected symbols.
+
+    One-time prerequisite:
+    run BUILD_LOC_AIO_CANONICAL_HEADLESS_RC2.ps1 as Administrator so the
+    LIO_HEADLESS_* include files exist in AmiBroker's Include folder.
+*/
+#pragma nocache
+SetBarsRequired(sbrAll, sbrAll);
+
+// ============================================================================
+// BO LOC CO PHIEU - BO SUNG MA NGANH ICB TU FDATA
+//
+// Cap nhat:
+// - Them cot "Ma nganh" ngay sau cot "Ticker".
+// - Uu tien doc ma nganh tu ten Industry ma FData gan vao database.
+// - Neu Industry khong co ma 4 chu so o dau, moi fallback sang IcbID(0).
+// - Giu nguyen tat ca dieu kien loc va cot sap xep cu.
+// ============================================================================
+
+SetOption("NoDefaultColumns", True);
+
+// =====================================================
+// THAM SO LOC DONG
+// =====================================================
+minClosePct = Param("Min % Close vs MA20", -100, -100, 100, 0.1);
+maxClosePct = Param("Max % Close vs MA20",  100, -100, 100, 0.1);
+
+minVolPct = Param("Min % Vol vs VolMA20", -100, -100, 1000, 0.1);
+maxVolPct = Param("Max % Vol vs VolMA20", 1000, -100, 1000, 0.1);
+
+onlyMAOrder = ParamToggle("Chi lay MA20>MA50>MA100", "Khong|Co", 0);
+onlyMA200Up = ParamToggle("Chi lay MA200 doc len", "Khong|Co", 0);
+
+minVolMA20 = Param("Min Vol MA20", 50000, 0, 5000000, 1000);
+
+// =====================================================
+// BOLLINGER BAND PARAM
+// =====================================================
+bbPeriod = Param("BB Period", 20, 5, 50, 1);
+bbWidthMax = Param("Max BB Width (%)", 5, 0.1, 50, 0.1);
+
+// Loc mau MA20:
+ma20ColorMode = Param("Loc mau MA20 (0-2)", 0, 0, 2, 1);
+
+// Loc mau Close:
+closeColorMode = Param("Loc mau Close (0-6)", 0, 0, 6, 1);
+
+// =====================================================
+// DINH NGHIA MAU
+// =====================================================
+myDarkGreen = ColorRGB(0, 102, 0);
+myDarkPink = ColorRGB(204, 0, 102);
+myDarkViolet = ColorRGB(128, 0, 128);
+myWhiteBg = colorWhite;
+
+// =====================================================
+// TINH TOAN KHUNG NGAY
+// =====================================================
+ma20 = MA(C, 20);
+ma50 = MA(C, 50);
+ma100 = MA(C, 100);
+ma200 = MA(C, 200);
+volMA20 = MA(V, 20);
+
+// =====================================================
+// BOLLINGER BAND CALCULATION
+// =====================================================
+bbMid = MA(C, bbPeriod);
+bbStd = StDev(C, bbPeriod);
+bbUpper = bbMid + 2 * bbStd;
+bbLower = bbMid - 2 * bbStd;
+
+bbWidthPct = 100 * (bbUpper - bbLower) / bbMid;
+
+// =====================================================
+// XU HUONG CAC DUONG TRUNG BINH
+// =====================================================
+up20 = ma20 > Ref(ma20, -1);
+up50 = ma50 > Ref(ma50, -1);
+up100 = ma100 > Ref(ma100, -1);
+up200 = ma200 > Ref(ma200, -1);
+
+maOrder = ma20 > ma50 AND ma50 > ma100;
+
+closeVsMA20Pct = 100 * (C - ma20) / ma20;
+closeVsMA50Pct = 100 * (C - ma50) / ma50;
+volVsVolMA20Pct = 100 * (V - volMA20) / volMA20;
+closeChangePct = 100 * (C - Ref(C, -1)) / Ref(C, -1);
+lowToClosePct = 100 * (C - L) / L;
+rsi14 = RSI(14);
+
+// =====================================================
+// TINH DINH HIGH 52 TUAN
+// =====================================================
+TimeFrameSet(inWeekly);
+
+prevWeekHigh = Ref(H, -1);
+high52WExclCurrentWeek = HHV(prevWeekHigh, 52);
+
+CloseW = C;
+LowW = L;
+
+MA10W = MA(C, 10);
+MA20W = MA(C, 20);
+MA40W = MA(C, 40);
+
+weeklyReady =
+    !IsNull(MA40W) AND
+    !IsNull(Ref(MA10W, -2)) AND
+    !IsNull(Ref(MA20W, -2)) AND
+    !IsNull(Ref(CloseW, -4)) AND
+    !IsNull(Ref(LowW, -4));
+
+weekUptrend =
+    weeklyReady
+    AND MA10W > MA20W
+    AND MA20W > MA40W
+    AND CloseW > MA20W
+    AND MA10W > Ref(MA10W, -2)
+    AND MA20W > Ref(MA20W, -2)
+    AND CloseW > Ref(CloseW, -4)
+    AND LowW > Ref(LowW, -4);
+
+TimeFrameRestore();
+
+prevWeekHigh_D = TimeFrameExpand(prevWeekHigh, inWeekly, expandFirst);
+high52WExclCurrentWeek_D = TimeFrameExpand(
+    high52WExclCurrentWeek,
+    inWeekly,
+    expandFirst
+);
+weekUptrend_D = TimeFrameExpand(weekUptrend, inWeekly, expandFirst);
+
+closeVs52WHighPct =
+    100 * (C - high52WExclCurrentWeek_D) / high52WExclCurrentWeek_D;
+
+// =====================================================
+// KIEM TRA DU DU LIEU
+// =====================================================
+enoughBars =
+    !IsNull(ma200) AND
+    !IsNull(Ref(ma200, -1)) AND
+    !IsNull(volMA20) AND
+    !IsNull(Ref(C, -1)) AND
+    !IsNull(high52WExclCurrentWeek_D) AND
+    !IsNull(weekUptrend_D);
+
+// =====================================================
+// PHAN NHOM DIEU KIEN
+// =====================================================
+ma20Green = C >= ma20;
+ma20NotBlack = ma20Green;
+
+closePurple = closeChangePct >= 6;
+closePink = closeChangePct >= 3 AND closeChangePct < 6;
+closeGreen = closeChangePct > 0 AND closeChangePct < 3;
+closeUpAny = closeChangePct > 0;
+closeNotUp = closeChangePct <= 0;
+closeNotBlack = closePurple OR closePink OR closeGreen;
+
+changeTextColor = IIf(
+    closeChangePct > 0,
+    colorBlue,
+    IIf(closeChangePct < 0, colorRed, colorBlack)
+);
+
+// =====================================================
+// DIEU KIEN GOC
+// =====================================================
+baseFilter =
+    Status("lastbarinrange")
+    AND enoughBars
+    AND up20
+    AND up50
+    AND up100
+    AND volMA20 > minVolMA20;
+
+// =====================================================
+// LOC DONG THEM
+// =====================================================
+rangeFilter =
+    closeVsMA20Pct >= minClosePct
+    AND closeVsMA20Pct <= maxClosePct
+    AND volVsVolMA20Pct >= minVolPct
+    AND volVsVolMA20Pct <= maxVolPct;
+
+extraFilter =
+    (onlyMAOrder == 0 OR maOrder)
+    AND (onlyMA200Up == 0 OR up200);
+
+ma20Filter =
+    (ma20ColorMode == 0)
+    OR (ma20ColorMode == 1 AND ma20Green)
+    OR (ma20ColorMode == 2 AND ma20NotBlack);
+
+closeFilter =
+    (closeColorMode == 0)
+    OR (closeColorMode == 1 AND closePurple)
+    OR (closeColorMode == 2 AND closePink)
+    OR (closeColorMode == 3 AND closeGreen)
+    OR (closeColorMode == 4 AND closeUpAny)
+    OR (closeColorMode == 5 AND closeNotUp)
+    OR (closeColorMode == 6 AND closeNotBlack);
+
+// =====================================================
+// BOLLINGER FILTER
+// =====================================================
+bbFilter = bbWidthPct <= bbWidthMax;
+
+// =====================================================
+// FILTER CUOI CUNG
+// =====================================================
+Filter =
+    baseFilter
+    AND rangeFilter
+    AND extraFilter
+    AND ma20Filter
+    AND closeFilter
+    AND bbFilter;
+
+// ============================================================================
+// CANONICAL HEADLESS RUNTIME v0.2 — EXPLICIT TOPOLOGICAL ORDER
+// These files contain the project's canonical analytical formulas with only
+// presentation calls / nested include directives removed by the one-time
+// headless builder. No analytical formula is rewritten here.
+// ============================================================================
+#include_once <LIO_HEADLESS_WyckoffVSA_RuntimeConfig_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_Core_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_Candidate_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_StructureLocation_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_Confirmation_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_Event_StoppingClimacticAbsorption_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_Event_SupplyTest_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_Event_SpringShakeout_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_Event_UpthrustUTAD_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_Event_SOSLPS_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_StructuralSequence_PhaseA_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_StructuralSequence_PhaseA_Snapshot_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_RangeContext_SOWLPSY_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_PhaseContext_InputFacade_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_PhaseContext_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_PhaseContext_PublicSnapshot_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_PhaseContext_ConsumerFacade_Runtime_v0.2.afl>
+#include_once <LIO_HEADLESS_WyckoffVSA_CompositeIndicator_Runtime_v0.2.afl>
+
+// ============================================================================
+// LOC AIO PRESENTATION PROJECTION — ANALYTICS ARE READ-ONLY
+// ============================================================================
+LIO_CAN_VSAGate = IIf(Filter, 1, 0);
+
+LIO_CAN_CoreReady = IIf(
+    RVOLValid AND
+    RSpreadValid AND
+    ClosePositionValid AND
+    DirectionalProgressValid AND
+    ThresholdConfigValid,
+    1,
+    0
+);
+
+LIO_CAN_BehaviourReady = IIf(
+    CandidateInputValid AND
+    LIO_CAN_CoreReady,
+    1,
+    0
+);
+
+LIO_CAN_StructureReady = IIf(
+    WVRC_ConfigValid AND
+    SL_ConfigValid,
+    1,
+    0
+);
+
+LIO_CAN_EventReady = LIO_CAN_StructureReady;
+LIO_CAN_FinalReady = LIO_CAN_StructureReady;
+
+LIO_CAN_RangeSideCode = IIf(
+    WCI_ContextMultiplicityCode == 1,
+    IIf(
+        WCI_L_PublicActive == 1,
+        1,
+        IIf(WCI_U_PublicActive == 1, 2, 0)
+    ),
+    0
+);
+
+LIO_CAN_RangeSideText =
+    "NONE / AMBIGUOUS\nLOWER-DERIVED RANGE\nUPPER-DERIVED RANGE";
+
+LIO_CAN_SpringKindCode = IIf(
+    WCI_CurrentSpringShakeoutEvent == 1 AND
+    WE_SS_ConfirmedKindValid == 1,
+    WE_SS_ConfirmedKindCode,
+    0
+);
+
+LIO_CAN_SpringKindText =
+    "NONE\nSPRING-LIKE\nSHAKEOUT-LIKE\nAMBIGUOUS RECLAIM";
+
+LIO_CAN_StoppingResponseConfirmed = IIf(
+    WE_ER_StoppingResponseCode == 3,
+    1,
+    0
+);
+
+LIO_CAN_SOW = IIf(
+    WCI_CurrentSOWEvent == 1,
+    1,
+    0
+);
+
+LIO_CAN_LPSY = IIf(
+    WCI_CurrentLPSYEvent == 1,
+    1,
+    0
+);
+
+// Canonical engine deliberately does NOT force an UTAD label.
+// Upthrust is exposed directly; distribution/re-distribution interpretation
+// belongs to Phase/Family context.
+
+
+// =====================================================
+// HIEN THI
+// =====================================================
+tickerTextColor = colorBlack;
+
+// FData luu ten Industry theo dang "8780 Cong ty Chung khoan".
+fdataIndustryName = IndustryID(1);
+fdataIndustryCode = StrLeft(fdataIndustryName, 4);
+industryCode = IcbID(0);
+
+// Neu 4 ky tu dau cua ten Industry la mot ma so hop le thi uu tien FData.
+if (StrToNum(fdataIndustryCode) > 0)
+{
+    industryCode = fdataIndustryCode;
+}
+
+closeTextColor = IIf(
+    closePurple,
+    myDarkViolet,
+    IIf(closePink, myDarkPink, IIf(closeGreen, myDarkGreen, colorBlack))
+);
+
+ma20TextColor = IIf(ma20Green, myDarkGreen, colorBlack);
+
+// =====================================================
+// THEM % CLOSE SO VOI GIA CAO NHAT PHIEN
+// =====================================================
+// Close hien tai so voi High cua cung phien.
+// Vi du: High = 100, Close = 95 -> 95%.
+closeVsHighPct = 100 * C / H;
+
+
+// =====================================================
+// CAC COT HIEN THI
+// =====================================================
+
+// Cot 1: Ma co phieu
+AddTextColumn(Name(), "Ticker", 1.0, tickerTextColor, myWhiteBg, 70);
+
+// Cot 2: Ma phan nganh ICB
+AddTextColumn(industryCode, "Nganh", 1.0, colorBlack, myWhiteBg, 75);
+
+// Cot 3: Close
+AddColumn(C, "Close", 1.2, closeTextColor, myWhiteBg);
+
+// Cot 4: % thay doi
+AddColumn(closeChangePct, "% TD", 1.2, changeTextColor, myWhiteBg);
+
+// Cot 5: % Close so voi gia cao nhat phien
+AddColumn(
+    closeVsHighPct,
+    "% vs High",
+    1.2,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 6: % Close vs Low
+AddColumn(
+    lowToClosePct,
+    "% vs Low",
+    1.2,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 7: % Vol vs Vol MA20
+AddColumn(
+    volVsVolMA20Pct,
+    "% Vol vs MA20",
+    1.2,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 8: MA20
+AddColumn(ma20, "MA20", 1.2, ma20TextColor, myWhiteBg);
+
+// Cot 9: RSI
+AddColumn(rsi14, "RSI(14)", 1.2, colorBlack, myWhiteBg);
+
+// Cot 10: % Close vs MA20
+AddColumn(
+    closeVsMA20Pct,
+    "% Close vs MA20",
+    1.2,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 11: % Close vs MA50
+AddColumn(
+    closeVsMA50Pct,
+    "% Close vs MA50",
+    1.2,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 12: MA50
+AddColumn(ma50, "MA50", 1.2, colorBlack, myWhiteBg);
+
+// Cot 13: MA100
+AddColumn(ma100, "MA100", 1.2, colorBlack, myWhiteBg);
+
+// Cot 14: BBW
+AddColumn(bbWidthPct, "BBW (%)", 1.2, colorBlack, myWhiteBg);
+
+// Cot 15: MA20 > MA50 > MA100
+AddColumn(
+    IIf(maOrder, 1, Null),
+    "MA TT",
+    1.0,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 16: MA200 doc len
+AddColumn(
+    IIf(up200, 1, Null),
+    "MA200 doc len",
+    1.0,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 17: Uptrend tuan
+AddColumn(
+    IIf(weekUptrend_D, 1, Null),
+    "Uptrend tuan",
+    1.0,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 18: % Close vs dinh 52T
+AddColumn(
+    closeVs52WHighPct,
+    "% Close vs D52T",
+    1.2,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 19: Vol MA20
+AddColumn(
+    volMA20,
+    "Vol MA20",
+    1.0,
+    colorBlack,
+    myWhiteBg
+);
+
+// Cot 20: Date
+AddColumn(DateTime(), "Date", formatDateTime);
+
+// ============================================================================
+// WYCKOFF/VSA CANONICAL ANALYTICAL COLUMNS
+// Legacy columns 1..20 above remain unchanged and in the same order.
+// ============================================================================
+
+// ----- Core VSA -----
+AddColumn(LIO_CAN_VSAGate, "VSA Gate", 1.0);
+AddColumn(RVOL, "RVOL", 1.3);
+AddMultiTextColumn(RVOLStateCode, RVOLStateText, "Volume State");
+AddColumn(RSpread, "RSpread", 1.3);
+AddMultiTextColumn(RSpreadStateCode, RSpreadStateText, "Spread State");
+AddColumn(100 * ClosePosition, "Close Position %", 1.1);
+AddMultiTextColumn(CloseStateCode, CloseStateText, "Close State");
+AddColumn(DirectionalProgress, "Directional Progress ATR", 1.3);
+AddMultiTextColumn(
+    EffortDirectionalResultStateCode,
+    EffortDirectionalResultStateText,
+    "Effort / Result"
+);
+AddColumn(LIO_CAN_CoreReady, "Core VSA Ready", 1.0);
+
+// ----- Basic Candidate / Confirmation / Effort-Response -----
+AddMultiTextColumn(
+    NoDemandCandidateCode,
+    CandidateStateText,
+    "No Demand Candidate"
+);
+AddMultiTextColumn(
+    NoSupplyCandidateCode,
+    CandidateStateText,
+    "No Supply Candidate"
+);
+AddMultiTextColumn(
+    CE_NoDemand_StatusCode,
+    CE_StatusText,
+    "No Demand Response"
+);
+AddMultiTextColumn(
+    CE_NoSupply_StatusCode,
+    CE_StatusText,
+    "No Supply Response"
+);
+AddColumn(CE_NoDemand_Confirmed, "No Demand Confirmed", 1.0);
+AddColumn(CE_NoSupply_Confirmed, "No Supply Confirmed", 1.0);
+AddMultiTextColumn(
+    WE_ER_ClimacticEffortCode,
+    WE_ER_ClimacticStatusText,
+    "Climactic Effort"
+);
+AddMultiTextColumn(
+    WE_ER_AbsorptionCode,
+    WE_ER_AbsorptionStatusText,
+    "Absorption"
+);
+AddColumn(
+    WE_ER_DownsidePressureObserved,
+    "Downside Pressure",
+    1.0
+);
+AddColumn(
+    WE_ER_UpsidePressureObserved,
+    "Upside Pressure",
+    1.0
+);
+AddMultiTextColumn(
+    WE_ER_StoppingVolumeCode,
+    WE_ER_StoppingStatusText,
+    "Stopping Volume"
+);
+AddMultiTextColumn(
+    WE_ER_StoppingResponseCode,
+    WE_ER_StoppingResponseStatusText,
+    "Stopping Response"
+);
+AddColumn(
+    LIO_CAN_StoppingResponseConfirmed,
+    "Stopping Response Confirmed",
+    1.0
+);
+AddColumn(LIO_CAN_BehaviourReady, "Behaviour Ready", 1.0);
+
+// ----- Canonical Range / Structure projection -----
+AddMultiTextColumn(
+    WCI_ContextMultiplicityCode,
+    WCI_ContextMultiplicityText,
+    "Range Context"
+);
+AddMultiTextColumn(
+    LIO_CAN_RangeSideCode,
+    LIO_CAN_RangeSideText,
+    "Range Side"
+);
+AddColumn(WCI_PrimaryRangeLow, "Range Low", 1.2);
+AddColumn(WCI_PrimaryRangeHigh, "Range High", 1.2);
+AddColumn(100 * WCI_RangePosition, "Range Position %", 1.1);
+AddColumn(WCI_RangeAgeBars, "Range Age", 1.0);
+AddMultiTextColumn(
+    WCI_PriorTrendContextCode,
+    WPC_PriorTrendText,
+    "Prior Trend"
+);
+AddMultiTextColumn(
+    WCI_RangeStatusCode,
+    WPCP_RangeStatusText,
+    "Range Status"
+);
+AddColumn(LIO_CAN_StructureReady, "Structure Ready", 1.0);
+
+// ----- Canonical current events -----
+AddMultiTextColumn(
+    LIO_CAN_SpringKindCode,
+    LIO_CAN_SpringKindText,
+    "Spring / Shakeout"
+);
+AddColumn(
+    WCI_CurrentSpringShakeoutEvent,
+    "Spring/Shakeout Confirmed",
+    1.0
+);
+AddColumn(
+    WCI_CurrentSupplyTestEvent,
+    "Supply Test Confirmed",
+    1.0
+);
+AddColumn(
+    WCI_CurrentUpthrustEvent,
+    "Upthrust Confirmed",
+    1.0
+);
+AddColumn(WCI_CurrentSOSEvent, "SOS", 1.0);
+AddColumn(WCI_CurrentLPSEvent, "LPS Confirmed", 1.0);
+AddColumn(LIO_CAN_SOW, "SOW", 1.0);
+AddColumn(LIO_CAN_LPSY, "LPSY Confirmed", 1.0);
+AddColumn(
+    WCI_CurrentBullishAbsorptionResponse,
+    "Bullish Absorption Response",
+    1.0
+);
+AddColumn(
+    WCI_CurrentBearishAbsorptionResponse,
+    "Bearish Absorption Response",
+    1.0
+);
+AddColumn(WCI_CurrentEventMask, "Current Event Mask", 1.0);
+AddColumn(LIO_CAN_EventReady, "Event Ready", 1.0);
+
+// ----- Canonical Phase / Family / Evidence -----
+AddMultiTextColumn(
+    WCI_PhaseStateCode,
+    WPC_PhaseText,
+    "Wyckoff Phase"
+);
+AddMultiTextColumn(
+    WCI_StructuralDevelopmentCode,
+    WCI_StructuralDevelopmentText,
+    "Structural Development"
+);
+AddMultiTextColumn(
+    WCI_FamilyHypothesisCode,
+    WPC_FamilyText,
+    "Family Hypothesis"
+);
+AddMultiTextColumn(
+    WCI_EvidenceBalanceCode,
+    WCI_EvidenceBalanceText,
+    "Evidence"
+);
+AddMultiTextColumn(
+    WCI_DirectionalContextCode,
+    WCI_DirectionalContextText,
+    "Directional Context"
+);
+AddColumn(LIO_CAN_FinalReady, "Final Analysis Ready", 1.0);
+
+
+
+// =====================================================
+// SAP XEP
+// =====================================================
+// Cot "MA20>MA50>MA100" hien tai la cot 15.
+// Giu nguyen logic sort cu.
+SetSortColumns(-15);

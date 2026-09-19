@@ -1,0 +1,64 @@
+LOC ALL IN ONE + WYCKOFF/VSA — RC2 CANONICAL NATIVE ACCEPTANCE AUDIT
+
+RC1_ROWS = 80
+RC2_ROWS = 80
+CANDIDATE_SET_EQUAL = PASS
+LEGACY_20_COLUMNS_BY_TICKER = PASS
+STAGE2A_2B_VALUES_BY_TICKER = PASS
+
+READINESS:
+- VSA Gate: 80/80
+- Core VSA Ready: 80/80
+- Behaviour Ready: 80/80
+- Structure Ready: 80/80
+- Event Ready: 80/80
+- Final Analysis Ready: 80/80
+
+RANGE CONTEXT DISTRIBUTION:
+- NO ACTIVE RANGE CONTEXT: 3
+- MULTIPLE ACTIVE RANGE CONTEXTS: 48
+- SINGLE ACTIVE RANGE CONTEXT: 29
+
+PHASE DISTRIBUTION:
+- INSUFFICIENT CONTEXT: 51
+- PHASE-C-CANDIDATE: 2
+- PHASE-B-LIKE: 16
+- PHASE-C-LIKE: 3
+- PHASE-D-LIKE: 6
+- PHASE-A-LIKE: 2
+
+FAMILY DISTRIBUTION:
+- INSUFFICIENT: 3
+- MIXED / CONFLICTING EVIDENCE: 62
+- UNRESOLVED UPPER RANGE: 4
+- UNRESOLVED LOWER RANGE: 4
+- REACCUMULATION-HYPOTHESIS: 1
+- ACCUMULATION-HYPOTHESIS: 1
+- REDISTRIBUTION-HYPOTHESIS: 1
+- DISTRIBUTION-HYPOTHESIS: 4
+
+CURRENT EVENT COUNTS:
+- Spring/Shakeout Confirmed: 1
+- Supply Test Confirmed: 1
+- Upthrust Confirmed: 0
+- SOS: 6
+- LPS Confirmed: 5
+- SOW: 1
+- LPSY Confirmed: 1
+- Bullish Absorption Response: 1
+- Bearish Absorption Response: 2
+
+INTERPRETATION:
+- Stage 1 candidate set and the 20 legacy columns are preserved by symbol.
+- Stage 2A/Core and Stage 2B/basic behaviour values match the previously native-tested integrated version.
+- Stage 2C-2E now come from the project's canonical Runtime v0.2 / Composite public outputs.
+- RC2 intentionally does not reproduce RC1 custom range/phase values.
+- Range Position may be outside 0..100 for a frozen structural range; that alone is not a defect in the canonical engine.
+- Multiple active contexts fail closed at the singleton projection level (no arbitrary range/phase winner).
+
+STATUS:
+RC2_CANONICAL_NATIVE_EXECUTION = PASS
+RC2_STAGE1_PRESERVATION = PASS
+RC2_CORE_BEHAVIOUR_EQUIVALENCE = PASS
+RC2_STRUCTURE_PHASE_SOURCE = CANONICAL_RUNTIME_V0.2
+PRODUCTION_NAME_PROMOTION = PENDING FINAL SANITY CHECK / PERFORMANCE DECISION
