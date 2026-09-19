@@ -1,0 +1,253 @@
+/*
+    Wyckoff VSA Adaptive Commit Marker v0.1
+    AmiBroker 6.20.01 compatible.
+
+    This AFL is deliberately lightweight and MUST be the final APX in every
+    adaptive batch variant.
+
+    It consumes Pending* metadata written by AdaptiveOneClickController,
+    validates the visible as-of and critical published state, and commits only
+    the completion markers implied by PendingMode.
+
+    PendingMode:
+      1 FAST_ONLY
+      2 DAILY_REFRESH
+      3 WEEKLY_REFRESH
+      4 MONTHLY_REFRESH
+      5 FULL_RECOVERY
+
+    The marker does not implement Wyckoff/VSA methodology.
+*/
+#pragma nocache
+SetBarsRequired(1,0);
+SetOption("StaticVarAutoSave",60);
+
+#include_once <WyckoffVSA_RuntimeConfig_v0.2.afl>
+
+WVAC_MarketSymbol = WVRC_SelectionMarketSymbol;
+if (StrLen(WVAC_MarketSymbol)==0)
+    WVAC_MarketSymbol = WVRC_RSMarketSymbol;
+if (StrLen(WVAC_MarketSymbol)==0)
+    WVAC_MarketSymbol = "VNINDEX";
+
+WVAC_ForeignOK = SetForeign(WVAC_MarketSymbol,1,0);
+#include_once <WyckoffVSA_OperationalClock_v0.1.afl>
+RestorePriceArrays();
+
+#include_once <WyckoffVSA_DailySnapshotContract_v0.2.afl>
+
+WVAC_Prefix = "WVSA_AOC_v01_";
+WVAC_SchemaMajor = 1;
+WVAC_SchemaMinor = 0;
+WVAC_UniverseName = "VN STOCKS ONLY";
+
+WVAC_WLIndex = CategoryFind(WVAC_UniverseName,categoryWatchlist);
+WVAC_UniverseList = "";
+WVAC_UniverseCount = 0;
+if (WVAC_WLIndex>=0)
+{
+    WVAC_UniverseList =
+        CategoryGetSymbols(categoryWatchlist,WVAC_WLIndex);
+    WVAC_UniverseCount =
+        IIf(WVAC_UniverseList=="",0,StrCount(WVAC_UniverseList,",")+1);
+}
+
+WVAC_AsOfDateNum = WCLK_AsOfBusinessDateKey;
+WVAC_AsOfDateTime = WCLK_AsOfDateTime;
+WVAC_ExpectedW = WCLK_ExpectedCompletedWeeklyOrdinal;
+WVAC_ExpectedM = WCLK_ExpectedCompletedMonthlyOrdinal;
+WVAC_Fingerprint = WDS_ConfigFingerprint;
+
+WVAC_PendingValid =
+    Nz(StaticVarGet(WVAC_Prefix+"PendingValid"),0);
+WVAC_Mode =
+    Nz(StaticVarGet(WVAC_Prefix+"PendingMode"),0);
+WVAC_PendingAsOfDateNum =
+    StaticVarGet(WVAC_Prefix+"PendingAsOfDateNum");
+WVAC_PendingAsOfDateTime =
+    StaticVarGet(WVAC_Prefix+"PendingAsOfDateTime");
+WVAC_PendingW =
+    StaticVarGet(WVAC_Prefix+"PendingWeeklyOrdinal");
+WVAC_PendingM =
+    StaticVarGet(WVAC_Prefix+"PendingMonthlyOrdinal");
+WVAC_PendingUniverseName =
+    StaticVarGetText(WVAC_Prefix+"PendingUniverseName");
+WVAC_PendingUniverseList =
+    StaticVarGetText(WVAC_Prefix+"PendingUniverseList");
+WVAC_PendingFingerprint =
+    StaticVarGetText(WVAC_Prefix+"PendingConfigFingerprint");
+WVAC_PendingMarketSymbol =
+    StaticVarGetText(WVAC_Prefix+"PendingMarketSymbol");
+
+WVAC_PendingIdentityValid =
+    WVAC_PendingValid==1 AND
+    WVAC_Mode>=1 AND WVAC_Mode<=5 AND
+    WVAC_PendingAsOfDateNum==WVAC_AsOfDateNum AND
+    WVAC_PendingAsOfDateTime==WVAC_AsOfDateTime AND
+    WVAC_PendingW==WVAC_ExpectedW AND
+    WVAC_PendingM==WVAC_ExpectedM AND
+    WVAC_PendingUniverseName==WVAC_UniverseName AND
+    WVAC_PendingUniverseList==WVAC_UniverseList AND
+    WVAC_PendingFingerprint==WVAC_Fingerprint AND
+    WVAC_PendingMarketSymbol==WVAC_MarketSymbol;
+
+// Market W/M validation for refresh modes that claim those stages.
+WVAC_MWPrefix = "WVSA_MTF_v01_" + WVAC_MarketSymbol + "_W_";
+WVAC_MMPrefix = "WVSA_MTF_v01_" + WVAC_MarketSymbol + "_M_";
+WVAC_SelPrefix = "WVSA_SELCTX_v01_" + WVAC_MarketSymbol + "_";
+
+WVAC_MarketWValid =
+    Nz(StaticVarGet(WVAC_MWPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(WVAC_MWPrefix+"CommittedGenerationID"),0)>0 AND
+    StaticVarGet(WVAC_MWPrefix+"SourcePeriodOrdinal")==WVAC_ExpectedW AND
+    StaticVarGetText(WVAC_MWPrefix+"TimeframeCode")=="W" AND
+    Nz(StaticVarGet(WVAC_MWPrefix+"ProvisionalFlag"),1)==0 AND
+    StaticVarGet(WVAC_MWPrefix+"ClockBasisCode")==WCLK_ClockBasisCode;
+
+WVAC_MarketMValid =
+    Nz(StaticVarGet(WVAC_MMPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(WVAC_MMPrefix+"CommittedGenerationID"),0)>0 AND
+    StaticVarGet(WVAC_MMPrefix+"SourcePeriodOrdinal")==WVAC_ExpectedM AND
+    StaticVarGetText(WVAC_MMPrefix+"TimeframeCode")=="M" AND
+    Nz(StaticVarGet(WVAC_MMPrefix+"ProvisionalFlag"),1)==0 AND
+    StaticVarGet(WVAC_MMPrefix+"ClockBasisCode")==WCLK_ClockBasisCode;
+
+WVAC_SelectionValid =
+    Nz(StaticVarGet(WVAC_SelPrefix+"Ready"),0)==1 AND
+    Nz(StaticVarGet(WVAC_SelPrefix+"CommittedGenerationID"),0)>0 AND
+    StaticVarGetText(WVAC_SelPrefix+"SourceSymbol")==WVAC_MarketSymbol AND
+    StaticVarGet(WVAC_SelPrefix+"SourceInterval")==inDaily AND
+    StaticVarGet(WVAC_SelPrefix+"SourceBusinessDateKey")==WVAC_AsOfDateNum AND
+    Nz(StaticVarGet(WVAC_SelPrefix+"CompositePayloadValid"),0)==1 AND
+    Nz(StaticVarGet(WVAC_SelPrefix+"MTFPayloadValid"),0)==1 AND
+    Nz(StaticVarGet(WVAC_SelPrefix+"ProvisionalFlag"),1)==0 AND
+    StaticVarGet(WVAC_SelPrefix+"ClockBasisCode")==WCLK_ClockBasisCode;
+
+// Verify every Daily snapshot. This is metadata-only and remains lightweight.
+WVAC_DailyFreshCount = 0;
+WVAC_DailyCheckedCount = 0;
+for (WVAC_i=0;
+     (WVAC_sym=StrExtract(WVAC_UniverseList,WVAC_i))!="";
+     WVAC_i++)
+{
+    WVAC_DPrefix = "WVSA_DAILY_v02_" + WVAC_sym + "_";
+    WVAC_DailyCheckedCount++;
+
+    WVAC_DGenA =
+        Nz(StaticVarGet(WVAC_DPrefix+"CommittedGenerationID"),0);
+    WVAC_DReady =
+        Nz(StaticVarGet(WVAC_DPrefix+"Ready"),0);
+    WVAC_DWriteComplete =
+        Nz(StaticVarGet(WVAC_DPrefix+"WriteComplete"),0);
+    WVAC_DSchemaMajor =
+        Nz(StaticVarGet(WVAC_DPrefix+"SchemaMajor"),-1);
+    WVAC_DSchemaMinor =
+        Nz(StaticVarGet(WVAC_DPrefix+"SchemaMinor"),-1);
+    WVAC_DBusinessDate =
+        StaticVarGet(WVAC_DPrefix+"BusinessDateKey");
+    WVAC_DSymbol =
+        StaticVarGetText(WVAC_DPrefix+"Symbol");
+    WVAC_DFingerprint =
+        StaticVarGetText(WVAC_DPrefix+"ConfigFingerprint");
+    WVAC_DGenB =
+        Nz(StaticVarGet(WVAC_DPrefix+"CommittedGenerationID"),0);
+
+    WVAC_DValid =
+        WVAC_DReady==1 AND
+        WVAC_DWriteComplete==1 AND
+        WVAC_DGenA>0 AND
+        WVAC_DGenA==WVAC_DGenB AND
+        WVAC_DSchemaMajor==2 AND
+        WVAC_DSchemaMinor==1 AND
+        WVAC_DSymbol==WVAC_sym AND
+        WVAC_DFingerprint==WVAC_Fingerprint AND
+        WVAC_DBusinessDate==WVAC_AsOfDateNum;
+
+    if (WVAC_DValid)
+        WVAC_DailyFreshCount++;
+}
+
+WVAC_DailyAllFresh =
+    WVAC_DailyCheckedCount==WVAC_UniverseCount AND
+    WVAC_DailyFreshCount==WVAC_UniverseCount AND
+    WVAC_UniverseCount>0;
+
+// Mode-specific acceptance.
+// FAST_ONLY does not advance any stage marker.
+WVAC_ModeValid = 0;
+
+if (WVAC_Mode==1)
+    WVAC_ModeValid = 1;
+else
+if (WVAC_Mode==2)
+    WVAC_ModeValid = WVAC_SelectionValid AND WVAC_DailyAllFresh;
+else
+if (WVAC_Mode==3)
+    WVAC_ModeValid =
+        WVAC_MarketWValid AND WVAC_SelectionValid AND WVAC_DailyAllFresh;
+else
+if (WVAC_Mode==4)
+    WVAC_ModeValid =
+        WVAC_MarketMValid AND WVAC_SelectionValid AND WVAC_DailyAllFresh;
+else
+if (WVAC_Mode==5)
+    WVAC_ModeValid =
+        WVAC_MarketWValid AND WVAC_MarketMValid AND
+        WVAC_SelectionValid AND WVAC_DailyAllFresh;
+
+WVAC_CommitOK =
+    WVAC_ForeignOK AND
+    WCLK_ClockValid AND
+    WVAC_WLIndex>=0 AND
+    WVAC_PendingIdentityValid AND
+    WVAC_ModeValid;
+
+if (WVAC_CommitOK)
+{
+    StaticVarSet(WVAC_Prefix+"SchemaMajor",WVAC_SchemaMajor,True);
+    StaticVarSet(WVAC_Prefix+"SchemaMinor",WVAC_SchemaMinor,True);
+    StaticVarSetText(WVAC_Prefix+"UniverseName",WVAC_UniverseName,True);
+    StaticVarSetText(WVAC_Prefix+"UniverseList",WVAC_UniverseList,True);
+    StaticVarSetText(WVAC_Prefix+"ConfigFingerprint",WVAC_Fingerprint,True);
+    StaticVarSetText(WVAC_Prefix+"MarketSymbol",WVAC_MarketSymbol,True);
+
+    if (WVAC_Mode==3 OR WVAC_Mode==5)
+        StaticVarSet(WVAC_Prefix+"WeeklyOrdinal",WVAC_ExpectedW,True);
+
+    if (WVAC_Mode==4 OR WVAC_Mode==5)
+        StaticVarSet(WVAC_Prefix+"MonthlyOrdinal",WVAC_ExpectedM,True);
+
+    if (WVAC_Mode>=2)
+    {
+        StaticVarSet(WVAC_Prefix+"SelectionBusinessDateKey",WVAC_AsOfDateNum,True);
+        StaticVarSet(WVAC_Prefix+"DailyBusinessDateKey",WVAC_AsOfDateNum,True);
+    }
+
+    StaticVarSet(WVAC_Prefix+"LastCommitMode",WVAC_Mode,True);
+    StaticVarSet(WVAC_Prefix+"LastCommitAsOfDateTime",WVAC_AsOfDateTime,True);
+    StaticVarSet(WVAC_Prefix+"LastCommitOK",1,True);
+}
+else
+{
+    // Fail closed. Do not advance freshness markers.
+    StaticVarSet(WVAC_Prefix+"LastCommitOK",0,True);
+}
+
+// Pending token is single-use. If this APX ran, consume it regardless of outcome.
+StaticVarSet(WVAC_Prefix+"PendingValid",0,True);
+
+WVAC_LastBar = BarIndex()==LastValue(BarIndex());
+Filter = WVAC_LastBar;
+
+AddTextColumn(WVAC_MarketSymbol,"Market");
+AddColumn(0*BarIndex()+WVAC_AsOfDateTime,"Visible As-Of",formatDateTime);
+AddColumn(0*BarIndex()+WVAC_Mode,"Pending Mode",1.0);
+AddColumn(0*BarIndex()+WVAC_PendingIdentityValid,"Pending Identity Valid",1.0);
+AddColumn(0*BarIndex()+WVAC_MarketWValid,"Market W Valid",1.0);
+AddColumn(0*BarIndex()+WVAC_MarketMValid,"Market M Valid",1.0);
+AddColumn(0*BarIndex()+WVAC_SelectionValid,"Selection Valid",1.0);
+AddColumn(0*BarIndex()+WVAC_DailyFreshCount,"Daily Fresh",1.0);
+AddColumn(0*BarIndex()+WVAC_DailyCheckedCount,"Daily Checked",1.0);
+AddColumn(0*BarIndex()+WVAC_ModeValid,"Mode Valid",1.0);
+AddColumn(0*BarIndex()+WVAC_CommitOK,"COMMIT OK",1.0);
+AddTextColumn("ADAPTIVE_COMMIT_MARKER_V01_20260919_A","Marker Version");
